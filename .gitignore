@@ -1,0 +1,33 @@
+# ── 기출 데이터: 절대 커밋 금지 (개발기준서 9.2) ──
+*.pdf
+*.zip
+packs/
+samples/private/
+
+# ── Node / Vite ──
+node_modules/
+dist/
+dev-dist/
+*.local
+.vite/
+
+# ── Python (전처리기) ──
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+build/
+*.spec.bak
+*.exe
+
+# ── 테스트·도구 ──
+coverage/
+playwright-report/
+test-results/
+
+# ── OS / 에디터 ──
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
