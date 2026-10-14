@@ -1,0 +1,7 @@
+# oneq-prep 1단계 프로토타입 의존성 (모두 MIT/Apache/BSD)
+pypdfium2>=4
+pdfplumber>=0.11
+pillow>=10
+numpy>=1.26
+jsonschema>=4.20
+pytest>=8

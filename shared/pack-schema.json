@@ -1,0 +1,157 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://oneq-ace.local/pack-schema/oqp-1.json",
+  "title": "원큐합격 문제팩 oqp/1",
+  "description": "전처리기(oneq-prep)와 학습앱을 잇는 유일한 계약. zip 안의 manifest.json과 questions.json의 형식을 정한다. 이 파일이 바뀌면 Python·TS 검증기와 shared/fixtures를 함께 고친다.",
+  "$defs": {
+    "manifest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["format", "packId", "packVersion", "cert", "exam", "subjects", "passRule", "questionCount", "source", "preparedBy", "createdAt", "generator", "answerMasking", "files"],
+      "properties": {
+        "format": { "const": "oqp/1" },
+        "packId": {
+          "type": "string",
+          "pattern": "^[A-Z][A-Z0-9]{1,15}-\\d{4}-\\d{1,2}$",
+          "description": "종목코드-연도-회차. 같은 회차 팩이 다시 게시되면 packVersion으로 최신본을 판별한다"
+        },
+        "packVersion": { "type": "integer", "minimum": 1 },
+        "cert": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["code", "name", "grade"],
+          "properties": {
+            "code": { "type": "string", "pattern": "^[A-Z][A-Z0-9]{1,15}$" },
+            "name": { "type": "string", "minLength": 1 },
+            "grade": { "enum": ["기사", "산업기사", "기능사", "기능장", "기술사", "기타"] }
+          }
+        },
+        "exam": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["year", "round", "date"],
+          "properties": {
+            "year": { "type": "integer", "minimum": 1990, "maximum": 2100 },
+            "round": { "type": "integer", "minimum": 1, "maximum": 9 },
+            "roundLabel": { "type": "string", "description": "예: '1·2회 통합'(2020년)" },
+            "date": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" }
+          }
+        },
+        "subjects": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 10,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["no", "name", "count", "isLaw"],
+            "properties": {
+              "no": { "type": "integer", "minimum": 1 },
+              "name": { "type": "string", "minLength": 1 },
+              "count": { "type": "integer", "minimum": 1 },
+              "isLaw": { "type": "boolean", "description": "과목 전체가 법규인지. 일부 문항만 법규이면 문항 flags의 'law'로 표시" }
+            }
+          }
+        },
+        "passRule": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["subjectMin", "avgMin"],
+          "properties": {
+            "subjectMin": { "type": "number", "minimum": 0, "maximum": 100 },
+            "avgMin": { "type": "number", "minimum": 0, "maximum": 100 }
+          }
+        },
+        "questionCount": { "type": "integer", "minimum": 1, "maximum": 300 },
+        "source": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type"],
+          "properties": {
+            "type": { "enum": ["public-pbt", "recalled", "other"], "description": "공개 PBT 기출 / 응시자 복원 문제 / 기타" },
+            "origin": { "type": "string", "description": "원본 PDF 출처(사이트·자료명)" },
+            "note": { "type": "string" }
+          }
+        },
+        "preparedBy": { "type": "string", "minLength": 1, "description": "전처리·검수자" },
+        "reviewedAt": { "type": ["string", "null"], "pattern": "^\\d{4}-\\d{2}-\\d{2}$", "description": "사람 검수 완료일. 미검수이면 null" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "generator": { "type": "string", "pattern": "^oneq-prep \\S+$" },
+        "answerMasking": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["method", "masked", "leakCheck"],
+          "description": "문항 이미지에서 정답 표시를 지웠는지에 대한 기록. 학습앱은 leakCheck가 passed가 아니면 가져오기를 거부한다",
+          "properties": {
+            "method": {
+              "type": "array",
+              "minItems": 1,
+              "items": { "enum": ["filled-glyph-replace", "highlight-remove", "none-needed"] },
+              "description": "filled-glyph-replace: 채운 원문자(❶~❹)를 일반 원문자로 교체 / highlight-remove: 형광 표시 제거 / none-needed: 원본에 표시 없음(정답표 사용)"
+            },
+            "masked": { "type": "integer", "minimum": 0, "description": "지운 정답 표시 개수" },
+            "leakCheck": { "enum": ["passed", "failed"] }
+          }
+        },
+        "files": {
+          "type": "array",
+          "minItems": 2,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["path", "sha256", "bytes"],
+            "properties": {
+              "path": { "type": "string", "pattern": "^(questions\\.json|images/[A-Za-z0-9_-]+\\.webp)$" },
+              "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+              "bytes": { "type": "integer", "minimum": 1 }
+            }
+          }
+        }
+      }
+    },
+    "question": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["qid", "no", "subjectNo", "noInSubject", "answer", "choiceCount", "answerSource", "answerCheck", "img", "imgSize", "text", "contentHash", "keywords", "lawRefs", "clusterId", "flags"],
+      "properties": {
+        "qid": { "type": "string", "pattern": "^[A-Z][A-Z0-9]{1,15}-\\d{4}-\\d{1,2}-\\d{3}$", "description": "packId-문항번호(3자리). 사람이 읽는 위치 ID" },
+        "no": { "type": "integer", "minimum": 1, "maximum": 300, "description": "시험지 전체 문항번호" },
+        "subjectNo": { "type": "integer", "minimum": 1 },
+        "noInSubject": { "type": "integer", "minimum": 1 },
+        "answer": { "type": "integer", "minimum": 1, "maximum": 5 },
+        "acceptAlso": {
+          "type": "array",
+          "items": { "type": "integer", "minimum": 1, "maximum": 5 },
+          "uniqueItems": true,
+          "description": "복수정답·전항정답 처리된 문항의 추가 인정 번호"
+        },
+        "choiceCount": { "type": "integer", "minimum": 2, "maximum": 5 },
+        "answerSource": { "enum": ["inline-mark", "answer-table", "manual"], "description": "정답을 어디서 읽었는지" },
+        "answerCheck": { "enum": ["agree", "single", "corrected"], "description": "agree: 보기 표시와 정답표가 일치 / single: 한쪽만 있음 / corrected: 불일치를 사람이 검수해 확정" },
+        "img": { "type": "string", "pattern": "^images/[A-Za-z0-9_-]+\\.webp$", "description": "정답 표시를 지운 문항 전체 이미지(지문+보기)" },
+        "imgSize": {
+          "type": "array",
+          "prefixItems": [{ "type": "integer", "minimum": 1 }, { "type": "integer", "minimum": 1 }],
+          "items": false,
+          "minItems": 2,
+          "description": "[폭, 높이] px. 앱이 이미지를 읽기 전에 자리를 잡는 데 쓴다"
+        },
+        "text": { "type": "string", "description": "검색·유사도용 추출 텍스트. 화면에 표시하지 않으며 정답 표시 원문자는 일반 원문자로 바꿔 저장" },
+        "contentHash": { "type": "string", "pattern": "^(t|i):[0-9a-f]{16}$", "description": "t: 정규화 텍스트 SHA-256 앞 16자 / i: 이미지 지각해시. 재전처리 시 학습 기록을 다시 잇는 키" },
+        "keywords": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+        "lawRefs": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+        "clusterId": { "type": ["string", "null"] },
+        "flags": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "enum": ["law", "has-figure", "spans-column", "stem-has-circled-glyph", "needs-review"] }
+        }
+      }
+    },
+    "questions": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/question" }
+    }
+  }
+}

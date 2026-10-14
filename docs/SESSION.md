@@ -4,35 +4,39 @@
 
 ## 현재 위치
 
-- **단계**: 0단계 — 실기기 저장 검증 (진행 중: 실기기 테스트 대기)
-- **게이트**: Android 본인 기기에서 T1~T9 통과. iPhone은 동료 기기로 보조 확인
+- **단계**: 1단계 — 팩 포맷 (완료, 게이트 통과)
+- **게이트**: 샘플팩이 Python·TS 검증기 모두 통과 → ✅
+- **0단계 잔여**: T8a 수정본 Android 재시험·`device-tests.md` 기록은 아직. 사용자 요청으로 1단계를 먼저 진행함
 
-## 직전 세션 요약 — 2026-10-14 (세션 #1)
+## 직전 세션 요약 — 2026-10-14 (세션 #2, 1단계)
 
 ### 완료
-- 모노레포 골격: `app/`, `preprocessor/`, `docs/`, `.gitignore`(PDF·zip·packs 제외)
-- `app/`: Vite 8 + React 18 + TypeScript + vite-plugin-pwa(prompt 업데이트) + Dexie 4 + fflate
-- 0단계 검증 화면(T1~T9): 설치 감지, 오프라인 실행, persist/estimate, 30MB 더미 팩(100장 × 300KB) 저장·전수 해시 검증, 재실행 유지 자동 확인, 샘플 zip 생성·가져오기·이미지 미리보기, 백업 내보내기(공유 시트/다운로드), 백업 파일 읽기, 결과 복사·공유
-- 저장 실패 전역 경고(`safeWrite` 래퍼), CSP `connect-src 'self'`
-- GitHub Actions → GitHub Pages 배포 워크플로
-- 클라우드 개발 환경의 모바일 에뮬레이션(Pixel 7, Chromium)으로 T2~T9 동작 확인. 실기기는 아직
-
-### 세션 중 수정 (실기기 1차 시험 반영)
-- T8a 공유 시트 `NotAllowedError` 해결: Android Chrome 공유 허용 확장자에 `.json` 없음 → 공유용 백업을 `.txt`로, 복원은 `.json`·`.txt` 허용
-- 앱 화면에 **앱 주소** 카드(주소 복사·보내기) 추가, 설치 안내에 "앱 서랍" 문구 추가
-- README에 스마트폰 Chrome 접속 주소·설치 방법 추가
-
-### 미완
-- 수정본 푸시 후 Android에서 T8a 재시험
-- Android 실기기 테스트 → `docs/device-tests.md` 기록
-- iPhone 보조 확인(동료 기기)
+- 기출 PDF 34회차(측량및지형공간정보기사 2011~2022.03, comcbt 교사용) 분석
+  - 전부 텍스트층 있는 2단 레이아웃, 5과목 × 20문항, 정답은 보기의 채운 원문자(❶~❹) + 마지막 페이지 정답표
+  - 3,400문항 전부: 문항 경계 100/100, 보기 표시 정답 1개, **정답표와 100% 일치**
+- `shared/pack-schema.json`(oqp/1) 확정 — 결정 기록 `docs/ADR/001-pack-format-oqp1.md`
+  - 추가 필드: `answerMasking`(정답 표시 제거 기록, leakCheck 필수), `answerSource`·`answerCheck`, `imgSize`, `exam.date`·`roundLabel`
+- 전처리 프로토타입 `preprocessor/oneq_prep/`(extract·render·pack·validate) — 2단계의 출발점
+  - 정답 표시 제거: 채운 원문자 자리를 지우고 같은 페이지의 일반 원문자 픽셀을 옮겨 붙임 → 흔적 없음. 잔존 검사(잉크 비율) 0건
+  - 지문 속 원문자("❶~❹의 각")는 보기 번호와 구분해 유지
+  - 크롭 하단 여백 7pt: 다음 문항의 윗줄표(AB̅)가 앞 문항 끝에 끼던 문제 수정(2012-2회 81번에서 발견)
+  - 형광 표시 제거 함수 `remove_highlight()`는 단위시험만(실제 PDF 없음)
+- 검증기 2종: `preprocessor/oneq_prep/validate.py`, `app/src/pack/validate.ts`(+ `miniSchema.ts`, CSP 때문에 ajv 대신 자체 해석기)
+  - 공용 시험 `shared/fixtures/cases.json` 22건 + 더미 팩 `valid-pack/` → pytest 24건, vitest 25건 통과
+- 샘플팩 실측: 회차당 2.5~2.9MB(100문항, WebP 1080px q80). 전 34회차 팩 생성·심층 검증 통과
+- 앱: `npm test`(vitest 5) 추가, 테스트 파일은 `tsconfig` 타입검사에서 제외
 
 ### 결정·변경
-- 결정 변경 없음. 버전만 구체화: Vite 8, TypeScript 7, React 18(D2 유지)
-- 0단계 DB 이름은 `oneq-stage0`으로 분리. 3단계에서 본 스키마(`oneq`)로 새로 만든다
+- ADR 001: qid = `packId-번호3자리`, 스키마 위치 `shared/`, answerMasking 필수, TS는 miniSchema
+- `.gitattributes` 추가: `shared/fixtures/**` 줄바꿈 변환 금지(해시 검사 보호)
+
+### 미완
+- 0단계: T8a 수정본 Android 재시험, `device-tests.md` 기록
+- 사내 게시판 첨부 용량 제한 확인(팩 2.5~2.9MB/회차 기준으로 분할 단위 결정)
+- 2단계 게이트용 "출처가 다른 PDF 3종": ① comcbt 교사용(채운 원문자+정답표) ② 한솔아카데미 경향문제(노란 형광 상자, 정답표 없음) 확보. ③ 정답표만 있는 PDF(또는 스캔본) 1종 더 필요
 
 ## 다음 할 일
-1. 실기기 결과를 대화창에 붙여 넣기 → `device-tests.md` 기록, 게이트 판정
-2. 실패 항목이 있으면 원인 분석·수정 (필요 시 D1 재검토)
-3. 게이트 통과 시 1단계(팩 포맷: `docs/pack-schema.json`, 샘플팩, 검증기) 시작
-   - 1단계 전 결정 필요: 사내 게시판 첨부 용량 제한, 휴대폰 첨부 다운로드 가능 여부
+1. 0단계 T8a 재시험 결과를 붙여 넣기 → 0단계 게이트 확정
+2. 2단계(전처리기 MVP) 또는 3단계(학습앱 코어) 시작 — 팩 포맷이 고정됐으므로 어느 쪽이든 가능
+   - 3단계를 먼저 하면 실제 샘플팩(`packs/oneq-SURVEY-2022-1.zip`)으로 바로 풀이 화면을 만들 수 있음
+   - 2단계 전 필요: 출처가 다른 기출 PDF 2종 이상(형광 표시본, 정답표만 있는 본)

@@ -1,0 +1,30 @@
+{
+  "description": "Python·TS 검증기 공용 시험. 각 case는 valid-pack에 변경(ops)을 적용한 뒤 나와야 할 오류 코드 집합(expect)을 적는다. json 파일을 고친 경우 rehash가 false가 아니면 manifest.files의 해시를 다시 계산한다.",
+  "cases": [
+    { "name": "정상 팩", "ops": [], "expect": [] },
+    { "name": "포맷 버전 다름", "ops": [{ "op": "set", "file": "manifest.json", "pointer": "/format", "value": "oqp/2" }], "expect": ["SCHEMA"] },
+    { "name": "questions.json 없음", "ops": [{ "op": "removeFile", "file": "questions.json" }], "expect": ["MISSING_FILE"] },
+    { "name": "answerMasking 누락", "ops": [{ "op": "delete", "file": "manifest.json", "pointer": "/answerMasking" }], "expect": ["SCHEMA"] },
+    { "name": "정답 표시 제거 실패 팩", "ops": [{ "op": "set", "file": "manifest.json", "pointer": "/answerMasking/leakCheck", "value": "failed" }], "expect": ["LEAK_CHECK"] },
+    { "name": "정답 번호가 보기 수 초과", "ops": [{ "op": "set", "file": "questions.json", "pointer": "/0/answer", "value": 5 }], "expect": ["ANSWER_RANGE"] },
+    { "name": "추가 인정 번호가 정답과 중복", "ops": [{ "op": "set", "file": "questions.json", "pointer": "/0/acceptAlso", "value": [2] }], "expect": ["ANSWER_RANGE"] },
+    { "name": "qid 중복", "ops": [{ "op": "set", "file": "questions.json", "pointer": "/1/qid", "value": "TEST-2022-1-001" }], "expect": ["DUP_QID", "QID_FORMAT"] },
+    { "name": "이미지 손상", "ops": [{ "op": "corrupt", "file": "images/002.webp" }], "expect": ["HASH_MISMATCH"] },
+    { "name": "목록에 없는 파일", "ops": [{ "op": "addFile", "file": "images/999.webp", "text": "x" }], "expect": ["EXTRA_FILE"] },
+    { "name": "이미지 파일 없음", "ops": [{ "op": "removeFile", "file": "images/003.webp" }], "expect": ["MISSING_FILE"] },
+    { "name": "문항 수 불일치", "ops": [{ "op": "set", "file": "manifest.json", "pointer": "/questionCount", "value": 4 }], "expect": ["COUNT_MISMATCH"] },
+    { "name": "과목 문항 수 불일치", "ops": [{ "op": "set", "file": "manifest.json", "pointer": "/subjects/0/count", "value": 3 }], "expect": ["SUBJECT"] },
+    { "name": "packId와 종목·연도·회차 불일치", "ops": [{ "op": "set", "file": "manifest.json", "pointer": "/packId", "value": "TEST-2022-2" }], "expect": ["PACK_ID", "QID_FORMAT"] },
+    { "name": "문항 이미지가 목록에 없음", "ops": [{ "op": "set", "file": "questions.json", "pointer": "/0/img", "value": "images/050.webp" }], "expect": ["MISSING_FILE"] },
+    { "name": "정의되지 않은 문항 필드", "ops": [{ "op": "set", "file": "questions.json", "pointer": "/0/foo", "value": 1 }], "expect": ["SCHEMA"] },
+    { "name": "contentHash 형식 오류", "ops": [{ "op": "set", "file": "questions.json", "pointer": "/0/contentHash", "value": "abc" }], "expect": ["SCHEMA"] },
+    { "name": "imgSize 원소 3개", "ops": [{ "op": "set", "file": "questions.json", "pointer": "/0/imgSize", "value": [1, 2, 3] }], "expect": ["SCHEMA"] },
+    { "name": "모르는 flag", "ops": [{ "op": "set", "file": "questions.json", "pointer": "/0/flags", "value": ["easy"] }], "expect": ["SCHEMA"] },
+    { "name": "문항번호 건너뜀", "ops": [
+        { "op": "set", "file": "questions.json", "pointer": "/2/no", "value": 4 },
+        { "op": "set", "file": "questions.json", "pointer": "/2/qid", "value": "TEST-2022-1-004" }
+      ], "expect": ["NUMBERING"] },
+    { "name": "questions.json 해시 불일치(재계산 안 함)", "rehash": false, "ops": [{ "op": "set", "file": "questions.json", "pointer": "/0/text", "value": "변조" }], "expect": ["HASH_MISMATCH"] },
+    { "name": "JSON 깨짐", "ops": [{ "op": "replaceText", "file": "manifest.json", "text": "{oops" }], "expect": ["JSON"] }
+  ]
+}

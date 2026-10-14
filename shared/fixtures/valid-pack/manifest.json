@@ -1,0 +1,71 @@
+{
+ "format": "oqp/1",
+ "packId": "TEST-2022-1",
+ "packVersion": 1,
+ "cert": {
+  "code": "TEST",
+  "name": "시험용 더미 종목",
+  "grade": "기사"
+ },
+ "exam": {
+  "year": 2022,
+  "round": 1,
+  "date": "2022-03-05"
+ },
+ "subjects": [
+  {
+   "no": 1,
+   "name": "더미과목A",
+   "count": 2,
+   "isLaw": false
+  },
+  {
+   "no": 2,
+   "name": "더미법규",
+   "count": 1,
+   "isLaw": true
+  }
+ ],
+ "passRule": {
+  "subjectMin": 40,
+  "avgMin": 60
+ },
+ "questionCount": 3,
+ "source": {
+  "type": "other",
+  "note": "검증기 시험용 더미"
+ },
+ "preparedBy": "fixture",
+ "reviewedAt": "2026-10-14",
+ "createdAt": "2026-10-14T00:00:00+00:00",
+ "generator": "oneq-prep 0.1.0",
+ "answerMasking": {
+  "method": [
+   "none-needed"
+  ],
+  "masked": 0,
+  "leakCheck": "passed"
+ },
+ "files": [
+  {
+   "path": "questions.json",
+   "sha256": "ecf814b02f5d795b1d2a85bcc0a0fda915f174d36a4ccebff1034c49278a3f34",
+   "bytes": 1334
+  },
+  {
+   "path": "images/001.webp",
+   "sha256": "8ee3265a5dfcb831ed749059279692d6b9c115df7c027d637789590992c7b07b",
+   "bytes": 1688
+  },
+  {
+   "path": "images/002.webp",
+   "sha256": "31b76e8e335fc4b11c5d2465ce0639e8970a416356c878d4f8696df66db25305",
+   "bytes": 1696
+  },
+  {
+   "path": "images/003.webp",
+   "sha256": "a244a255494ae94361c87d4bb3a9d43b1104678dcdc5f92321088754ecc920ed",
+   "bytes": 1794
+  }
+ ]
+}
