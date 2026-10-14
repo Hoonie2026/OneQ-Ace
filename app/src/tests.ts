@@ -340,7 +340,9 @@ export async function shareOrDownload(
     const file = new File([blob], name, { type });
     if (!navigator.canShare?.({ files: [file] })) return '— 이 브라우저는 파일 공유 시트를 지원하지 않음';
     try {
-      await navigator.share({ files: [file], title: name });
+      // title·text를 함께 넘기면 Android의 일부 받는 앱(드라이브 "저장" 등)이 파일 대신 그 문자열만 받아
+      // "파일명 - " 같은 빈 항목이 생긴다(0단계 실측). 파일만 넘긴다.
+      await navigator.share({ files: [file] });
       return '— 공유 시트에서 전달 완료';
     } catch (err) {
       if (err instanceof DOMException && err.name === 'AbortError') return '— 공유 시트를 닫음(취소)';
