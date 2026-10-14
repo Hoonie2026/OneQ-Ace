@@ -28,16 +28,6 @@ export async function sha256Hex(buf: ArrayBuffer | Uint8Array): Promise<string> 
   return Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, '0')).join('');
 }
 
-/** 압축되지 않는 난수 바이트(실제 WebP 이미지처럼 용량을 그대로 차지하게) */
-export function randomBytes(size: number): Uint8Array {
-  const out = new Uint8Array(size);
-  const CHUNK = 65536; // getRandomValues 1회 최대치
-  for (let i = 0; i < size; i += CHUNK) {
-    crypto.getRandomValues(out.subarray(i, Math.min(i + CHUNK, size)));
-  }
-  return out;
-}
-
 export function deviceSummary(): string {
   const ua = navigator.userAgent;
   let os = '기타';
@@ -69,4 +59,25 @@ export function downloadBlob(blob: Blob, filename: string): void {
   a.click();
   a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 60_000);
+}
+
+export interface StorageInfo {
+  usage?: number;
+  quota?: number;
+  persisted?: boolean;
+}
+
+export async function readStorageInfo(): Promise<StorageInfo> {
+  const info: StorageInfo = {};
+  try {
+    if (navigator.storage?.estimate) {
+      const e = await navigator.storage.estimate();
+      info.usage = e.usage;
+      info.quota = e.quota;
+    }
+    if (navigator.storage?.persisted) info.persisted = await navigator.storage.persisted();
+  } catch {
+    /* 표시만 생략 */
+  }
+  return info;
 }

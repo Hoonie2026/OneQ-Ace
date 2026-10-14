@@ -1,12 +1,17 @@
+/// <reference types="vitest/config" />
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
+import pkg from './package.json' with { type: 'json' };
 
 // GitHub Pages 주소: https://<사용자>.github.io/OneQ-Ace/
 const BASE = '/OneQ-Ace/';
 
 export default defineConfig({
   base: BASE,
+  define: { __APP_VERSION__: JSON.stringify(pkg.version) },
+  // e2e/는 Playwright 전용(npm run e2e)
+  test: { include: ['src/**/*.test.ts'] },
   plugins: [
     react(),
     VitePWA({

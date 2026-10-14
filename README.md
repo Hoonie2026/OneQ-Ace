@@ -8,8 +8,8 @@
 
 | 폴더 | 내용 | 상태 |
 |---|---|---|
-| `app/` | 스마트폰 학습앱 — 정적 PWA (Vite + React + TypeScript) | 0단계: 실기기 저장 검증 화면 |
-| `preprocessor/` | PC 기출 PDF 전처리기 `oneq-prep` (Python) | 2단계에서 시작 |
+| `app/` | 스마트폰 학습앱 — 정적 PWA (Vite + React + TypeScript) | v0.1(3단계): 팩 가져오기·풀이·채점·백업/복원 |
+| `preprocessor/` | PC 기출 PDF 전처리기 `oneq-prep` (Python) | 1단계 프로토타입, 2단계에서 MVP |
 | `docs/` | 세션 기록, 실기기 결과표, 결정 기록(ADR) | |
 
 - 서버·DB·외부 API 없음. 모든 학습 기록은 기기 안에만 저장됩니다.
@@ -22,6 +22,8 @@ cd app
 npm install
 npm run dev        # http://localhost:5173/OneQ-Ace/
 npm run build      # dist/ 생성
+npm test           # 단위 시험(vitest)
+npm run e2e        # 모바일 에뮬레이션 게이트 시험(Playwright, 처음 한 번 `npx playwright install chromium`)
 ```
 
 `main` 브랜치에 푸시하면 GitHub Actions가 `app/`을 빌드해 GitHub Pages에 배포합니다.
@@ -30,8 +32,8 @@ npm run build      # dist/ 생성
 
 | 구분 | 주소 |
 |---|---|
-| **앱(여기서 설치)** | `https://<GitHub사용자명>.github.io/OneQ-Ace/` |
-| 저장소(코드 보관, 설치 불가) | `https://github.com/<GitHub사용자명>/OneQ-Ace` |
+| **앱(여기서 설치)** | `https://hoonie2026.github.io/OneQ-Ace/` |
+| 저장소(코드 보관, 설치 불가) | `https://github.com/Hoonie2026/OneQ-Ace` |
 
 1. 스마트폰 **Chrome**(iPhone은 **Safari**) 주소창에 **앱 주소**를 입력합니다. 저장소 주소에서는 설치 메뉴가 나오지 않습니다.
 2. Android: 오른쪽 위 **⋮ → 앱 설치**(또는 홈 화면에 추가) / iPhone: 공유 버튼 → **홈 화면에 추가**
