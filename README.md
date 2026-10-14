@@ -25,7 +25,19 @@ npm run build      # dist/ 생성
 ```
 
 `main` 브랜치에 푸시하면 GitHub Actions가 `app/`을 빌드해 GitHub Pages에 배포합니다.
-배포 주소: `https://<GitHub사용자명>.github.io/OneQ-Ace/`
+
+## 스마트폰에서 설치하기
+
+| 구분 | 주소 |
+|---|---|
+| **앱(여기서 설치)** | `https://<GitHub사용자명>.github.io/OneQ-Ace/` |
+| 저장소(코드 보관, 설치 불가) | `https://github.com/<GitHub사용자명>/OneQ-Ace` |
+
+1. 스마트폰 **Chrome**(iPhone은 **Safari**) 주소창에 **앱 주소**를 입력합니다. 저장소 주소에서는 설치 메뉴가 나오지 않습니다.
+2. Android: 오른쪽 위 **⋮ → 앱 설치**(또는 홈 화면에 추가) / iPhone: 공유 버튼 → **홈 화면에 추가**
+3. 설치한 **「원큐합격」 아이콘**으로 엽니다. Android는 아이콘이 홈 화면이 아니라 **앱 화면(앱 서랍)**에만 생길 수 있습니다. 홈 화면에도 두려면 앱 화면에서 아이콘을 길게 눌러 **홈 화면에 추가**를 누릅니다.
+
+앱 주소는 GitHub 저장소의 **Settings → Pages** 맨 위("Your site is live at …")에서도 확인할 수 있고, 앱 화면 아래 **앱 주소** 카드에서 복사·전송할 수 있습니다.
 
 ## 세션 규칙
 

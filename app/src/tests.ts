@@ -317,7 +317,18 @@ async function buildBackup(): Promise<{ blob: Blob; name: string; data: BackupFi
   return { blob: new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }), name, data };
 }
 
-/** 공유 시트(파일) 우선, 불가하면 다운로드. 결과를 문장으로 돌려준다 */
+/**
+ * Android Chrome이 공유 시트로 보낼 수 있는 확장자(Chromium share_service_impl.cc의 허용 목록 중 앱에서 쓸 만한 것).
+ * .json·.zip은 목록에 없어 NotAllowedError(Permission denied)가 난다 → 공유용 백업은 .txt로 보낸다.
+ */
+const SHAREABLE_EXT = ['.txt', '.text', '.csv', '.pdf', '.png', '.jpg', '.jpeg', '.webp', '.html'];
+
+export function isShareableName(name: string): boolean {
+  const lower = name.toLowerCase();
+  return SHAREABLE_EXT.some((ext) => lower.endsWith(ext));
+}
+
+/** 공유 시트 또는 다운로드로 파일을 내보낸다. 결과를 문장으로 돌려준다 */
 export async function shareOrDownload(
   blob: Blob,
   name: string,
@@ -325,6 +336,7 @@ export async function shareOrDownload(
   mode: 'share' | 'download',
 ): Promise<string> {
   if (mode === 'share') {
+    if (!isShareableName(name)) return `— 공유 시트로 보낼 수 없는 확장자(${name})`;
     const file = new File([blob], name, { type });
     if (!navigator.canShare?.({ files: [file] })) return '— 이 브라우저는 파일 공유 시트를 지원하지 않음';
     try {
@@ -340,19 +352,28 @@ export async function shareOrDownload(
 }
 
 export async function testBackupExport(mode: 'share' | 'download'): Promise<ResultRow> {
+  const id = mode === 'share' ? 'T8a' : 'T8b';
   try {
     const { blob, name } = await buildBackup();
-    const msg = await shareOrDownload(blob, name, 'application/json', mode);
+    // 공유 시트: 내용은 같은 JSON, 확장자만 .txt (Android Chrome 허용 목록 대응). 복원은 .json·.txt 모두 받는다
+    const outName = mode === 'share' ? name.replace(/\.json$/, '.txt') : name;
+    const outType = mode === 'share' ? 'text/plain' : 'application/json';
+    const msg = await shareOrDownload(
+      new Blob([blob], { type: outType }),
+      outName,
+      outType,
+      mode,
+    );
     const label = mode === 'share' ? '공유 시트' : '다운로드';
-    const unsupported = msg.includes('지원하지 않음');
+    const unsupported = msg.includes('지원하지 않음') || msg.includes('보낼 수 없는');
     return saveResult(
-      mode === 'share' ? 'T8a' : 'T8b',
+      id,
       unsupported ? 'fail' : 'check',
-      `${label}: ${name} (${formatBytes(blob.size)}) ${msg}` +
-        (unsupported ? '' : '. 파일 앱/다운로드 폴더에 실제로 저장됐으면 통과로 표시하세요'),
+      `${label}: ${outName} (${formatBytes(blob.size)}) ${msg}` +
+        (unsupported ? '' : '. 파일 앱/드라이브/다운로드 폴더에 실제로 저장됐으면 통과로 표시하세요'),
     );
   } catch (err) {
-    return saveResult(mode === 'share' ? 'T8a' : 'T8b', 'fail', describeError(err));
+    return saveResult(id, 'fail', describeError(err));
   }
 }
 

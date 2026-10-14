@@ -36,6 +36,7 @@ export default function App() {
   const [online, setOnline] = useState(navigator.onLine);
   const [installEvt, setInstallEvt] = useState<BeforeInstallPromptEvent | null>(null);
   const standalone = isStandalone();
+  const appUrl = new URL(import.meta.env.BASE_URL, window.location.origin).href;
   const launched = useRef(false);
 
   const {
@@ -247,7 +248,7 @@ export default function App() {
               </li>
             </ul>
           )}
-          <p className="hint">설치 후 홈 화면의 「원큐합격」 아이콘으로 다시 여세요.</p>
+          <p className="hint">설치 후 홈 화면이나 앱 화면(앱 서랍)의 「원큐합격」 아이콘으로 다시 여세요. Android는 홈 화면에 아이콘이 자동으로 생기지 않을 수 있습니다.</p>
         </section>
       )}
 
@@ -323,10 +324,10 @@ export default function App() {
         </TestCard>
         <TestCard id="T9" row={r('T9')}>
           <label className={`btn${busy ? ' disabled' : ''}`}>
-            백업 파일 열기
+            백업 파일 열기(.json·.txt)
             <input
               type="file"
-              accept=".json,application/json"
+              accept=".json,.txt,application/json,text/plain"
               hidden
               disabled={!!busy}
               onChange={(e) => {
@@ -338,6 +339,35 @@ export default function App() {
           </label>
         </TestCard>
       </ul>
+
+      <section className="card address">
+        <h2>앱 주소</h2>
+        <p className="url">{appUrl}</p>
+        <p className="hint">다른 휴대폰에서는 Chrome(iPhone은 Safari) 주소창에 이 주소를 입력하고 설치하세요.</p>
+        <div className="test-actions">
+          <button
+            className="btn btn-small"
+            onClick={async () => {
+              try {
+                await navigator.clipboard.writeText(appUrl);
+                flash('주소를 복사했습니다');
+              } catch {
+                window.prompt('아래 주소를 길게 눌러 복사하세요', appUrl);
+              }
+            }}
+          >
+            주소 복사
+          </button>
+          {'share' in navigator && (
+            <button
+              className="btn btn-small"
+              onClick={() => navigator.share({ title: '원큐합격', url: appUrl }).catch(() => undefined)}
+            >
+              주소 보내기
+            </button>
+          )}
+        </div>
+      </section>
 
       <section className="actions">
         <button className="btn btn-primary btn-block" disabled={!!busy} onClick={copyReport}>

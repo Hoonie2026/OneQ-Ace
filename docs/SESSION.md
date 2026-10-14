@@ -17,8 +17,13 @@
 - GitHub Actions → GitHub Pages 배포 워크플로
 - 클라우드 개발 환경의 모바일 에뮬레이션(Pixel 7, Chromium)으로 T2~T9 동작 확인. 실기기는 아직
 
+### 세션 중 수정 (실기기 1차 시험 반영)
+- T8a 공유 시트 `NotAllowedError` 해결: Android Chrome 공유 허용 확장자에 `.json` 없음 → 공유용 백업을 `.txt`로, 복원은 `.json`·`.txt` 허용
+- 앱 화면에 **앱 주소** 카드(주소 복사·보내기) 추가, 설치 안내에 "앱 서랍" 문구 추가
+- README에 스마트폰 Chrome 접속 주소·설치 방법 추가
+
 ### 미완
-- GitHub 저장소 생성·푸시·Pages 활성화 (사용자)
+- 수정본 푸시 후 Android에서 T8a 재시험
 - Android 실기기 테스트 → `docs/device-tests.md` 기록
 - iPhone 보조 확인(동료 기기)
 
