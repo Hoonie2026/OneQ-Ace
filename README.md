@@ -8,7 +8,7 @@
 
 | 폴더 | 내용 | 상태 |
 |---|---|---|
-| `app/` | 스마트폰 학습앱 — 정적 PWA (Vite + React + TypeScript) | v0.1(3단계): 팩 가져오기·풀이·채점·백업/복원 |
+| `app/` | 스마트폰 학습앱 — 정적 PWA (Vite + React + TypeScript) | v0.1(3단계): 팩 가져오기·풀이·채점·백업/복원. `src/engine/`: 4단계 학습 엔진(화면 연결은 5단계) |
 | `preprocessor/` | PC 기출 PDF 전처리기 `oneq-prep` (Python) | 1단계 프로토타입, 2단계에서 MVP |
 | `docs/` | 세션 기록, 실기기 결과표, 결정 기록(ADR), 사용 안내 초안(`USER-GUIDE.md`) | |
 
@@ -24,6 +24,7 @@ npm run dev        # http://localhost:5173/OneQ-Ace/
 npm run build      # dist/ 생성
 npm test           # 단위 시험(vitest)
 npm run e2e        # 모바일 에뮬레이션 게이트 시험(Playwright, 처음 한 번 `npx playwright install chromium`)
+npm run gate       # 4단계 학습 엔진 시뮬레이션(가상 학습자 3종 × 60·30·14일 × 시드 3, 약 35초)
 ```
 
 `main` 브랜치에 푸시하면 GitHub Actions가 `app/`을 빌드해 GitHub Pages에 배포합니다.
