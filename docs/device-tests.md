@@ -59,6 +59,7 @@
 | 10-14 | Android Chrome(홈 화면 앱) | T8a 공유 시트에서 `NotAllowedError — Permission denied`. Chrome은 공유 가능한 파일 확장자를 허용 목록으로 제한하며 `.json`·`.zip`은 목록에 없음 | 공유용 백업은 내용은 같은 JSON, 확장자만 `.txt`로 변경. 복원은 `.json`·`.txt` 모두 허용. 다운로드 경로는 `.json` 유지 |
 | 10-14 | Android 10 · Chrome 153 | T8a 재시험: 공유는 성공했으나 받는 앱에 "파일명 - " 빈 항목만 생김. `navigator.share()`에 `title`을 함께 넘겨 일부 받는 앱이 파일 대신 문자열을 받은 것으로 추정 | 공유 시 `files`만 넘기도록 수정(3단계에서 재확인). **백업 기본 경로는 다운로드(.json)로 확정**, 공유 시트는 보조 |
 | 10-14 | Android | 설치한 앱 아이콘이 홈 화면이 아닌 앱 서랍에만 생김(기기 설정에 따라 다름) | 정상. 8단계 설치 가이드에 "앱 화면에서 찾기" 안내 추가 |
+| 10-15 | Android Chrome 153 · PC Chrome 155 | v0.1.0: 회차 풀기·과목별을 누르면 검은 빈 화면. 원인: Chrome 150대부터 `window.scrollTo()`가 Promise를 돌려주는데, 화면 전환 effect가 그 값을 반환해 React가 정리 함수로 호출 → `TypeError: n is not a function`으로 앱 전체가 멈춤. 시험용 Chromium(구버전)에서는 재현 안 됨 | v0.1.1: effect를 중괄호로 고침. 오류 화면(ErrorBoundary) 추가 — 앞으로 오류가 나도 빈 화면 대신 오류 내용·홈으로 버튼 표시. Playwright에 새 Chrome의 스크롤 동작을 흉내 내는 시험 추가(옛 코드에서 실패 확인) |
 
 ## 3단계 — 학습앱 코어 (앱 v0.1)
 

@@ -818,3 +818,10 @@ h3 {
     min-height: 48px;
   }
 }
+
+.crash {
+  border-color: var(--fail);
+}
+.crash .diag {
+  margin: 8px 0 0;
+}

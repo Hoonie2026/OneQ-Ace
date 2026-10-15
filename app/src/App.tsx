@@ -5,6 +5,7 @@ import { describeError, STORAGE_ERROR_EVENT } from './db';
 import { describeIssues, importPackFile } from './pack/import';
 import { examLabel } from './study';
 import { formatBytes } from './util';
+import { ErrorBoundary } from './ui/ErrorBoundary';
 import { Home } from './ui/Home';
 import { PackDetail } from './ui/PackDetail';
 import { Result } from './ui/Result';
@@ -50,8 +51,11 @@ export default function App() {
     if (screen.name === 'home') backupDue().then((r) => setBackupBanner(r.due)).catch(() => undefined);
   }, [screen.name, version]);
 
-  // 화면 전환 시 맨 위로
-  useEffect(() => window.scrollTo(0, 0), [screen]);
+  // 화면 전환 시 맨 위로. 중괄호 필수: Chrome 150대부터 scrollTo()가 Promise를 돌려주는데,
+  // 화살표 함수가 그것을 반환하면 React가 정리 함수로 호출해 앱 전체가 멈춘다(2026-10-15 실기기 검은 화면)
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [screen]);
 
   const importFiles = async (files: File[]) => {
     setBusy(true);
@@ -130,6 +134,7 @@ export default function App() {
         )}
       </div>
 
+      <ErrorBoundary key={JSON.stringify(screen)} onHome={home}>
       {screen.name === 'home' && (
         <Home
           version={version}
@@ -159,6 +164,7 @@ export default function App() {
           toast={flash}
         />
       )}
+      </ErrorBoundary>
 
       {toast && (
         <div className="toast" role="status" onClick={() => setToast(null)}>

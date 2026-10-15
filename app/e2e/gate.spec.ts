@@ -21,6 +21,20 @@ async function packFile(): Promise<{ path: string; total: number }> {
   return { path, total: 100 };
 }
 
+/**
+ * Chrome 150대(실기기 153, PC 155)는 scrollTo·scrollBy·scrollIntoView가 Promise를 돌려준다. 시험용 Chromium은 더 오래돼
+ * undefined를 돌려주므로, 새 동작을 흉내 내 같은 종류의 회귀(2026-10-15 검은 화면)를 잡는다
+ */
+function newerChromeScroll() {
+  for (const [obj, name] of [[window, 'scrollTo'], [window, 'scroll'], [window, 'scrollBy'], [Element.prototype, 'scrollTo'], [Element.prototype, 'scrollIntoView']] as const) {
+    const orig = (obj as any)[name];
+    (obj as any)[name] = function (...args: unknown[]) {
+      orig.apply(this, args);
+      return Promise.resolve();
+    };
+  }
+}
+
 async function waitForSW(page: Page) {
   await page.waitForFunction(async () => !!(await navigator.serviceWorker.ready).active, null, { timeout: 30_000 });
   await page.reload(); // 서비스워커가 페이지를 제어하게
@@ -36,6 +50,7 @@ async function fingerprintText(page: Page): Promise<string> {
 test('3단계 게이트: 오프라인 1회차 완주 → 백업 → 삭제 → 복원 100% 일치', async ({ browser }, info) => {
   const { path: pack, total } = await packFile();
   const ctx = await browser.newContext({ ...info.project.use, serviceWorkers: 'allow', acceptDownloads: true });
+  await ctx.addInitScript(newerChromeScroll);
   const page = await ctx.newPage();
   await page.goto('./');
   await waitForSW(page);
@@ -95,6 +110,7 @@ test('3단계 게이트: 오프라인 1회차 완주 → 백업 → 삭제 → �
 
   // ⑤ 앱 삭제 = 저장소가 빈 새 컨텍스트, ⑥ 복원
   const ctx2 = await browser.newContext({ ...info.project.use, serviceWorkers: 'allow' });
+  await ctx2.addInitScript(newerChromeScroll);
   const p2 = await ctx2.newPage();
   await p2.goto('./');
   await expect(p2.getByText('문제팩을 가져오세요')).toBeVisible();
