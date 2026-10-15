@@ -45,6 +45,7 @@ export async function deleteCert(code: string, d: OneQDB = defaultDb): Promise<{
       await d.images.where('packId').anyOf(ids).delete();
       await d.packs.bulkDelete(ids);
       if ((await d.settings.get(SETTING.certCode))?.value === code) await d.settings.delete(SETTING.certCode);
+      await d.settings.delete(`plan:${code}`); // 종목별 시험일·학습시간(engine/load.ts planSettingKey)
     }),
   );
   return { packs, attempts };
