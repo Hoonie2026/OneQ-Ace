@@ -185,7 +185,18 @@ test('3단계 게이트: 오프라인 1회차 완주(회차·과목별 혼합) �
   await expect(p2.getByText(/문제팩 1회차/)).toBeVisible();
   await p2.getByRole('button', { name: /측량|시험용 종목/ }).first().click();
 
-  // 이 기기 데이터 지우기(앱 삭제 대신 쓰는 경로)
+  // 학습 기록만 지우기 → 백업 복원 → 문제팩을 다시 가져오지 않아도 바로 이어짐(실기기 2차 요청)
+  await p2.getByRole('button', { name: '백업·설정' }).click();
+  await p2.getByTestId('wipe-records').click();
+  await expect(p2.getByText('진도 0/')).toBeVisible();
+  await p2.getByRole('button', { name: '백업·설정' }).click();
+  await p2.getByTestId('restore-input').setInputFiles(backupPath);
+  await expect(p2.getByTestId('restore-report')).toContainText('백업과 기록 일치');
+  await expect(p2.getByTestId('restore-report')).not.toContainText('매핑 대기');
+  expect(await p2.getByTestId('fingerprint').textContent()).toBe(before);
+  await p2.getByRole('button', { name: '뒤로' }).click();
+
+  // 문제팩까지 모두 지우기 → 빈 홈(가져오기 화면)
   await p2.getByRole('button', { name: '백업·설정' }).click();
   await p2.getByTestId('wipe').click();
   await expect(p2.getByText('문제팩을 가져오세요')).toBeVisible();

@@ -14,6 +14,7 @@ import {
   type RestoreReport,
 } from '../backup';
 import { db, describeError, getSetting, isStandalone, SETTING, STAGE0_DB_NAME } from '../db';
+import { deleteCert, wipeAll, wipeRecords } from '../wipe';
 import { deviceSummary, formatBytes, readStorageInfo, type StorageInfo } from '../util';
 
 export function Settings(props: {
@@ -31,6 +32,7 @@ export function Settings(props: {
   const [busy, setBusy] = useState(false);
   const [report, setReport] = useState<RestoreReport | null>(null);
   const [stage0, setStage0] = useState(false);
+  const [certs, setCerts] = useState<{ code: string; name: string; packs: number; attempts: number }[]>([]);
   const appUrl = new URL(import.meta.env.BASE_URL, window.location.origin).href;
 
   const load = async () => {
@@ -39,6 +41,15 @@ export function Settings(props: {
     setPending(await db.orphans.count());
     setInfo(await readStorageInfo());
     setStage0(await Dexie.exists(STAGE0_DB_NAME).catch(() => false));
+    const packs = await db.packs.toArray();
+    const map = new Map<string, { code: string; name: string; packs: number; attempts: number }>();
+    for (const p of packs) {
+      const c = map.get(p.manifest.cert.code) ?? { code: p.manifest.cert.code, name: p.manifest.cert.name, packs: 0, attempts: 0 };
+      c.packs++;
+      map.set(c.code, c);
+    }
+    for (const c of map.values()) c.attempts = await db.attempts.filter((a) => a.qid.startsWith(`${c.code}-`)).count();
+    setCerts([...map.values()]);
   };
   useEffect(() => {
     load();
@@ -209,25 +220,74 @@ export function Settings(props: {
       </section>
 
       <section className="card">
+        <h2>자격종목 관리</h2>
+        {certs.length === 0 ? (
+          <p className="hint">가져온 문제팩이 없습니다.</p>
+        ) : (
+          <ul className="cert-list">
+            {certs.map((c) => (
+              <li key={c.code}>
+                <span>
+                  <b>{c.name}</b>
+                  <small className="muted">
+                    문제팩 {c.packs}회차 · 풀이 {c.attempts}건
+                  </small>
+                </span>
+                <button
+                  className="btn btn-small btn-danger"
+                  onClick={async () => {
+                    if (!window.confirm(`${c.name}을(를) 삭제합니다.\n문제팩 ${c.packs}회차와 이 종목의 학습 기록 ${c.attempts}건이 지워집니다(다른 종목은 그대로).\n합격 등으로 더 공부하지 않을 때 쓰세요. 계속할까요?`)) return;
+                    if (!window.confirm('기록을 남기려면 먼저 백업하세요. 지금 삭제할까요?')) return;
+                    const r = await deleteCert(c.code);
+                    props.toast(`${c.name} 삭제: 문제팩 ${r.packs}회차, 풀이 기록 ${r.attempts}건`);
+                    props.onChanged();
+                    await load();
+                  }}
+                >
+                  종목 삭제
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      <section className="card">
         <h2>이 기기 데이터 지우기</h2>
         <p className="hint">
-          Android에서 앱 아이콘을 삭제해도 학습 데이터는 Chrome에 남습니다(다시 설치하면 그대로 보임). 휴대폰을 넘기거나 복원을 시험할 때는 여기서
-          지웁니다. 문제팩·풀이 기록·메모가 모두 지워지고 되돌릴 수 없으니 먼저 백업하세요.
+          Android에서 앱 아이콘을 삭제해도 데이터는 Chrome에 남습니다(다시 설치하면 그대로 보임). 다시 시작하거나 휴대폰을 넘길 때는 여기서 지웁니다. 되돌릴
+          수 없으니 먼저 백업하세요.
         </p>
-        <button
-          className="btn btn-danger btn-block"
-          data-testid="wipe"
-          onClick={async () => {
-            if (!window.confirm(`이 기기의 문제팩과 학습 기록(${fp ? formatFingerprint(fp) : ''})을 모두 지웁니다. 백업 파일을 저장했나요?`)) return;
-            if (!window.confirm('정말 지울까요? 되돌릴 수 없습니다.')) return;
-            db.close();
-            await Dexie.delete(db.name);
-            await Dexie.delete(STAGE0_DB_NAME).catch(() => undefined);
-            window.location.reload();
-          }}
-        >
-          문제팩·학습 기록 모두 지우기
-        </button>
+        <div className="stack">
+          <button
+            className="btn btn-danger btn-block"
+            data-testid="wipe-records"
+            onClick={async () => {
+              if (!window.confirm(`학습 기록(${fp ? formatFingerprint(fp) : ''})만 지우고 문제팩은 남깁니다. 백업 파일을 저장했나요?`)) return;
+              await wipeRecords();
+              props.toast('학습 기록을 지웠습니다. 문제팩은 그대로입니다');
+              props.onChanged();
+              props.onBack();
+            }}
+          >
+            학습 기록만 지우기(문제팩 유지)
+          </button>
+          <button
+            className="btn btn-danger btn-block"
+            data-testid="wipe"
+            onClick={async () => {
+              if (!window.confirm(`문제팩과 학습 기록(${fp ? formatFingerprint(fp) : ''})을 모두 지웁니다. 백업 파일을 저장했나요?`)) return;
+              if (!window.confirm('정말 모두 지울까요? 되돌릴 수 없습니다.')) return;
+              await wipeAll();
+              await Dexie.delete(STAGE0_DB_NAME).catch(() => undefined);
+              props.toast('모두 지웠습니다. 문제팩을 다시 가져오세요');
+              props.onChanged();
+              props.onBack();
+            }}
+          >
+            문제팩까지 모두 지우기
+          </button>
+        </div>
       </section>
 
       <section className="card">

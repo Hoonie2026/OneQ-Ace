@@ -142,15 +142,14 @@ export function Solve(props: { target: Target; onExit: () => void; onResult: () 
           </span>
         </div>
         <button
-          className="icon-btn score-btn"
+          className="score-btn"
           onClick={async () => {
             await flushNote();
             props.onResult();
           }}
           aria-label="지금 성적 보기"
         >
-          <small>성적</small>
-          <b data-testid="answered">{answeredCount}</b>
+          📊 성적
         </button>
       </header>
       <div className="solve-progress" aria-hidden="true">

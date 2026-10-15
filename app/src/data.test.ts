@@ -2,7 +2,8 @@ import 'fake-indexeddb/auto';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { OneQDB } from './db';
 import { deletePack, importPackBytes } from './pack/import';
-import { ensureWrongRun, firstUnanswered, loadSession, recordAnswer, restartPass, saveNote, sessionResult, setUnsure, type Target } from './study';
+import { ensureWrongRun, firstUnanswered, loadSession, passHistory, recordAnswer, restartPass, saveNote, sessionResult, setUnsure, type Target } from './study';
+import { deleteCert, wipeAll, wipeRecords } from './wipe';
 import { backupDue, buildBackup, fingerprint, parseBackup, restoreBackup, BackupFormatError } from './backup';
 import { makePack, type FakeQ } from './test/makePack';
 
@@ -228,5 +229,65 @@ describe('백업·복원 (3단계 게이트: 백업 → 앱 삭제 → 복원 �
     await solveAll('TEST-2022-1', () => 1);
     expect((await backupDue(Date.now(), d)).due).toBe(false);
     expect((await backupDue(Date.now() + 8 * 86400_000, d)).due).toBe(true);
+  });
+});
+
+describe('점수 표기(실기기 2차 요청)', () => {
+  const hundred = () => makePack({ questions: Array.from({ length: 100 }, (_, i) => ({ hash: `h${i}`, answer: 1, subjectNo: Math.floor(i / 20) + 1 })) });
+
+  it('20문항 중 5문항 풀고 2문항 정답 → 그 과목 10점, 전체 평균 2점, 판정은 다 풀 때까지 보류', async () => {
+    await importPackBytes(await hundred(), {}, d);
+    const s = await solve({ kind: 'pass', packId: 'TEST-2022-1' }, (i) => (i < 2 ? 1 : 2), 5);
+    const r = await sessionResult(s, d);
+    expect(r.subjects[0].score).toBe(10);
+    expect(r.subjects[0].rate).toBe(40);
+    expect(r.avgScore).toBe(2);
+    expect(r.verdict).toBe(null);
+  });
+
+  it('회독 이력: 같은 회차를 두 번 풀면 회독별 점수가 따로 남는다', async () => {
+    await importPackBytes(await hundred(), {}, d);
+    await solveAll('TEST-2022-1', (i) => (i % 2 ? 1 : 2)); // 50점
+    await restartPass('TEST-2022-1', d);
+    await new Promise((r) => setTimeout(r, 5));
+    await solve({ kind: 'pass', packId: 'TEST-2022-1' }, () => 1, 10); // 10문항 정답 → 평균 10점
+    const h = await passHistory('TEST-2022-1', d);
+    expect(h.map((x) => [x.passNo, x.answered, x.avgScore, x.verdict])).toEqual([
+      [1, 100, 50, 'fail-average'],
+      [2, 10, 10, null],
+    ]);
+  });
+});
+
+describe('지우기·종목 삭제', () => {
+  it('학습 기록만 지우면 문제팩은 남고, 복원하면 팩을 다시 가져오지 않아도 바로 이어진다', async () => {
+    await importPackBytes(await makePack({ questions: qs(['a', 'b']) }), {}, d);
+    await solveAll('TEST-2022-1', () => 1);
+    const fp = await fingerprint(d);
+    const { json } = await buildBackup('test', d);
+    await wipeRecords(d);
+    expect([await d.attempts.count(), await d.packs.count()]).toEqual([0, 1]);
+    const rep = await restoreBackup(parseBackup(json), d);
+    expect(rep.matchesBackup).toBe(true);
+    expect(rep.reconcile.pending).toBe(0);
+    expect(await fingerprint(d)).toEqual(fp);
+    expect((await loadSession({ kind: 'pass', packId: 'TEST-2022-1' }, d))!.answers.size).toBe(2);
+  });
+
+  it('모두 지우기는 문제팩까지', async () => {
+    await importPackBytes(await makePack({ questions: qs(['a']) }), {}, d);
+    await wipeAll(d);
+    expect([await d.packs.count(), await d.questions.count(), await d.images.count()]).toEqual([0, 0, 0]);
+  });
+
+  it('종목 삭제는 그 종목의 팩과 기록만', async () => {
+    await importPackBytes(await makePack({ code: 'AAA', questions: qs(['a', 'b']) }), {}, d);
+    await importPackBytes(await makePack({ code: 'BBB', questions: qs(['c']) }), {}, d);
+    await solveAll('AAA-2022-1', () => 1);
+    await solveAll('BBB-2022-1', () => 1);
+    const r = await deleteCert('AAA', d);
+    expect(r).toEqual({ packs: 1, attempts: 2 });
+    expect((await d.packs.toArray()).map((p) => p.packId)).toEqual(['BBB-2022-1']);
+    expect((await d.attempts.toArray()).map((a) => a.qid)).toEqual(['BBB-2022-1-001']);
   });
 });

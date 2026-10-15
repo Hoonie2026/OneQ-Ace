@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ensureWrongRun, loadSession, restartPass, sessionResult, type Result as R, type Target } from '../study';
+import { ensureWrongRun, loadSession, passHistory, restartPass, sessionResult, type PassRecord, type Result as R, type Target } from '../study';
 
 const VERDICT: Record<NonNullable<R['verdict']>, { icon: string; text: string; cls: string }> = {
   pass: { icon: '✓', text: '합격선 통과', cls: 'ok' },
@@ -12,6 +12,7 @@ export function Result(props: { target: Target; onHome: () => void; onSolve: (t:
   const [res, setRes] = useState<R | null>(null);
   const [rule, setRule] = useState({ min: 40, avg: 60 });
   const [packId, setPackId] = useState('');
+  const [history, setHistory] = useState<PassRecord[]>([]);
 
   useEffect(() => {
     (async () => {
@@ -20,6 +21,7 @@ export function Result(props: { target: Target; onHome: () => void; onSolve: (t:
       setPackId(s.pack.packId);
       setRule({ min: s.pack.manifest.passRule.subjectMin, avg: s.pack.manifest.passRule.avgMin });
       setRes(await sessionResult(s));
+      if (props.target.kind === 'pass' && !props.target.subjectNo) setHistory(await passHistory(s.pack.packId));
     })();
   }, [JSON.stringify(props.target)]);
 
@@ -63,38 +65,43 @@ export function Result(props: { target: Target; onHome: () => void; onSolve: (t:
             <span>모름</span>
           </div>
         </div>
-        {!v && !res.complete && props.target.kind === 'pass' && !props.target.subjectNo && (
-          <p className="hint">과목마다 5문항 이상 풀면 합격선 판정을 보여 줍니다.</p>
-        )}
         {v && (
           <p className={`verdict ${v.cls}`}>
             <span aria-hidden="true">{v.icon}</span> {v.text}
-            {res.complete ? '' : ' (지금까지 푼 문항 기준)'}
           </p>
         )}
+        {!res.complete && wholePass && <p className="hint">합격선 판정은 100문항을 다 풀면 보여 줍니다.</p>}
       </section>
 
       <section className="card">
-        <h2>과목별 {res.complete ? '점수' : '정답률'}</h2>
+        <div className="score-head">
+          <h2>과목별 점수</h2>
+          <p className={`avg-score${res.complete && res.avgScore < rule.avg ? ' bad' : ''}`} data-testid="avg-score">
+            평균 <b>{res.avgScore}</b>점
+          </p>
+        </div>
         <ul className="bars">
           {res.subjects.map((s) => {
-            const val = res.complete ? s.score : s.rate;
-            const risk = val !== null && val < rule.min;
+            const risk = res.complete && s.score < rule.min;
             return (
               <li key={s.no}>
                 <div className="bar-label">
                   <span>
                     {s.no}. {s.name}
                   </span>
-                  <b className={risk ? 'bad' : ''}>{val === null ? '안 풂' : `${risk ? '과락 ' : ''}${val}${res.complete ? '점' : '%'}`}</b>
+                  <b className={risk ? 'bad' : ''} data-testid={`subject-score-${s.no}`}>
+                    {risk ? '과락 ' : ''}
+                    {s.score}점
+                  </b>
                 </div>
-                <div className="bar" role="img" aria-label={`${s.name} ${val ?? 0}`}>
-                  <div className={`bar-fill${risk ? ' bad' : (val ?? 0) < rule.avg ? ' warn' : ''}`} style={{ width: `${val ?? 0}%` }} />
+                <div className="bar" role="img" aria-label={`${s.name} ${s.score}점`}>
+                  <div className={`bar-fill${!res.complete ? ' partial' : s.score < rule.min ? ' bad' : s.score < rule.avg ? ' warn' : ''}`} style={{ width: `${s.score}%` }} />
                   <i className="bar-line" style={{ left: `${rule.min}%` }} />
                   <i className="bar-line avg" style={{ left: `${rule.avg}%` }} />
                 </div>
                 <small className="muted">
                   맞힘 {s.correct} / 푼 문항 {s.answered} / 전체 {s.total}
+                  {s.rate !== null && s.answered < s.total ? ` · 푼 문항 정답률 ${s.rate}%` : ''}
                   {s.unknown ? ` · 모름 ${s.unknown}` : ''}
                 </small>
               </li>
@@ -102,10 +109,40 @@ export function Result(props: { target: Target; onHome: () => void; onSolve: (t:
           })}
         </ul>
         <p className="hint">
-          세로선: 과락선 {rule.min} · 평균선 {rule.avg}.{' '}
-          {res.complete ? '점수 = 맞힌 문항 ÷ 과목 전체 문항.' : '다 풀기 전에는 푼 문항의 정답률로 보여 줍니다.'}
+          점수 = 맞힌 문항 ÷ 과목 전체 문항 × 100{res.complete ? '' : '(안 푼 문항은 0점)'}. 평균 = 과목 점수의 평균. 세로선: 과락선 {rule.min} · 평균선{' '}
+          {rule.avg}.
         </p>
       </section>
+
+      {history.length > 0 && (
+        <section className="card">
+          <h2>이 회차 회독 이력</h2>
+          <table className="history">
+            <thead>
+              <tr>
+                <th>회독</th>
+                <th>시작</th>
+                <th>진도</th>
+                <th>평균</th>
+                <th>판정</th>
+              </tr>
+            </thead>
+            <tbody>
+              {history.map((h) => (
+                <tr key={h.sessionId}>
+                  <td>{h.passNo}회독</td>
+                  <td>{new Date(h.startedAt).toLocaleDateString('ko-KR', { month: 'numeric', day: 'numeric' })}</td>
+                  <td>
+                    {h.answered}/{h.total}
+                  </td>
+                  <td>{h.avgScore}점</td>
+                  <td>{h.verdict ? VERDICT[h.verdict].text : h.finishedAt ? '중단' : '진행 중'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </section>
+      )}
 
       <section className="actions">
         {!res.complete && (

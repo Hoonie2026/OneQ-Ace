@@ -93,7 +93,8 @@ export async function restartPass(packId: string, d: OneQDB = defaultDb): Promis
 
 /** 회독에서 문항별 마지막 풀이(회독 시작 이후, 오답 다시 풀기 제외) */
 export async function passAnswers(pass: RunRow, qids: string[], d: OneQDB = defaultDb): Promise<Map<string, AttemptRow>> {
-  return latestByQid(qids, d, (a) => a.ts >= pass.startedAt && a.mode !== 'wrong');
+  // 끝난 회독은 끝난 시각까지만(다음 회독 기록이 섞이지 않게)
+  return latestByQid(qids, d, (a) => a.ts >= pass.startedAt && (pass.finishedAt == null || a.ts <= pass.finishedAt) && a.mode !== 'wrong');
 }
 
 // ── 오답·모름 묶음 ────────────────────────────────────
@@ -241,16 +242,15 @@ export interface Result {
   wrong: number;
   unknown: number;
   subjects: SubjectScore[];
-  /** 과목 정답률 평균(푼 과목만) */
-  avgRate: number | null;
-  /** 다 풀었으면 시험 점수로, 아니면 지금까지의 정답률로 판정 */
+  /** 평균 점수 = 과목 점수의 평균(안 푼 문항은 0점). 예: 100문항 중 2문항 정답 → 2점 */
+  avgScore: number;
+  /** 합격선 판정. 회차 전체를 다 풀었을 때만(풀이 중 점수는 안 푼 문항이 0점이라 판정하지 않음) */
   verdict: 'pass' | 'fail-subject' | 'fail-average' | null;
   complete: boolean;
   wrongQids: string[];
 }
 
 const r1 = (x: number) => Math.round(x * 10) / 10;
-export const INTERIM_MIN = 5;
 
 export async function sessionResult(s: Session, d: OneQDB = defaultDb): Promise<Result> {
   const qs = (await d.questions.bulkGet(s.qids)).filter((q): q is QuestionRow => !!q);
@@ -266,7 +266,7 @@ export async function sessionResult(s: Session, d: OneQDB = defaultDb): Promise<
     wrong: 0,
     unknown: 0,
     subjects: [],
-    avgRate: null,
+    avgScore: 0,
     verdict: null,
     complete: false,
     wrongQids: [],
@@ -294,16 +294,11 @@ export async function sessionResult(s: Session, d: OneQDB = defaultDb): Promise<
     x.rate = x.answered ? r1((x.correct / x.answered) * 100) : null;
     x.score = r1((x.correct / x.total) * 100);
   }
-  const rated = res.subjects.filter((x) => x.rate !== null);
-  res.avgRate = rated.length ? r1(rated.reduce((t, x) => t + x.rate!, 0) / rated.length) : null;
+  res.avgScore = res.subjects.length ? r1(res.subjects.reduce((t, x) => t + x.score, 0) / res.subjects.length) : 0;
   res.complete = res.answered === res.total && res.total > 0;
-  // 판정은 회차 전체(과목 필터 없는 회독)에서만. 다 풀기 전에는 모든 과목을 5문항 이상 풀었을 때만(몇 문항으로 과락을 단정하지 않게)
-  const enough = res.complete || res.subjects.every((x) => x.answered >= INTERIM_MIN);
-  if (s.target.kind === 'pass' && !s.target.subjectNo && rated.length && enough) {
+  if (s.target.kind === 'pass' && !s.target.subjectNo && res.complete) {
     const { subjectMin, avgMin } = s.pack.manifest.passRule;
-    const vals = res.complete ? res.subjects.map((x) => x.score) : rated.map((x) => x.rate!);
-    const avg = vals.reduce((t, v) => t + v, 0) / vals.length;
-    res.verdict = vals.some((v) => v < subjectMin) ? 'fail-subject' : avg < avgMin ? 'fail-average' : 'pass';
+    res.verdict = res.subjects.some((x) => x.score < subjectMin) ? 'fail-subject' : res.avgScore < avgMin ? 'fail-average' : 'pass';
   }
   return res;
 }
@@ -353,4 +348,43 @@ export async function packSummary(pack: PackRow, d: OneQDB = defaultDb): Promise
     wrongRunLeft: wrongRun ? wrongRun.qids.length - wrongDone : 0,
     lastActivity: Math.max(pass?.updatedAt ?? 0, wrongRun?.updatedAt ?? 0),
   };
+}
+
+// ── 회독 이력(같은 회차를 여러 번 풀었을 때 누적) ──────────
+
+export interface PassRecord {
+  passNo: number;
+  sessionId: string;
+  startedAt: number; // 첫 회독은 첫 풀이 시각
+  finishedAt: number | null;
+  answered: number;
+  total: number;
+  avgScore: number;
+  subjectScores: number[];
+  verdict: Result['verdict'];
+}
+
+export async function passHistory(packId: string, d: OneQDB = defaultDb): Promise<PassRecord[]> {
+  const pack = await d.packs.get(packId);
+  if (!pack) return [];
+  const passes = (await d.runs.where('packId').equals(packId).filter((r) => r.mode === 'round').toArray()).sort((a, b) => a.startedAt - b.startedAt);
+  const qids = (await packQuestions(packId, d)).map((q) => q.qid);
+  const out: PassRecord[] = [];
+  for (const [i, run] of passes.entries()) {
+    const answers = await passAnswers(run, qids, d);
+    const res = await sessionResult({ target: { kind: 'pass', packId }, run, pack, title: '', qids, answers }, d);
+    const first = Math.min(...[...answers.values()].map((a) => a.ts));
+    out.push({
+      passNo: i + 1,
+      sessionId: run.sessionId,
+      startedAt: run.startedAt || (Number.isFinite(first) ? first : run.updatedAt),
+      finishedAt: run.finishedAt,
+      answered: res.answered,
+      total: res.total,
+      avgScore: res.avgScore,
+      subjectScores: res.subjects.map((x) => x.score),
+      verdict: res.verdict,
+    });
+  }
+  return out;
 }
