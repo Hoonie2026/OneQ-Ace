@@ -8,11 +8,13 @@ import { addDays, parseDate } from './days';
 import { buildBank, byFrequency, sameKey, subjectKey } from './items';
 import { gradeOf, replay } from './memory';
 import { forecast } from './predict';
-import { planWeek, weekStartOf } from './plan';
+import { planWeek, subjectWeights, weekStartOf } from './plan';
+import { studyTime } from './minutes';
+import { passOutlook } from './outlook';
 import { buildTodaySession, interleave, retryTail } from './session';
 import { buildMock } from './mock';
-import { engineMock, enginePlan, engineToday, loadEngine, savePlanSettings } from './load';
-import { syntheticBank } from './sim';
+import { engineMock, engineOutlook, enginePlan, engineToday, loadEngine, savePlanSettings } from './load';
+import { passProbability, syntheticBank } from './sim';
 import { DEFAULT_PLAN_SETTINGS, type EngineAttempt, type EngineQuestion } from './types';
 
 const q = (qid: string, subjectName: string, text: string, examDate = '2022-03-05'): EngineQuestion => ({
@@ -136,12 +138,26 @@ describe('예상 점수(6.3)·주간 계획(6.4)·세션(6.5)', () => {
     expect(plan.doneThisWeek).toBe(1);
   });
 
-  it('마지막 주: 과락 위험이 아닌 과목은 신규 없이 복습만', () => {
+  it('마지막 주: 과목 진단 없이 복습·신규를 Δ로 고르고, 기록이 없으면 신규가 나온다', () => {
     const mem = replay(bank, []);
     const plan = planWeek({ bank, mem, attempts: [], settings: { ...settings, examDate: '2027-01-08' }, now: T0 });
     expect(plan.finalWeek).toBe(true);
-    // 기록이 없으면 전 과목이 과락 위험이라 신규가 허용된다
     expect(plan.counts.new).toBeGreaterThan(0);
+    expect(plan.items.length).toBe(plan.capacity); // 시간을 놀리지 않는다(ADR 007)
+  });
+
+  it('날짜별 학습시간: 연차일(300분)·쉬는 날(0분)이 가용량과 오늘 학습량에 반영된다', () => {
+    const base = planWeek({ bank, mem: replay(bank, []), attempts: [], settings, now: T0 });
+    const dayMinutes = { '2027-01-05': 300, '2027-01-06': 0 };
+    const plan = planWeek({ bank, mem: replay(bank, []), attempts: [], settings: { ...settings, dayMinutes }, now: T0 });
+    // 기본 날은 60분 × 6/7. 화 300분, 수 0분으로 바꾸면 (300 + 0 − 2 × 60 × 6/7)분 늘어난다
+    expect(plan.capacity).toBe(Math.floor(((360 - 2 * 60 * (6 / 7) + 300) * 60) / 90));
+    expect(plan.capacity).toBeGreaterThan(base.capacity);
+    expect(plan.todayMinutes).toBe(60);
+    const tue = planWeek({ bank, mem: replay(bank, []), attempts: [], settings: { ...settings, dayMinutes }, now: T0 + 86_400_000 });
+    expect(tue.todayMinutes).toBe(300);
+    expect(tue.todayTarget).toBe(200); // 300분 ÷ 1.5분
+    expect(studyTime({ ...settings, dayMinutes }, parseDate('2027-01-05'), parseDate('2027-01-06'))).toEqual({ minutes: 300, days: 1 });
   });
 
   it('세션: 15문항, 같은 과목 연속 3문항 이내', () => {
@@ -162,9 +178,70 @@ describe('예상 점수(6.3)·주간 계획(6.4)·세션(6.5)', () => {
     expect(retryTail(out, new Set(['0', '6'])).map((x) => x.qid)).toEqual(['0', '6']);
   });
 
+  it('과목 가중치(합격 확률 기여도): 과락선 아래로 깊을수록 크고, 안전한 과목은 작다', () => {
+    const w = subjectWeights(new Map([['a', 20], ['b', 35], ['c', 45], ['d', 70]]), { subjectMin: 40, avgMin: 60 });
+    expect(w.get('a')!).toBeGreaterThan(w.get('b')!);
+    expect(w.get('b')!).toBeGreaterThan(w.get('c')!);
+    expect(w.get('c')!).toBeGreaterThan(w.get('d')!);
+    expect(w.get('a')! / w.get('d')!).toBeGreaterThan(1.5); // 평균 부족 몫은 모든 과목에 같이 붙는다
+  });
+
+  it('합격 확률(과목당 20문항): 이항분포로 정확히 계산한다', () => {
+    // 한 과목: 정답 수 ≥ 12(평균 60) — 이항(20, 0.6)의 P(X ≥ 12) = 0.5956
+    expect(passProbability([60])).toBeCloseTo(0.5956, 3);
+    expect(passProbability([100, 100, 100, 100, 100])).toBeCloseTo(1, 9);
+    expect(passProbability([70, 70, 70, 70, 20])).toBeLessThan(0.05); // 20점 과목이 8문항 이상 맞힐 확률 3%
+    expect(passProbability([65, 65, 65, 65, 65])).toBeGreaterThan(passProbability([80, 80, 80, 80, 25]));
+  });
+
   it('주 시작은 월요일', () => {
     expect(weekStartOf(addDays(T0, 6))).toBe(parseDate('2027-01-04'));
     expect(weekStartOf(addDays(T0, 7))).toBe(parseDate('2027-01-11'));
+  });
+});
+
+describe('합격 기준 경고(ADR 007)', () => {
+  const qs = syntheticBank(10);
+  const bank = buildBank(qs);
+  const settings = { ...DEFAULT_PLAN_SETTINGS, examDate: '2027-01-18' }; // 14일 뒤
+  /** 과목마다 첫 풀이 20건, 정답률을 과목별로 정해 둔 기록 */
+  const history = (rates: number[]): EngineAttempt[] => {
+    const out: EngineAttempt[] = [];
+    bank.subjects.forEach((s, si) => {
+      const items = bank.items.filter((it) => it.subjectKey === s.key).slice(0, 20);
+      items.forEach((it, i) => out.push(att(it.qids[0], -1, i < Math.round(rates[si] * 20))));
+    });
+    return out;
+  };
+
+  it('과목 진단 전에는 판단을 미룬다(unknown)', () => {
+    const ol = passOutlook(bank, replay(bank, []), settings, T0);
+    expect(ol.status).toBe('unknown');
+    expect(ol.rough).toBe(true);
+  });
+
+  it('한 과목이 약하고 시간이 모자라면 과락 경고와 필요한 하루 학습시간을 낸다', () => {
+    const attempts = history([0.6, 0.6, 0.1, 0.6, 0.6]);
+    const mem = replay(bank, attempts);
+    const ol = passOutlook(bank, mem, { ...settings, dailyMinutes: 5 }, T0);
+    expect(ol.status).toBe('fail-subject');
+    expect(ol.failSubjects).toEqual([bank.subjects[2].name]);
+    expect(ol.fixMinutesPerDay).not.toBeNull();
+    expect(ol.neededMinutesPerDay).not.toBeNull();
+    expect(ol.neededMinutesPerDay!).toBeGreaterThanOrEqual(ol.fixMinutesPerDay!);
+    expect(ol.extraMinutesPerDay).toBeGreaterThan(0);
+    // 같은 사람이 필요한 만큼 시간을 늘리면 경고가 풀린다
+    const more = passOutlook(bank, mem, { ...settings, dailyMinutes: Math.ceil((ol.neededMinutesPerDay! * 7) / 6) + 1 }, T0);
+    expect(['pass', 'tight']).toContain(more.status);
+    expect(more.failSubjects).toEqual([]);
+  });
+
+  it('날짜별 학습시간(연차)을 넣으면 투영 점수가 오른다', () => {
+    const mem = replay(bank, history([0.5, 0.5, 0.3, 0.5, 0.5]));
+    const base = passOutlook(bank, mem, settings, T0);
+    const leave = passOutlook(bank, mem, { ...settings, dayMinutes: { '2027-01-16': 300, '2027-01-17': 300 } }, T0);
+    expect(leave.plannedMinutes).toBeGreaterThan(base.plannedMinutes);
+    expect(leave.projectedAverage).toBeGreaterThan(base.projectedAverage);
   });
 });
 
@@ -234,12 +311,16 @@ describe('DB 연결(load.ts)', () => {
     expect(ctx.settings).toBeNull();
     expect(enginePlan(ctx, T0)).toBeNull();
     expect(engineToday(ctx, T0)).toEqual([]);
+    expect(engineOutlook(ctx, T0)).toBeNull();
 
     await savePlanSettings('TEST', { examDate: '2027-02-01' }, d);
+    await savePlanSettings('TEST', { examDate: '2027-02-01', dayMinutes: { '2027-01-31': 300 } }, d); // 날짜별 학습시간도 같이 저장
     await d.attempts.add({ uid: 'u1', qid: 'TEST-2022-1-001', contentHash: 'x', ts: T0 - 86_400_000, chosen: 2, correct: false, unsure: false, elapsedMs: 5000, mode: 'round', sessionId: 's' });
     ctx = (await loadEngine('TEST', d))!;
     expect(ctx.settings!.examDate).toBe('2027-02-01');
     expect(ctx.settings!.passRule).toEqual({ subjectMin: 40, avgMin: 60 });
+    expect(ctx.settings!.dayMinutes).toEqual({ '2027-01-31': 300 });
+    expect(engineOutlook(ctx, T0)!.status).toBe('unknown'); // 과목 진단 전
     const plan = enginePlan(ctx, T0)!;
     expect(plan.items.find((p) => p.item.qids.includes('TEST-2022-1-001'))!.slot).toBe('weak');
     expect(engineToday(ctx, T0).length).toBe(12); // 15보다 적으면 있는 만큼

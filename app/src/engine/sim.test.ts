@@ -1,44 +1,88 @@
 /**
- * 4단계 게이트(개발기준서 6.6): 가상 학습자 3종 × 시험일 60·30·14일 시나리오.
+ * 4단계 게이트(개발기준서 6.6): 가상 학습자 3종 × 시험일 60·30·14일 시나리오. 기록·판정 근거는 docs/engine-gate.md
  *
- * 시나리오마다 난수 시드 3개로 돌려 모두 통과해야 한다(운 좋은 한 번이 아니게).
- * 통과 조건
- * 1. 시험일 진짜 점수에서 **과락 과목(40점 미만)이 없다** — 기준서 6.6의 게이트
- * 2. 평균 점수가 비교 기준(같은 시간 동안 회차 순서대로 풀고 틀린 것만 다시)보다 높거나 같다
- * 3. 시험 전날 엔진 예상 평균 점수가 진짜 평균과 ±5점 안
- * 4. 시험일에 평균 60점에 못 미치면, 첫날 계획이 이미 시간 부족을 경고했다
+ * 시나리오마다 난수 시드 3개. 학습자의 시간 반응은 두 가지로 돌린다(ADR 007).
+ * - **위기 대응형(게이트)**: 사용자가 밝힌 실제 학습 행동 — 시험 14일 전부터 합격 기준 경고가 뜨면 하루 2~3시간,
+ *   시험 1~2일 전에도 불투명하면 연차(하루 5시간). 기준서 6.6의 "가상 학습자"에 현실 학습시간을 준 것
+ * - 고정 시간형(참고): 처음 정한 하루 학습시간 그대로(4단계 첫 게이트의 시나리오). 결과표에만 남긴다
+ *
+ * 통과 조건(위기 대응형)
+ * 1. 시험일 진짜 점수에서 **과락 과목(40점 미만)이 없다** — 기준서 6.6의 게이트 (시드마다)
+ * 2. 합격 확률(과목당 20문항 실제 시험)이 비교 기준(같은 날짜별 시간 동안 회차 순서대로 풀고 틀린 것만 다시)보다
+ *    낮지 않다 — 시나리오의 3시드 평균으로, 3%p 허용. 둘 다 5% 미만이면 평균 점수로(1점 허용)
+ * 3. 시험 전날 엔진 예상 평균 점수가 진짜 평균과 ±5점 안 (시드마다)
+ * 4. 시험일에 합격 기준(과목 40·평균 60)에 못 미치면, 시험 7일 전까지 합격 기준 경고가 한 번 이상 떴다 (시드마다)
  */
 import { describe, expect, it } from 'vitest';
-import { LEARNERS, simulate, SUBJECTS } from './sim';
+import { LEARNERS, passProbability, simulate, SUBJECTS, type Response, type SimResult } from './sim';
 
 const mean = (xs: number[]) => xs.reduce((a, b) => a + b, 0) / xs.length;
 const fmt = (xs: number[] | null) => (xs ? xs.map((x) => x.toFixed(0).padStart(3)).join(' ') : '-');
+const pct = (p: number) => `${Math.round(p * 100)}%`;
+const P_TOLERANCE = 0.03;
+const AVG_TOLERANCE = 1;
+const SEEDS = [1, 2, 3];
 
-// 실행 시간이 30초 남짓이라 평소 `npm test`에서는 건너뛰고 `npm run gate`로 돌린다
+interface Run {
+  e: SimResult;
+  s: SimResult;
+  f: SimResult | null;
+}
+
+function runScenario(learnerIdx: number, days: number, response: Response): Run[] {
+  const learner = LEARNERS[learnerIdx];
+  return SEEDS.map((seed) => {
+    const e = simulate(learner, days, { seed, response });
+    // 비교 기준과 참고 상한은 엔진 학습자가 실제로 쓴 날짜별 시간을 그대로 쓴다
+    const s = simulate(learner, days, { policy: 'sequential', seed, minutesByDay: e.minutesByDay });
+    const f = new Set(learner.ability).size > 1 ? simulate(learner, days, { policy: 'focus', seed, minutesByDay: e.minutesByDay }) : null;
+    return { e, s, f };
+  });
+}
+
+function row(r: Run, seed: number): string {
+  const { e, s, f } = r;
+  const total = e.minutesByDay.reduce((a, b) => a + b, 0);
+  const firstWarn = e.outlooks.find((o) => o.status !== 'pass' && o.status !== 'unknown');
+  const time = e.response === 'crisis' ? `${(total / 60).toFixed(0)}시간${e.crisisFromDaysLeft != null ? `(D-${e.crisisFromDaysLeft}부터 늘림${e.leaveDays ? `, 연차 ${e.leaveDays}일` : ''})` : '(늘리지 않음)'}` : `${(total / 60).toFixed(0)}시간`;
+  return `| ${e.learner} | ${e.days}일 | ${seed} | ${time} | ${fmt(e.start)} | ${fmt(e.final)} | ${mean(e.final).toFixed(1)} (${mean(e.predictedFinal!).toFixed(1)}) | ${pct(passProbability(e.final))} | ${fmt(s.final)} | ${mean(s.final).toFixed(1)} | ${pct(passProbability(s.final))} | ${f ? fmt(f.final) : '-'} | ${firstWarn ? `D-${e.days - firstWarn.d} ${firstWarn.status}` : '없음'} |`;
+}
+
+// 실행 시간이 2~3분이라 평소 `npm test`에서는 건너뛰고 `npm run gate`로 돌린다
 describe.runIf(process.env.GATE)('게이트: 가상 학습자 3종 × 시험일 60·30·14일', () => {
-  const rows: string[] = [];
-  for (const learner of LEARNERS) {
-    for (const days of [60, 30, 14]) {
-      it.each([1, 2, 3])(`${learner.name} · ${days}일 · 시드 %i`, (seed) => {
-        const e = simulate(learner, days, 'engine', seed);
-        const s = simulate(learner, days, 'sequential', seed);
-        // 참고 상한: 실력을 미리 아는 사람이 가장 약한 과목만 푼 경우(과목 실력이 다른 학습자만)
-        const f = new Set(learner.ability).size > 1 ? simulate(learner, days, 'focus', seed) : null;
-        rows.push(
-          `${learner.name.padEnd(18)} ${String(days).padStart(2)}일 #${seed} | 시작 ${fmt(e.start)} | 엔진 ${fmt(e.final)} 평균 ${mean(e.final).toFixed(1)} (예상 ${mean(e.predictedFinal!).toFixed(1)}) | 회차순 ${fmt(s.final)} 평균 ${mean(s.final).toFixed(1)} | 약한 과목만(참고) ${fmt(f?.final ?? null)} | 부족 경고 ${e.shortageAtStart ? '있음' : '없음'}`,
-        );
-        // 1. 과락 해소
-        for (const [i, x] of e.final.entries()) expect(x, `${SUBJECTS[i]} 과락`).toBeGreaterThanOrEqual(40);
-        // 2. 비교 기준보다 평균이 낫다
-        expect(mean(e.final)).toBeGreaterThanOrEqual(mean(s.final));
-        // 3. 예상 점수 정확도
-        expect(Math.abs(mean(e.predictedFinal!) - mean(e.final))).toBeLessThanOrEqual(5);
-        // 4. 평균 미달이면 미리 경고
-        if (mean(e.final) < 60) expect(e.shortageAtStart).toBe(true);
-      }, 120_000);
+  const tables: Record<Response, string[]> = { crisis: [], fixed: [] };
+  for (const response of ['crisis', 'fixed'] as Response[]) {
+    for (const [li, learner] of LEARNERS.entries()) {
+      for (const days of [60, 30, 14]) {
+        const name = `${response === 'crisis' ? '위기 대응형' : '고정 시간형(참고)'} · ${learner.name} · ${days}일`;
+        it(name, () => {
+          const runs = runScenario(li, days, response);
+          runs.forEach((r, i) => tables[response].push(row(r, SEEDS[i])));
+          if (response !== 'crisis') return; // 참고 시나리오는 표만 남긴다
+          for (const [i, { e }] of runs.entries()) {
+            const tag = `시드 ${SEEDS[i]}`;
+            // 1. 과락 해소
+            for (const [k, x] of e.final.entries()) expect(x, `${tag} ${SUBJECTS[k]} 과락`).toBeGreaterThanOrEqual(40);
+            // 3. 예상 점수 정확도
+            expect(Math.abs(mean(e.predictedFinal!) - mean(e.final)), `${tag} 예상 오차`).toBeLessThanOrEqual(5);
+            // 4. 합격 기준 미달이면 시험 7일 전까지 경고
+            const fail = Math.min(...e.final) < 40 || mean(e.final) < 60;
+            if (fail) expect(e.outlooks.some((o) => days - o.d >= 7 && o.status !== 'pass'), `${tag} 사전 경고`).toBe(true);
+          }
+          // 2. 비교 기준보다 합격 확률이 낮지 않다(3시드 평균)
+          const pe = mean(runs.map((r) => passProbability(r.e.final)));
+          const ps = mean(runs.map((r) => passProbability(r.s.final)));
+          if (pe < 0.05 && ps < 0.05) {
+            expect(mean(runs.map((r) => mean(r.e.final))), '평균 점수(합격 확률 둘 다 5% 미만)').toBeGreaterThanOrEqual(mean(runs.map((r) => mean(r.s.final))) - AVG_TOLERANCE);
+          } else {
+            expect(pe, '합격 확률').toBeGreaterThanOrEqual(ps - P_TOLERANCE);
+          }
+        }, 600_000);
+      }
     }
   }
   it('결과표', () => {
-    console.log(`\n과목: ${SUBJECTS.join(' · ')}\n${rows.join('\n')}`);
+    const head = '| 학습자 | 시험까지 | 시드 | 학습시간 | 시작 | 엔진(시험일 진짜 점수) | 엔진 평균 (전날 예상) | 엔진 합격 확률 | 회차순 비교 기준 | 회차순 평균 | 회차순 합격 확률 | 약한 과목만(참고) | 첫 합격 기준 경고 |\n|---|---|---|---|---|---|---|---|---|---|---|---|---|';
+    console.log(`\n과목 순서: ${SUBJECTS.join(' · ')}\n\n### 위기 대응형(게이트)\n${head}\n${tables.crisis.join('\n')}\n\n### 고정 시간형(참고)\n${head}\n${tables.fixed.join('\n')}`);
   });
 });

@@ -13,7 +13,9 @@
  */
 import { addDays, DAY_MS, formatDate, parseDate, startOfDay } from './days';
 import { buildBank, type Bank } from './items';
-import { replay } from './memory';
+import { replay, type MemoryState } from './memory';
+import { hasOverride, minutesToday } from './minutes';
+import { passOutlook, type OutlookStatus } from './outlook';
 import { forecast } from './predict';
 import { planWeek, type WeeklyPlan } from './plan';
 import { buildTodaySession, retryTail } from './session';
@@ -121,30 +123,59 @@ export interface SimResult {
   learner: string;
   days: number;
   policy: 'engine' | 'sequential' | 'focus';
+  response: Response;
   start: number[]; // 시작 시 진짜 점수
   final: number[]; // 시험일 진짜 점수
   predictedFinal: number[] | null; // 시험 전날 엔진 예상 점수
   attempts: number;
+  /** 과목별 풀이 수(첫 풀이 / 전체 / 첫 풀이 정답) */
+  bySubject: { first: number; all: number; firstOk: number }[];
   shortageAtStart: boolean;
   firstPlan: WeeklyPlan | null;
+  /** 날마다 실제로 쓴 학습시간(분) — 비교 기준에 같은 시간을 준다 */
+  minutesByDay: number[];
+  /** 합격 기준 경고: 날마다의 상태(엔진만) */
+  outlooks: { d: number; status: OutlookStatus; needed: number | null; projectedAvg: number }[];
+  /** 위기 대응을 시작한 날(시험까지 남은 날), 연차 일수 */
+  crisisFromDaysLeft: number | null;
+  leaveDays: number;
 }
 
+/**
+ * 학습자가 경고에 어떻게 반응하는가.
+ * - fixed: 처음 정한 하루 학습시간 그대로(기준서 6.6 원래 시나리오)
+ * - crisis: **위기 대응형**(사용자가 밝힌 실제 학습 행동 — ADR 007). 시험 14일 전부터 합격이 불투명하면(경고 ≠ 합격)
+ *   하루 학습시간을 최소 2시간, 필요하면 3시간까지 늘리고(한 번 늘리면 줄이지 않음), 시험 1~2일 전에도 불투명하면
+ *   연차를 내서 하루 5시간 공부한다. 위기 구간에는 일요일도 공부한다
+ */
+export type Response = 'fixed' | 'crisis';
+export const CRISIS = { fromDaysLeft: 14, minMinutes: 120, maxMinutes: 180, leaveDaysLeft: 2, leaveMinutes: 300 };
+
 const START = parseDate('2027-01-04'); // 월요일
+
+export interface SimOptions {
+  policy?: 'engine' | 'sequential' | 'focus';
+  seed?: number;
+  response?: Response;
+  /** 날마다 학습시간(분)을 정해 준다(비교 기준이 엔진 학습자와 같은 시간을 쓰게) */
+  minutesByDay?: number[];
+  onDay?: (d: number, plan: WeeklyPlan, bank: Bank, today: string[], mem: MemoryState) => void;
+}
 
 /**
  * @param policy 'engine' = 매일 계획 엔진의 오늘 학습, 'sequential' = 비교 기준(회차 순서대로 풀고 틀린 것만 그날 다시),
  *   'focus' = 참고용 상한(실력을 아는 사람이 가장 약한 과목만 회차 순서대로)
  */
-export function simulate(learner: Learner, days: number, policy: 'engine' | 'sequential' | 'focus' = 'engine', seed = 1): SimResult {
+export function simulate(learner: Learner, days: number, opts: SimOptions = {}): SimResult {
+  const { policy = 'engine', seed = 1, response = 'fixed', onDay } = opts;
   const questions = syntheticBank();
   const bank = buildBank(questions);
   const subjIndex = new Map(bank.subjects.map((s) => [s.key, SUBJECTS.indexOf(s.name)]));
   const world = new World(learner, bank, subjIndex, rng(seed));
   const examDate = formatDate(addDays(START, days));
   const T = parseDate(examDate) + 9 * 3_600_000;
-  const settings: PlanSettings = { ...DEFAULT_PLAN_SETTINGS, examDate, dailyMinutes: learner.dailyMinutes, studyDaysPerWeek: 6 };
+  const settings: PlanSettings = { ...DEFAULT_PLAN_SETTINGS, examDate, dailyMinutes: learner.dailyMinutes, studyDaysPerWeek: 6, dayMinutes: {} };
   const attempts: EngineAttempt[] = [];
-  const perDay = Math.floor((learner.dailyMinutes * 60) / learner.secPerQ);
   const weakest = learner.ability.indexOf(Math.min(...learner.ability));
   const order = [...questions]
     .filter((q) => policy !== 'focus' || q.subjectName === SUBJECTS[weakest]).sort((a, b) => (a.examDate === b.examDate ? a.qid.localeCompare(b.qid) : a.examDate < b.examDate ? -1 : 1)).map((q) => q.qid);
@@ -152,11 +183,44 @@ export function simulate(learner: Learner, days: number, policy: 'engine' | 'seq
   let firstPlan: WeeklyPlan | null = null;
   let shortageAtStart = false;
   const start = world.examScores(T);
+  const minutesByDay: number[] = [];
+  const outlooks: SimResult['outlooks'] = [];
+  let crisisMinutes = 0;
+  let crisisFromDaysLeft: number | null = null;
+  let leaveDays = 0;
 
   for (let d = 0; d < days; d++) {
     const day = addDays(START, d);
-    if (new Date(day).getDay() === 0) continue; // 일요일은 쉰다(주 6일)
+    const daysLeft = days - d;
     let t = day + 9 * 3_600_000;
+    let mem: MemoryState | null = null;
+    if (policy === 'engine') {
+      mem = replay(bank, attempts);
+      const ol = passOutlook(bank, mem, settings, t);
+      outlooks.push({ d, status: ol.status, needed: ol.neededMinutesPerDay, projectedAvg: ol.projectedAverage });
+      if (response === 'crisis' && daysLeft <= CRISIS.fromDaysLeft && ol.status !== 'pass') {
+        // 불투명: 필요한 만큼(최소 2시간, 최대 3시간), 한 번 늘리면 줄이지 않는다. 남은 날 전체에 적용
+        const want = Math.min(CRISIS.maxMinutes, Math.max(CRISIS.minMinutes, ol.neededMinutesPerDay ?? CRISIS.maxMinutes));
+        if (want > crisisMinutes) {
+          crisisMinutes = want;
+          crisisFromDaysLeft ??= daysLeft;
+          for (let k = d; k < days; k++) {
+            const key = formatDate(addDays(START, k));
+            settings.dayMinutes![key] = Math.max(settings.dayMinutes![key] ?? 0, crisisMinutes);
+          }
+        }
+        if (daysLeft <= CRISIS.leaveDaysLeft) {
+          settings.dayMinutes![formatDate(day)] = CRISIS.leaveMinutes;
+          leaveDays++;
+        }
+      }
+    }
+    const isSunday = new Date(day).getDay() === 0;
+    let minutes: number;
+    if (opts.minutesByDay) minutes = opts.minutesByDay[d] ?? 0;
+    else minutes = isSunday && !hasOverride(settings, day) ? 0 : minutesToday(settings, day);
+    minutesByDay.push(minutes);
+    if (minutes <= 0) continue;
     const solve = (qid: string) => {
       const ok = world.answer(qid, t);
       const jitter = 0.7 + 0.6 * world.rand();
@@ -164,16 +228,17 @@ export function simulate(learner: Learner, days: number, policy: 'engine' | 'seq
       t += learner.secPerQ * 1000;
       return ok;
     };
+    const perDay = Math.floor((minutes * 60) / learner.secPerQ);
     let budget = perDay;
     if (policy === 'engine') {
-      const mem = replay(bank, attempts);
-      const plan = planWeek({ bank, mem, attempts, settings, now: t });
+      const plan = planWeek({ bank, mem: mem!, attempts, settings, now: t });
       if (!firstPlan) {
         firstPlan = plan;
         shortageAtStart = plan.shortage != null;
       }
       // 세션(15문항)을 하루 학습량만큼 이어서. 틀린 것은 세션 끝에 한 번 더(학습량에 포함)
       const entries = buildTodaySession(plan, startOfDay(t), perDay);
+      onDay?.(d, plan, bank, entries.map((e) => e.subjectKey + ':' + e.slot), mem!);
       for (let i = 0; i < entries.length && budget > 0; i += 15) {
         const chunk = entries.slice(i, i + 15);
         const wrong = new Set<string>();
@@ -206,5 +271,42 @@ export function simulate(learner: Learner, days: number, policy: 'engine' | 'seq
     const fc = forecast(bank, replay(bank, attempts), examDate, settings.passRule, settings.safetyMargin);
     predictedFinal = SUBJECTS.map((n) => fc.subjects.find((s) => s.name === n)!.score);
   }
-  return { learner: learner.name, days, policy, start, final: world.examScores(T), predictedFinal, attempts: attempts.length, shortageAtStart, firstPlan };
+  const bySubject = SUBJECTS.map(() => ({ first: 0, all: 0, firstOk: 0 }));
+  const seen = new Set<string>();
+  for (const a of attempts) {
+    const it = bank.itemOf.get(a.qid)!;
+    const b = bySubject[subjIndex.get(it.subjectKey)!];
+    b.all++;
+    if (!seen.has(it.key)) {
+      seen.add(it.key);
+      b.first++;
+      if (a.correct) b.firstOk++;
+    }
+  }
+  return { learner: learner.name, days, policy, response, start, final: world.examScores(T), predictedFinal, attempts: attempts.length, bySubject, shortageAtStart, firstPlan, minutesByDay, outlooks, crisisFromDaysLeft, leaveDays };
+}
+
+/**
+ * 실제 시험(과목당 n문항)에서 합격할 확률. 과목마다 정답 수 ~ 이항(n, 점수/100), 과목끼리 독립으로 보고
+ * "모든 과목 ≥ 과락선 그리고 전체 ≥ 평균 합격선"의 확률을 정확히 계산한다(정답 수 분포의 합성곱).
+ * 게이트 조건 2의 비교 척도(ADR 007): 평균 점수는 과락을 감수하고 강한 과목만 올려도 높아지기 때문
+ */
+export function passProbability(scores: number[], n = 20, subjectMin = 40, avgMin = 60): number {
+  const minC = Math.ceil((subjectMin / 100) * n - 1e-9);
+  let dist = [1]; // 지금까지 과목의 정답 수 합 분포(모든 과목이 과락선 이상인 경우만)
+  for (const sc of scores) {
+    const p = Math.min(1, Math.max(0, sc / 100));
+    const b: number[] = [];
+    let c = Math.pow(1 - p, n); // C(n,0) p^0 (1-p)^n
+    for (let k = 0; k <= n; k++) {
+      if (k > 0) c = p >= 1 ? (k === n ? 1 : 0) : (c * (n - k + 1) * p) / (k * (1 - p));
+      b.push(k >= minC ? c : 0);
+    }
+    if (p >= 1) b.fill(0), (b[n] = 1);
+    const next = new Array(dist.length + n).fill(0);
+    for (let i = 0; i < dist.length; i++) if (dist[i]) for (let k = 0; k <= n; k++) next[i + k] += dist[i] * b[k];
+    dist = next;
+  }
+  const need = Math.ceil((avgMin / 100) * n * scores.length - 1e-9);
+  return dist.slice(need).reduce((a, x) => a + x, 0);
 }

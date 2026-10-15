@@ -7,6 +7,7 @@ import { buildBank, type Bank } from './items';
 import { replay, type MemoryState } from './memory';
 import { forecast, type Forecast } from './predict';
 import { planWeek, type WeeklyPlan } from './plan';
+import { passOutlook, type PassOutlook } from './outlook';
 import { buildTodaySession, type SessionEntry } from './session';
 import { buildMock, type MockExam, type MockStrategy } from './mock';
 import { startOfDay } from './days';
@@ -68,6 +69,11 @@ export function engineForecast(ctx: EngineContext): Forecast | null {
 
 export function enginePlan(ctx: EngineContext, now = Date.now()): WeeklyPlan | null {
   return ctx.settings ? planWeek({ bank: ctx.bank, mem: ctx.mem, attempts: ctx.attempts, settings: ctx.settings, now }) : null;
+}
+
+/** 합격 기준 경고(홈 경고 카드, 5단계) */
+export function engineOutlook(ctx: EngineContext, now = Date.now()): PassOutlook | null {
+  return ctx.settings ? passOutlook(ctx.bank, ctx.mem, ctx.settings, now) : null;
 }
 
 export function engineToday(ctx: EngineContext, now = Date.now()): SessionEntry[] {

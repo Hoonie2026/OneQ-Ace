@@ -42,6 +42,11 @@ export interface PlanSettings {
   dailyMinutes: number;
   /** 주간 학습일(1~7) */
   studyDaysPerWeek: number;
+  /**
+   * 날짜별 학습시간(분) — 기본값(하루 학습시간 × 주간 학습일 비율) 대신 그날 쓸 시간. 0이면 쉬는 날.
+   * 예: 시험 14일 전부터 하루 150분, 시험 1~2일 전 연차 300분(ADR 007). 키는 YYYY-MM-DD(기기 현지 날짜)
+   */
+  dayMinutes?: Record<string, number>;
   /** 안전여유 m(점). 기본 10 */
   safetyMargin: number;
   passRule: PassRule;
