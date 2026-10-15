@@ -42,7 +42,8 @@ export interface CardRow {
   lastReview?: number;
 }
 
-export type AttemptMode = 'round' | 'subject' | 'wrong';
+/** round·subject = 회독(ADR 003), wrong = 오답 다시 풀기, today = 오늘 학습(엔진 세션), mock = 모의고사(5단계) */
+export type AttemptMode = 'round' | 'subject' | 'wrong' | 'today' | 'mock';
 
 /** 모든 풀이 이력(원장). chosen 0 = 모름 */
 export interface AttemptRow {
@@ -83,6 +84,10 @@ export interface RunRow {
   startedAt: number;
   updatedAt: number;
   finishedAt: number | null;
+  /** 여러 회차에 걸친 묶음(오늘 학습·모의고사)의 자격종목. 이때 packId는 `${종목}-@${mode}` */
+  certCode?: string;
+  /** 모의고사 제한 시간(초) */
+  limitSec?: number;
 }
 
 /** 문항에 다시 잇지 못한 기록. 조용히 지우지 않고 여기 보관한다(4.3) */

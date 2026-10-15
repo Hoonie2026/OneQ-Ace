@@ -8,6 +8,7 @@ import { formatBytes } from './util';
 import { ErrorBoundary } from './ui/ErrorBoundary';
 import { Home } from './ui/Home';
 import { PackDetail } from './ui/PackDetail';
+import { PlanSetup } from './ui/PlanSetup';
 import { Result } from './ui/Result';
 import { Settings } from './ui/Settings';
 import { Solve } from './ui/Solve';
@@ -17,6 +18,7 @@ type Screen =
   | { name: 'solve'; target: Target }
   | { name: 'result'; target: Target }
   | { name: 'pack'; packId: string }
+  | { name: 'plan'; certCode: string; certName: string }
   | { name: 'settings' };
 
 const APP_VERSION = __APP_VERSION__;
@@ -154,8 +156,12 @@ export default function App() {
           onResult={(target) => go({ name: 'result', target })}
           onPack={(packId) => go({ name: 'pack', packId })}
           onSettings={() => go({ name: 'settings' })}
+          onPlan={(certCode, certName) => go({ name: 'plan', certCode, certName })}
+          onChanged={bump}
+          toast={flash}
         />
       )}
+      {screen.name === 'plan' && <PlanSetup certCode={screen.certCode} certName={screen.certName} onBack={home} onSaved={flash} />}
       {screen.name === 'solve' && (
         <Solve target={screen.target} onExit={home} onResult={() => go({ name: 'result', target: screen.target })} />
       )}

@@ -8,10 +8,16 @@
  * - 오답·모름 다시 풀기는 회독과 별개의 묶음(run)이고, 다 풀면 닫힌다.
  * - DB의 runs 테이블을 그대로 쓴다: mode 'round' = 회독, 'wrong' = 오답 묶음. (v0.1.0의 'subject' 묶음은 더 쓰지 않음)
  */
-import { db as defaultDb, newId, safeWrite, type AttemptRow, type OneQDB, type PackRow, type QuestionRow, type RunRow } from './db';
+import { db as defaultDb, newId, safeWrite, type AttemptMode, type AttemptRow, type OneQDB, type PackRow, type QuestionRow, type RunRow } from './db';
+import { subjectKey } from './engine/items';
 
-/** 풀이 화면이 여는 대상 */
-export type Target = { kind: 'pass'; packId: string; subjectNo?: number } | { kind: 'wrong'; sessionId: string };
+/**
+ * 풀이 화면이 여는 대상. set = 여러 회차에 걸친 묶음(오늘 학습·모의고사 — 5단계)
+ */
+export type Target = { kind: 'pass'; packId: string; subjectNo?: number } | { kind: 'wrong'; sessionId: string } | { kind: 'set'; sessionId: string };
+
+/** 회독 진도에 들어가는 풀이(회차 전체·과목별). 오답 다시 풀기·오늘 학습·모의고사는 회독과 별개 */
+export const isPassAttempt = (a: Pick<AttemptRow, 'mode'>) => a.mode === 'round' || a.mode === 'subject';
 
 export function isCorrect(q: Pick<QuestionRow, 'answer' | 'acceptAlso'>, chosen: number): boolean {
   return chosen !== 0 && (chosen === q.answer || (q.acceptAlso ?? []).includes(chosen));
@@ -94,7 +100,7 @@ export async function restartPass(packId: string, d: OneQDB = defaultDb): Promis
 /** 회독에서 문항별 마지막 풀이(회독 시작 이후, 오답 다시 풀기 제외) */
 export async function passAnswers(pass: RunRow, qids: string[], d: OneQDB = defaultDb): Promise<Map<string, AttemptRow>> {
   // 끝난 회독은 끝난 시각까지만(다음 회독 기록이 섞이지 않게)
-  return latestByQid(qids, d, (a) => a.ts >= pass.startedAt && (pass.finishedAt == null || a.ts <= pass.finishedAt) && a.mode !== 'wrong');
+  return latestByQid(qids, d, (a) => a.ts >= pass.startedAt && (pass.finishedAt == null || a.ts <= pass.finishedAt) && isPassAttempt(a));
 }
 
 // ── 오답·모름 묶음 ────────────────────────────────────
@@ -135,8 +141,11 @@ export async function ensureWrongRun(packId: string, d: OneQDB = defaultDb): Pro
 
 export interface Session {
   target: Target;
-  run: RunRow; // 회독 또는 오답 묶음
+  run: RunRow; // 회독·오답 묶음·오늘 학습·모의고사
+  /** 대표 팩(회독·오답은 그 팩, 묶음은 첫 문항의 팩) */
   pack: PackRow;
+  /** 문항이 속한 팩들(묶음은 여러 회차) */
+  packs: Map<string, PackRow>;
   title: string;
   qids: string[]; // 이 화면에서 풀 문항(과목별이면 그 과목만)
   answers: Map<string, AttemptRow>; // 이 묶음 기준 문항별 마지막 풀이
@@ -155,14 +164,66 @@ export async function loadSession(target: Target, d: OneQDB = defaultDb): Promis
       title += ` ${target.subjectNo}과목 ${s?.name ?? ''}`;
     }
     const qids = qs.map((q) => q.qid);
-    return { target, run, pack, title: title.trim(), qids, answers: await passAnswers(run, qids, d) };
+    return { target, run, pack, packs: new Map([[pack.packId, pack]]), title: title.trim(), qids, answers: await passAnswers(run, qids, d) };
   }
   const run = await d.runs.get(target.sessionId);
   if (!run) return null;
-  const pack = await d.packs.get(run.packId);
-  if (!pack) return null;
-  const answers = await latestByQid(run.qids, d, (a) => a.sessionId === run.sessionId);
-  return { target, run, pack, title: run.title, qids: run.qids, answers };
+  if (target.kind === 'wrong') {
+    const pack = await d.packs.get(run.packId);
+    if (!pack) return null;
+    const answers = await latestByQid(run.qids, d, (a) => a.sessionId === run.sessionId);
+    return { target, run, pack, packs: new Map([[pack.packId, pack]]), title: run.title, qids: run.qids, answers };
+  }
+  // 묶음: 지운 팩의 문항은 빼고 연다
+  const qs = (await d.questions.bulkGet(run.qids)).filter((q): q is QuestionRow => !!q);
+  if (!qs.length) return null;
+  const packs = new Map<string, PackRow>();
+  for (const id of new Set(qs.map((q) => q.packId))) {
+    const p = await d.packs.get(id);
+    if (p) packs.set(id, p);
+  }
+  const qids = qs.filter((q) => packs.has(q.packId)).map((q) => q.qid);
+  if (!qids.length) return null;
+  const answers = await latestByQid(qids, d, (a) => a.sessionId === run.sessionId);
+  return { target, run, pack: packs.get(qs[0].packId)!, packs, title: run.title, qids, answers };
+}
+
+/** 여러 회차에 걸친 묶음(오늘 학습·모의고사)을 만든다 */
+export async function createSetRun(
+  certCode: string,
+  mode: Extract<AttemptMode, 'today' | 'mock'>,
+  title: string,
+  qids: string[],
+  opts: { limitSec?: number; now?: number } = {},
+  d: OneQDB = defaultDb,
+): Promise<RunRow> {
+  const now = opts.now ?? Date.now();
+  const run: RunRow = {
+    sessionId: newId(),
+    packId: `${certCode}-@${mode}`,
+    mode,
+    title,
+    qids,
+    index: 0,
+    answered: {},
+    startedAt: now,
+    updatedAt: now,
+    finishedAt: null,
+    certCode,
+    ...(opts.limitSec ? { limitSec: opts.limitSec } : {}),
+  };
+  await safeWrite(mode === 'mock' ? '모의고사 시작' : '오늘 학습 시작', () => d.runs.put(run));
+  return run;
+}
+
+/** 묶음을 끝낸다(모의고사 제출·시간 종료) */
+export async function finishRun(sessionId: string, now = Date.now(), d: OneQDB = defaultDb): Promise<void> {
+  await safeWrite('풀이 끝내기', () => d.runs.update(sessionId, { finishedAt: now, updatedAt: now }));
+}
+
+/** 종목의 묶음 목록(최근 순) */
+export async function setRuns(certCode: string, mode: Extract<AttemptMode, 'today' | 'mock'>, d: OneQDB = defaultDb): Promise<RunRow[]> {
+  return (await d.runs.where('packId').equals(`${certCode}-@${mode}`).toArray()).sort((a, b) => b.startedAt - a.startedAt);
 }
 
 /** 이어 풀 위치: 안 푼 첫 문항. 다 풀었으면 -1 */
@@ -179,7 +240,7 @@ export async function recordAnswer(
   d: OneQDB = defaultDb,
 ): Promise<{ session: Session; attempt: AttemptRow }> {
   const now = opts.now ?? Date.now();
-  const mode = s.target.kind === 'wrong' ? 'wrong' : s.target.subjectNo ? 'subject' : 'round';
+  const mode: AttemptMode = s.target.kind === 'wrong' ? 'wrong' : s.target.kind === 'set' ? s.run.mode : s.target.subjectNo ? 'subject' : 'round';
   const attempt: AttemptRow = {
     uid: newId(),
     qid: q.qid,
@@ -194,8 +255,8 @@ export async function recordAnswer(
   };
   const answers = new Map(s.answers).set(q.qid, attempt);
   const run: RunRow = { ...s.run, answered: { ...s.run.answered, [q.qid]: attempt.uid }, updatedAt: now };
-  // 오답 묶음은 다 풀면 닫는다. 회독은 사용자가 "새 회독"을 고를 때까지 열어 둔다(결과를 계속 볼 수 있게)
-  if (s.target.kind === 'wrong' && run.qids.every((x) => answers.has(x))) run.finishedAt = now;
+  // 오답 묶음·오늘 학습·모의고사는 다 풀면 닫는다. 회독은 사용자가 "새 회독"을 고를 때까지 열어 둔다(결과를 계속 볼 수 있게)
+  if (s.target.kind !== 'pass' && s.qids.every((x) => answers.has(x))) run.finishedAt = now;
   await safeWrite('풀이 기록', () =>
     d.transaction('rw', d.attempts, d.runs, async () => {
       attempt.id = await d.attempts.add(attempt);
@@ -254,10 +315,18 @@ const r1 = (x: number) => Math.round(x * 10) / 10;
 
 export async function sessionResult(s: Session, d: OneQDB = defaultDb): Promise<Result> {
   const qs = (await d.questions.bulkGet(s.qids)).filter((q): q is QuestionRow => !!q);
-  const subjects = new Map<number, SubjectScore>();
-  for (const sub of s.pack.manifest.subjects) {
-    subjects.set(sub.no, { no: sub.no, name: sub.name, total: 0, answered: 0, correct: 0, unknown: 0, rate: null, score: 0 });
+  // 과목은 과목명으로 묶는다(ADR 004 — 여러 회차에 걸친 묶음도 같은 과목끼리). 순서는 가장 최근 회차의 과목 순서
+  const primary = [...s.packs.values()].sort((a, b) => (a.manifest.exam.date < b.manifest.exam.date ? 1 : -1))[0] ?? s.pack;
+  const subjects = new Map<string, SubjectScore>();
+  for (const sub of primary.manifest.subjects) {
+    subjects.set(subjectKey(sub.name), { no: sub.no, name: sub.name, total: 0, answered: 0, correct: 0, unknown: 0, rate: null, score: 0 });
   }
+  const keyOf = (q: QuestionRow) => {
+    const name = (s.packs.get(q.packId) ?? s.pack).manifest.subjects.find((x) => x.no === q.subjectNo)?.name ?? `${q.subjectNo}과목`;
+    const k = subjectKey(name);
+    if (!subjects.has(k)) subjects.set(k, { no: subjects.size + 1, name, total: 0, answered: 0, correct: 0, unknown: 0, rate: null, score: 0 });
+    return k;
+  };
   const res: Result = {
     title: s.title,
     total: qs.length,
@@ -272,7 +341,7 @@ export async function sessionResult(s: Session, d: OneQDB = defaultDb): Promise<
     wrongQids: [],
   };
   for (const q of qs) {
-    const sub = subjects.get(q.subjectNo)!;
+    const sub = subjects.get(keyOf(q))!;
     sub.total++;
     const a = s.answers.get(q.qid);
     if (!a) continue;
@@ -296,8 +365,10 @@ export async function sessionResult(s: Session, d: OneQDB = defaultDb): Promise<
   }
   res.avgScore = res.subjects.length ? r1(res.subjects.reduce((t, x) => t + x.score, 0) / res.subjects.length) : 0;
   res.complete = res.answered === res.total && res.total > 0;
-  if (s.target.kind === 'pass' && !s.target.subjectNo && res.complete) {
-    const { subjectMin, avgMin } = s.pack.manifest.passRule;
+  // 합격선 판정: 회차 전체를 다 풀었을 때, 그리고 모의고사는 제출(시간 종료 포함)하면 — 안 푼 문항은 0점
+  const mockDone = s.run.mode === 'mock' && (res.complete || s.run.finishedAt != null);
+  if (((s.target.kind === 'pass' && !s.target.subjectNo && res.complete) || mockDone) && res.subjects.length) {
+    const { subjectMin, avgMin } = primary.manifest.passRule;
     res.verdict = res.subjects.some((x) => x.score < subjectMin) ? 'fail-subject' : res.avgScore < avgMin ? 'fail-average' : 'pass';
   }
   return res;
@@ -322,7 +393,7 @@ export async function packSummary(pack: PackRow, d: OneQDB = defaultDb): Promise
   const qs = await packQuestions(pack.packId, d);
   const qids = qs.map((q) => q.qid);
   const pass = await currentPass(pack.packId, d);
-  const answers = pass ? await passAnswers(pass, qids, d) : await latestByQid(qids, d, (a) => a.mode !== 'wrong');
+  const answers = pass ? await passAnswers(pass, qids, d) : await latestByQid(qids, d, isPassAttempt);
   const latest = await latestByQid(qids, d);
   const bySubject = new Map<number, { answered: number; total: number }>();
   for (const q of qs) {
@@ -372,7 +443,7 @@ export async function passHistory(packId: string, d: OneQDB = defaultDb): Promis
   const out: PassRecord[] = [];
   for (const [i, run] of passes.entries()) {
     const answers = await passAnswers(run, qids, d);
-    const res = await sessionResult({ target: { kind: 'pass', packId }, run, pack, title: '', qids, answers }, d);
+    const res = await sessionResult({ target: { kind: 'pass', packId }, run, pack, packs: new Map([[pack.packId, pack]]), title: '', qids, answers }, d);
     const first = Math.min(...[...answers.values()].map((a) => a.ts));
     out.push({
       passNo: i + 1,

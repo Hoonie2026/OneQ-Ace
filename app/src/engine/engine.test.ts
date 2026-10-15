@@ -146,7 +146,7 @@ describe('예상 점수(6.3)·주간 계획(6.4)·세션(6.5)', () => {
     expect(plan.items.length).toBe(plan.capacity); // 시간을 놀리지 않는다(ADR 007)
   });
 
-  it('날짜별 학습시간: 연차일(300분)·쉬는 날(0분)이 가용량과 오늘 학습량에 반영된다', () => {
+  it('날짜별 학습시간: 집중일(300분)·쉬는 날(0분)이 가용량과 오늘 학습량에 반영된다', () => {
     const base = planWeek({ bank, mem: replay(bank, []), attempts: [], settings, now: T0 });
     const dayMinutes = { '2027-01-05': 300, '2027-01-06': 0 };
     const plan = planWeek({ bank, mem: replay(bank, []), attempts: [], settings: { ...settings, dayMinutes }, now: T0 });
@@ -229,6 +229,10 @@ describe('합격 기준 경고(ADR 007)', () => {
     expect(ol.fixMinutesPerDay).not.toBeNull();
     expect(ol.neededMinutesPerDay).not.toBeNull();
     expect(ol.neededMinutesPerDay!).toBeGreaterThanOrEqual(ol.fixMinutesPerDay!);
+    // 최소(과락선·합격선 그대로) ≤ 권장(여유 포함). "남은 14일 동안 매일 최소 ○분"
+    expect(ol.daysLeft).toBe(14);
+    expect(ol.minMinutesPerDay).not.toBeNull();
+    expect(ol.minMinutesPerDay!).toBeLessThanOrEqual(ol.neededMinutesPerDay!);
     expect(ol.extraMinutesPerDay).toBeGreaterThan(0);
     // 같은 사람이 필요한 만큼 시간을 늘리면 경고가 풀린다
     const more = passOutlook(bank, mem, { ...settings, dailyMinutes: Math.ceil((ol.neededMinutesPerDay! * 7) / 6) + 1 }, T0);
@@ -236,7 +240,7 @@ describe('합격 기준 경고(ADR 007)', () => {
     expect(more.failSubjects).toEqual([]);
   });
 
-  it('날짜별 학습시간(연차)을 넣으면 투영 점수가 오른다', () => {
+  it('마지막 날들에 학습시간을 늘리면 투영 점수가 오른다', () => {
     const mem = replay(bank, history([0.5, 0.5, 0.3, 0.5, 0.5]));
     const base = passOutlook(bank, mem, settings, T0);
     const leave = passOutlook(bank, mem, { ...settings, dayMinutes: { '2027-01-16': 300, '2027-01-17': 300 } }, T0);

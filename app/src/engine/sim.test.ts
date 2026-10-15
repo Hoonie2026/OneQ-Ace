@@ -3,7 +3,7 @@
  *
  * 시나리오마다 난수 시드 3개. 학습자의 시간 반응은 두 가지로 돌린다(ADR 007).
  * - **위기 대응형(게이트)**: 사용자가 밝힌 실제 학습 행동 — 시험 14일 전부터 합격 기준 경고가 뜨면 하루 2~3시간,
- *   시험 1~2일 전에도 불투명하면 연차(하루 5시간). 기준서 6.6의 "가상 학습자"에 현실 학습시간을 준 것
+ *   시험 1~2일 전에도 불투명하면 경고가 알려 주는 필요한 시간만큼(하루 최대 8시간). 기준서 6.6의 "가상 학습자"에 현실 학습시간을 준 것
  * - 고정 시간형(참고): 처음 정한 하루 학습시간 그대로(4단계 첫 게이트의 시나리오). 결과표에만 남긴다
  *
  * 통과 조건(위기 대응형)
@@ -44,7 +44,7 @@ function row(r: Run, seed: number): string {
   const { e, s, f } = r;
   const total = e.minutesByDay.reduce((a, b) => a + b, 0);
   const firstWarn = e.outlooks.find((o) => o.status !== 'pass' && o.status !== 'unknown');
-  const time = e.response === 'crisis' ? `${(total / 60).toFixed(0)}시간${e.crisisFromDaysLeft != null ? `(D-${e.crisisFromDaysLeft}부터 늘림${e.leaveDays ? `, 연차 ${e.leaveDays}일` : ''})` : '(늘리지 않음)'}` : `${(total / 60).toFixed(0)}시간`;
+  const time = e.response === 'crisis' ? `${(total / 60).toFixed(0)}시간${e.crisisFromDaysLeft != null ? `(D-${e.crisisFromDaysLeft}부터 늘림${e.pushDays ? `, 마지막 ${e.pushDays}일 최대 ${(e.pushMaxMinutes / 60).toFixed(1)}시간` : ''})` : '(늘리지 않음)'}` : `${(total / 60).toFixed(0)}시간`;
   return `| ${e.learner} | ${e.days}일 | ${seed} | ${time} | ${fmt(e.start)} | ${fmt(e.final)} | ${mean(e.final).toFixed(1)} (${mean(e.predictedFinal!).toFixed(1)}) | ${pct(passProbability(e.final))} | ${fmt(s.final)} | ${mean(s.final).toFixed(1)} | ${pct(passProbability(s.final))} | ${f ? fmt(f.final) : '-'} | ${firstWarn ? `D-${e.days - firstWarn.d} ${firstWarn.status}` : '없음'} |`;
 }
 

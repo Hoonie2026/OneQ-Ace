@@ -1,6 +1,6 @@
 {
   "name": "oneq-ace-app",
-  "version": "0.1.3",
+  "version": "0.2.0",
   "description": "원큐합격 학습앱 (PWA)",
   "scripts": {
     "dev": "vite",

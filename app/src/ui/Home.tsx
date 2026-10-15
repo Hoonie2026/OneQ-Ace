@@ -1,7 +1,12 @@
 import { useEffect, useState } from 'react';
-import { db, getSetting, isStandalone, setSetting, SETTING } from '../db';
+import { loadCoach, startMock, startToday, type Coach } from '../coach';
+import { db, describeError, getSetting, isStandalone, setSetting, SETTING } from '../db';
 import { ensureWrongRun, examLabel, packSummary, type PackSummary, type Target } from '../study';
+import { CoachCard } from './CoachCard';
+import { MockPanel } from './MockPanel';
 import { PackPicker } from './PackPicker';
+
+type Tab = 'rounds' | 'mock';
 
 interface Cert {
   code: string;
@@ -17,7 +22,13 @@ export function Home(props: {
   onResult: (t: Target) => void;
   onPack: (packId: string) => void;
   onSettings: () => void;
+  onPlan: (certCode: string, certName: string) => void;
+  onChanged: () => void;
+  toast: (m: string) => void;
 }) {
+  const [coach, setCoach] = useState<Coach | null>(null);
+  const [tab, setTab] = useState<Tab>('rounds');
+  const [starting, setStarting] = useState(false);
   const [items, setItems] = useState<PackSummary[] | null>(null);
   const [certs, setCerts] = useState<Cert[]>([]);
   const [cert, setCert] = useState<string | null>(null);
@@ -42,6 +53,7 @@ export function Home(props: {
       setCerts(list);
       setCert(chosen);
       setItems(await Promise.all(packs.filter((p) => p.manifest.cert.code === chosen).map((p) => packSummary(p))));
+      setCoach(chosen ? await loadCoach(chosen) : null);
     })();
   }, [props.version]);
 
@@ -52,7 +64,24 @@ export function Home(props: {
       .sort((a, b) => b.manifest.exam.year - a.manifest.exam.year || b.manifest.exam.round - a.manifest.exam.round);
     setCert(code);
     setItems(await Promise.all(packs.map((p) => packSummary(p))));
+    setCoach(await loadCoach(code));
   };
+
+  /** 오늘 학습·모의고사 시작(엔진이 문항을 고른다) */
+  const start = async (kind: 'today' | 'mock') => {
+    if (!cert || starting) return;
+    setStarting(true);
+    try {
+      const t = kind === 'today' ? await startToday(cert) : await startMock(cert);
+      if (t) props.onSolve(t);
+      else props.toast(kind === 'today' ? '오늘 낼 문항이 없습니다. 학습 계획(시험일)을 확인하세요' : '모의고사를 만들 문항이 없습니다');
+    } catch (err) {
+      props.toast(`시작하지 못했습니다: ${describeError(err)}`);
+    } finally {
+      setStarting(false);
+    }
+  };
+  const mockCount = coach ? coach.ctx.bank.subjects.filter((x) => x.current).reduce((t, x) => t + x.examCount, 0) : 0;
 
   const certName = certs.find((c) => c.code === cert)?.name;
   // 이어 풀기: 이 종목에서 가장 최근에 풀던 것(회독 미완료 또는 오답 묶음)
@@ -97,7 +126,42 @@ export function Home(props: {
         </section>
       )}
 
-      {recent && (
+      {coach && cert && (
+        <CoachCard
+          coach={coach}
+          certCode={cert}
+          busy={starting}
+          onPlan={() => props.onPlan(cert, certName ?? cert)}
+          onToday={() => start('today')}
+          onResumeToday={(sessionId) => props.onSolve({ kind: 'set', sessionId })}
+          onChanged={props.onChanged}
+          toast={props.toast}
+        />
+      )}
+
+      {items && items.length > 0 && (
+        <nav className="tabs" role="tablist" aria-label="학습 방법">
+          <button role="tab" aria-selected={tab === 'rounds'} className={`tab${tab === 'rounds' ? ' on' : ''}`} onClick={() => setTab('rounds')}>
+            회차별
+          </button>
+          <button role="tab" aria-selected={tab === 'mock'} className={`tab${tab === 'mock' ? ' on' : ''}`} onClick={() => setTab('mock')} data-testid="tab-mock">
+            모의고사
+          </button>
+        </nav>
+      )}
+
+      {tab === 'mock' && cert && items && items.length > 0 && (
+        <MockPanel
+          certCode={cert}
+          version={props.version}
+          busy={starting}
+          questionCount={mockCount}
+          onStart={() => start('mock')}
+          onOpen={(sessionId, finished) => (finished ? props.onResult({ kind: 'set', sessionId }) : props.onSolve({ kind: 'set', sessionId }))}
+        />
+      )}
+
+      {tab === 'rounds' && recent && (
         <section className="card resume" data-testid="resume">
           <p className="muted">이어 풀기</p>
           {recent.wrongRun && recent.wrongRun.updatedAt >= (recent.pass?.updatedAt ?? 0) ? (
@@ -134,7 +198,7 @@ export function Home(props: {
         </section>
       )}
 
-      {items && items.length > 0 && (
+      {tab === 'rounds' && items && items.length > 0 && (
         <section>
           <div className="section-head">
             <h2>문제팩 {items.length}회차</h2>

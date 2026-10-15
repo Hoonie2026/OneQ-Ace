@@ -136,9 +136,10 @@ export interface SimResult {
   minutesByDay: number[];
   /** 합격 기준 경고: 날마다의 상태(엔진만) */
   outlooks: { d: number; status: OutlookStatus; needed: number | null; projectedAvg: number }[];
-  /** 위기 대응을 시작한 날(시험까지 남은 날), 연차 일수 */
+  /** 위기 대응을 시작한 날(시험까지 남은 날), 마지막 날들에 3시간을 넘겨 공부한 날 수와 그중 가장 긴 날(분) */
   crisisFromDaysLeft: number | null;
-  leaveDays: number;
+  pushDays: number;
+  pushMaxMinutes: number;
 }
 
 /**
@@ -146,10 +147,10 @@ export interface SimResult {
  * - fixed: 처음 정한 하루 학습시간 그대로(기준서 6.6 원래 시나리오)
  * - crisis: **위기 대응형**(사용자가 밝힌 실제 학습 행동 — ADR 007). 시험 14일 전부터 합격이 불투명하면(경고 ≠ 합격)
  *   하루 학습시간을 최소 2시간, 필요하면 3시간까지 늘리고(한 번 늘리면 줄이지 않음), 시험 1~2일 전에도 불투명하면
- *   연차를 내서 하루 5시간 공부한다. 위기 구간에는 일요일도 공부한다
+ *   경고가 알려 주는 "남은 날 매일 필요한 시간"만큼(하루 최대 8시간) 공부한다(사용자: 연차를 내서라도). 위기 구간에는 일요일도 공부한다
  */
 export type Response = 'fixed' | 'crisis';
-export const CRISIS = { fromDaysLeft: 14, minMinutes: 120, maxMinutes: 180, leaveDaysLeft: 2, leaveMinutes: 300 };
+export const CRISIS = { fromDaysLeft: 14, minMinutes: 120, maxMinutes: 180, finalDaysLeft: 2, finalMaxMinutes: 480 };
 
 const START = parseDate('2027-01-04'); // 월요일
 
@@ -187,7 +188,8 @@ export function simulate(learner: Learner, days: number, opts: SimOptions = {}):
   const outlooks: SimResult['outlooks'] = [];
   let crisisMinutes = 0;
   let crisisFromDaysLeft: number | null = null;
-  let leaveDays = 0;
+  let pushDays = 0;
+  let pushMaxMinutes = 0;
 
   for (let d = 0; d < days; d++) {
     const day = addDays(START, d);
@@ -209,9 +211,15 @@ export function simulate(learner: Learner, days: number, opts: SimOptions = {}):
             settings.dayMinutes![key] = Math.max(settings.dayMinutes![key] ?? 0, crisisMinutes);
           }
         }
-        if (daysLeft <= CRISIS.leaveDaysLeft) {
-          settings.dayMinutes![formatDate(day)] = CRISIS.leaveMinutes;
-          leaveDays++;
+        // 시험 1~2일 전: 남은 날 매일 필요한 시간만큼(하루 최대 8시간)
+        if (daysLeft <= CRISIS.finalDaysLeft) {
+          const need = Math.min(CRISIS.finalMaxMinutes, ol.neededMinutesPerDay ?? CRISIS.finalMaxMinutes);
+          const key = formatDate(day);
+          if (need > (settings.dayMinutes![key] ?? 0)) {
+            settings.dayMinutes![key] = need;
+            pushDays++;
+            pushMaxMinutes = Math.max(pushMaxMinutes, need);
+          }
         }
       }
     }
@@ -283,7 +291,7 @@ export function simulate(learner: Learner, days: number, opts: SimOptions = {}):
       if (a.correct) b.firstOk++;
     }
   }
-  return { learner: learner.name, days, policy, response, start, final: world.examScores(T), predictedFinal, attempts: attempts.length, bySubject, shortageAtStart, firstPlan, minutesByDay, outlooks, crisisFromDaysLeft, leaveDays };
+  return { learner: learner.name, days, policy, response, start, final: world.examScores(T), predictedFinal, attempts: attempts.length, bySubject, shortageAtStart, firstPlan, minutesByDay, outlooks, crisisFromDaysLeft, pushDays, pushMaxMinutes };
 }
 
 /**

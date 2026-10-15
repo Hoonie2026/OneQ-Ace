@@ -6,7 +6,8 @@
  * - 학습 단위 하나를 "익히면" 시험일 정답 확률 = R* + (1 − R*)·prior. R*는 시험 전까지 간격 복습을 마쳤을 때의 기억률
  * - 비용(문항 풀이 횟수): 미학습은 첫 풀이 + 틀리면 다시 + 복습 2회, 학습한 것은 복습 1회(+ 틀리면 다시)
  * - 남은 풀이 횟수(가용량)를 ① 과락선 아래 과목부터 그 과목 목표까지 ② 남으면 평균 목표까지, 효율(점/회) 순으로 쓴다
- * - 필요 시간 = 목표(과목 ≥ 과락선 + 여유/2, 평균 ≥ 합격선 + 여유/2)에 드는 풀이 횟수 × 문항당 시간 ÷ 남은 학습일
+ * - 필요 시간 = 목표에 드는 풀이 횟수 × 문항당 시간 ÷ 남은 날 — 권장(여유 포함)과 최소(과락선·합격선 그대로) 두 가지.
+ *   예: 시험 2일 전에도 불확실하면 "남은 2일 동안 매일 최소 ○시간"(ADR 007 — 특정 날을 연차로 정하지 않고 필요한 시간을 알린다)
  *
  * 투영은 "계획대로 하면 도달할 수 있는 점수"라 예상 점수(predict.ts, 지금 멈추면 받을 점수)보다 높다.
  */
@@ -47,8 +48,12 @@ export interface PassOutlook {
   /** 남은 학습일 수·계획한 학습시간 합(분) */
   studyDays: number;
   plannedMinutes: number;
-  /** 목표(여유 포함)에 필요한 하루 평균 학습시간(분). 문항이 모자라 시간을 늘려도 안 되면 null */
+  /** 시험까지 남은 날(오늘 포함, 시험일 제외). 아래 "하루 ○분"은 이 날들에 매일 공부한다고 보고 나눈 값 */
+  daysLeft: number;
+  /** 권장: 여유를 두고 합격(과목 ≥ 과락선 + 여유/2, 평균 ≥ 합격선 + 여유/2)하려면 매일 몇 분. 문항이 모자라 시간을 늘려도 안 되면 null */
   neededMinutesPerDay: number | null;
+  /** 최소: 과락선·합격선에 딱 닿으려면 매일 최소 몇 분. 이보다 적으면 합격이 어렵다. 불가능하면 null */
+  minMinutesPerDay: number | null;
   /** 지금 계획 대비 하루 몇 분 더 */
   extraMinutesPerDay: number;
   /** 과락만 벗어나는 데(모든 과목 ≥ 과락선 + 여유/2) 필요한 하루 평균 학습시간(분). 문항이 모자라면 null */
@@ -104,7 +109,7 @@ export function passOutlook(bank: Bank, mem: MemoryState, settings: PlanSettings
   for (const l of acts.values()) l.sort((a, b) => b.gain / b.cost - a.gain / a.cost);
 
   /** 가용량 cap으로 투영: ① 과목 목표 미달 과목(깊은 순) ② 평균 목표 ③ 남는 시간은 효율 순 */
-  const project = (cap: number) => {
+  const project = (cap: number, subjTarget: number, avgTarget: number) => {
     const score = new Map(fc.subjects.map((s) => [s.key, s.score]));
     const pos = new Map(fc.subjects.map((s) => [s.key, 0]));
     let used = 0;
@@ -139,12 +144,18 @@ export function passOutlook(bank: Bank, mem: MemoryState, settings: PlanSettings
     return { score, used, avg: avg() };
   };
 
-  const planned = project(capacity);
-  // 목표에 드는 풀이 횟수: 무한 가용량으로 ①·② 단계까지만
-  const ideal = project(Infinity);
-  const reachable = [...ideal.score.values()].every((v) => v >= subjTarget - 1e-9) && ideal.avg >= avgTarget - 1e-9;
-  const neededMinutesPerDay = reachable && time.days > 0 ? Math.ceil((ideal.used * sec) / 60 / time.days) : null;
-  const plannedPerDay = time.days > 0 ? time.minutes / time.days : 0;
+  const planned = project(capacity, subjTarget, avgTarget);
+  // 목표에 드는 풀이 횟수: 무한 가용량으로 ①·② 단계까지만. "하루 몇 분"은 남은 날(달력) 모두 공부한다고 보고 나눈다
+  const perDay = (q: number) => (daysLeft > 0 ? Math.ceil((q * sec) / 60 / daysLeft) : null);
+  const reach = (subjT: number, avgT: number) => {
+    const p = project(Infinity, subjT, avgT);
+    const ok = [...p.score.values()].every((v) => v >= subjT - 1e-9) && p.avg >= avgT - 1e-9;
+    return ok ? perDay(p.used) : null;
+  };
+  const neededMinutesPerDay = reach(subjTarget, avgTarget);
+  // 최소 시간: 여유 없이 과락선·합격선에 딱 닿는 데 필요한 시간(사용자 요청 — "남은 N일 동안 매일 최소 몇 분")
+  const minMinutesPerDay = reach(rule.subjectMin, rule.avgMin);
+  const plannedPerDay = daysLeft > 0 ? time.minutes / daysLeft : 0;
 
   let subjReachable = true;
   const subjects: SubjectOutlook[] = fc.subjects.map((s) => {
@@ -160,7 +171,7 @@ export function passOutlook(bank: Bank, mem: MemoryState, settings: PlanSettings
     return { key: s.key, name: s.name, now: s.score, projected: r1(planned.score.get(s.key)!), needQuestions: Math.ceil(need) };
   });
   const fixQ = subjects.reduce((a, s) => a + s.needQuestions, 0);
-  const fixMinutesPerDay = subjReachable && time.days > 0 ? Math.ceil((fixQ * sec) / 60 / time.days) : null;
+  const fixMinutesPerDay = subjReachable ? perDay(fixQ) : null;
   const projectedAverage = r1(planned.avg);
   const failSubjects = subjects.filter((s) => s.projected < rule.subjectMin).map((s) => s.name);
   const rough = fc.subjects.some((s) => (mem.priorObs.get(s.key) ?? 0) < OUTLOOK_MIN_OBS);
@@ -177,7 +188,9 @@ export function passOutlook(bank: Bank, mem: MemoryState, settings: PlanSettings
     failSubjects,
     studyDays: Math.round(time.days * 10) / 10,
     plannedMinutes: Math.round(time.minutes),
+    daysLeft,
     neededMinutesPerDay,
+    minMinutesPerDay,
     fixMinutesPerDay,
     extraMinutesPerDay: neededMinutesPerDay == null ? Infinity : Math.max(0, Math.ceil(neededMinutesPerDay - plannedPerDay)),
     rough,

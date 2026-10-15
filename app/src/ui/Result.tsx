@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { startRetry, startToday } from '../coach';
 import { ensureWrongRun, loadSession, passHistory, restartPass, sessionResult, type PassRecord, type Result as R, type Target } from '../study';
 
 const VERDICT: Record<NonNullable<R['verdict']>, { icon: string; text: string; cls: string }> = {
@@ -13,6 +14,7 @@ export function Result(props: { target: Target; onHome: () => void; onSolve: (t:
   const [rule, setRule] = useState({ min: 40, avg: 60 });
   const [packId, setPackId] = useState('');
   const [history, setHistory] = useState<PassRecord[]>([]);
+  const [set, setSet] = useState<{ certCode: string; mode: string; finished: boolean } | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -20,6 +22,7 @@ export function Result(props: { target: Target; onHome: () => void; onSolve: (t:
       if (!s) return props.onHome();
       setPackId(s.pack.packId);
       setRule({ min: s.pack.manifest.passRule.subjectMin, avg: s.pack.manifest.passRule.avgMin });
+      if (s.target.kind === 'set') setSet({ certCode: s.run.certCode ?? s.pack.manifest.cert.code, mode: s.run.mode, finished: s.run.finishedAt != null });
       setRes(await sessionResult(s));
       if (props.target.kind === 'pass' && !props.target.subjectNo) setHistory(await passHistory(s.pack.packId));
     })();
@@ -30,9 +33,22 @@ export function Result(props: { target: Target; onHome: () => void; onSolve: (t:
   const wholePass = props.target.kind === 'pass' && !props.target.subjectNo;
 
   const retryWrong = async () => {
+    if (set) {
+      // 오늘 학습·모의고사: 틀린·모른 문항을 오늘 학습 묶음으로 한 번 더(6.5 세션 끝 재출제)
+      const t = await startRetry(set.certCode, res.wrongQids);
+      if (t) props.onSolve(t);
+      return;
+    }
     const run = await ensureWrongRun(packId);
     if (run) props.onSolve({ kind: 'wrong', sessionId: run.sessionId });
   };
+  const nextToday = async () => {
+    if (!set) return;
+    const t = await startToday(set.certCode);
+    if (t) props.onSolve(t);
+    else props.toast('오늘 낼 문항이 없습니다');
+  };
+  const isMock = set?.mode === 'mock';
   const newPass = async () => {
     if (!window.confirm('이 회차를 처음부터 다시 풉니다(새 회독). 지금까지의 풀이 기록은 그대로 남습니다. 시작할까요?')) return;
     await restartPass(packId);
@@ -45,7 +61,7 @@ export function Result(props: { target: Target; onHome: () => void; onSolve: (t:
         <button className="icon-btn" onClick={props.onHome} aria-label="뒤로">
           ‹
         </button>
-        <h1>{res.complete ? '풀이 결과' : '지금까지 성적'}</h1>
+        <h1>{isMock ? '모의고사 결과' : res.complete ? '풀이 결과' : '지금까지 성적'}</h1>
       </header>
       <section className="card result-hero" data-testid="result">
         <p className="muted">
@@ -145,13 +161,18 @@ export function Result(props: { target: Target; onHome: () => void; onSolve: (t:
       )}
 
       <section className="actions">
-        {!res.complete && (
+        {!res.complete && !(set?.finished ?? false) && (
           <button className="btn btn-primary btn-block" onClick={() => props.onSolve(props.target)}>
             이어서 풀기 ({res.total - res.answered}문항 남음)
           </button>
         )}
-        {res.wrongQids.length > 0 && (
-          <button className={`btn btn-block${res.complete ? ' btn-primary' : ''}`} onClick={retryWrong}>
+        {set?.mode === 'today' && res.complete && (
+          <button className={`btn btn-block${res.wrongQids.length ? '' : ' btn-primary'}`} onClick={nextToday} data-testid="today-next">
+            오늘 학습 계속(다음 15문항)
+          </button>
+        )}
+        {res.wrongQids.length > 0 && (!set || res.complete || set.finished) && (
+          <button className={`btn btn-block${res.complete && !isMock ? ' btn-primary' : ''}`} onClick={retryWrong} data-testid="retry-wrong">
             틀린·모름 문항 다시 풀기
           </button>
         )}
