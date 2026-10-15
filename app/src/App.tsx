@@ -3,7 +3,7 @@ import { useRegisterSW } from 'virtual:pwa-register/react';
 import { backupDue } from './backup';
 import { describeError, STORAGE_ERROR_EVENT } from './db';
 import { describeIssues, importPackFile } from './pack/import';
-import { examLabel } from './study';
+import { examLabel, type Target } from './study';
 import { formatBytes } from './util';
 import { ErrorBoundary } from './ui/ErrorBoundary';
 import { Home } from './ui/Home';
@@ -14,8 +14,8 @@ import { Solve } from './ui/Solve';
 
 type Screen =
   | { name: 'home' }
-  | { name: 'solve'; sessionId: string }
-  | { name: 'result'; sessionId: string }
+  | { name: 'solve'; target: Target }
+  | { name: 'result'; target: Target }
   | { name: 'pack'; packId: string }
   | { name: 'settings' };
 
@@ -61,12 +61,20 @@ export default function App() {
     setBusy(true);
     const lines: string[] = [];
     let imported = 0;
+    let identical = 0;
     try {
       for (const f of files) {
         try {
           let r = await importPackFile(f);
-          if (r.status === 'same' && window.confirm(`${f.name}: 이미 가져온 팩(v${r.installedVersion})입니다. 다시 저장할까요?`)) {
-            r = await importPackFile(f, { force: true });
+          if (r.status === 'same') {
+            // 내용까지 같은 팩은 조용히 건너뛴다(여러 회차를 한꺼번에 다시 고른 경우). 학습 기록은 그대로
+            if (r.identical) {
+              identical++;
+              continue;
+            }
+            if (window.confirm(`${f.name}: 같은 버전(v${r.installedVersion})인데 내용이 다른 팩입니다. 새 것으로 바꿀까요? 학습 기록은 이어집니다`)) {
+              r = await importPackFile(f, { force: true });
+            } else continue;
           }
           if (r.status === 'imported') {
             imported++;
@@ -87,6 +95,7 @@ export default function App() {
           lines.push(`${f.name}: ${describeError(err)}`);
         }
       }
+      if (identical) lines.push(`이미 있는 같은 팩 ${identical}개는 건너뜀(학습 기록 그대로)`);
       if (imported && navigator.storage?.persist) {
         // 첫 팩을 저장한 시점에 영구 저장을 요청한다(C3)
         const persisted = await navigator.storage.persisted();
@@ -100,6 +109,7 @@ export default function App() {
   };
 
   const go = (s: Screen) => {
+    if (s.name === 'solve') setToast(null); // 알림이 풀이 화면 위쪽(진행·성적)을 가리지 않게
     setScreen(s);
     bump();
   };
@@ -140,16 +150,17 @@ export default function App() {
           version={version}
           busy={busy}
           onImport={importFiles}
-          onStart={(sessionId) => go({ name: 'solve', sessionId })}
+          onSolve={(target) => go({ name: 'solve', target })}
+          onResult={(target) => go({ name: 'result', target })}
           onPack={(packId) => go({ name: 'pack', packId })}
           onSettings={() => go({ name: 'settings' })}
         />
       )}
       {screen.name === 'solve' && (
-        <Solve sessionId={screen.sessionId} onExit={home} onFinish={(sessionId) => go({ name: 'result', sessionId })} />
+        <Solve target={screen.target} onExit={home} onResult={() => go({ name: 'result', target: screen.target })} />
       )}
       {screen.name === 'result' && (
-        <Result sessionId={screen.sessionId} onHome={home} onStart={(sessionId) => go({ name: 'solve', sessionId })} />
+        <Result target={screen.target} onHome={home} onSolve={(target) => go({ name: 'solve', target })} toast={flash} />
       )}
       {screen.name === 'pack' && (
         <PackDetail packId={screen.packId} onBack={home} onBackup={() => go({ name: 'settings' })} toast={flash} />

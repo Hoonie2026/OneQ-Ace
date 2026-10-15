@@ -1,53 +1,64 @@
 import { useEffect, useState } from 'react';
-import { db, isStandalone, type PackRow, type RunRow } from '../db';
-import { examLabel, openRuns, packProgress, startRun, type PackProgress } from '../study';
+import { db, getSetting, isStandalone, setSetting, SETTING } from '../db';
+import { ensureWrongRun, examLabel, packSummary, type PackSummary, type Target } from '../study';
 import { PackPicker } from './PackPicker';
 
-interface Item {
-  pack: PackRow;
-  prog: PackProgress;
-  round?: RunRow;
+interface Cert {
+  code: string;
+  name: string;
+  packs: number;
 }
 
 export function Home(props: {
   version: number;
   busy: boolean;
   onImport: (files: File[]) => void;
-  onStart: (sessionId: string) => void;
+  onSolve: (t: Target) => void;
+  onResult: (t: Target) => void;
   onPack: (packId: string) => void;
   onSettings: () => void;
 }) {
-  const [items, setItems] = useState<Item[] | null>(null);
-  const [resume, setResume] = useState<RunRow | null>(null);
-  const [subjectFor, setSubjectFor] = useState<PackRow | null>(null);
+  const [items, setItems] = useState<PackSummary[] | null>(null);
+  const [certs, setCerts] = useState<Cert[]>([]);
+  const [cert, setCert] = useState<string | null>(null);
+  const [subjectFor, setSubjectFor] = useState<PackSummary | null>(null);
 
   useEffect(() => {
     (async () => {
       const packs = (await db.packs.toArray()).sort(
         (a, b) => b.manifest.exam.year - a.manifest.exam.year || b.manifest.exam.round - a.manifest.exam.round,
       );
-      const runs = await openRuns();
-      const ids = new Set(packs.map((p) => p.packId));
-      const live = runs.filter((r) => ids.has(r.packId) && Object.keys(r.answered).length < r.qids.length);
-      setResume(live[0] ?? null);
-      setItems(
-        await Promise.all(
-          packs.map(async (pack) => ({
-            pack,
-            prog: await packProgress(pack.packId),
-            round: live.find((r) => r.packId === pack.packId && r.mode === 'round'),
-          })),
-        ),
-      );
+      // 자격종목별로 나눈다. 고른 종목은 기억해 두고, 없으면 가장 최근에 가져온 팩의 종목
+      const map = new Map<string, Cert>();
+      for (const p of packs) {
+        const c = map.get(p.manifest.cert.code) ?? { code: p.manifest.cert.code, name: p.manifest.cert.name, packs: 0 };
+        c.packs++;
+        map.set(c.code, c);
+      }
+      const list = [...map.values()].sort((a, b) => a.name.localeCompare(b.name, 'ko'));
+      const saved = await getSetting<string | null>(SETTING.certCode, null);
+      const newest = [...packs].sort((a, b) => b.importedAt - a.importedAt)[0]?.manifest.cert.code ?? null;
+      const chosen = saved && map.has(saved) ? saved : newest;
+      setCerts(list);
+      setCert(chosen);
+      setItems(await Promise.all(packs.filter((p) => p.manifest.cert.code === chosen).map((p) => packSummary(p))));
     })();
   }, [props.version]);
 
-  const begin = async (packId: string, mode: 'round' | 'wrong', subjectNo?: number) => {
-    const run = await startRun(packId, subjectNo ? 'subject' : mode, { subjectNo });
-    if (run) props.onStart(run.sessionId);
+  const pickCert = async (code: string) => {
+    await setSetting(SETTING.certCode, code);
+    const packs = (await db.packs.toArray())
+      .filter((p) => p.manifest.cert.code === code)
+      .sort((a, b) => b.manifest.exam.year - a.manifest.exam.year || b.manifest.exam.round - a.manifest.exam.round);
+    setCert(code);
+    setItems(await Promise.all(packs.map((p) => packSummary(p))));
   };
 
-  const certs = [...new Set(items?.map((i) => i.pack.manifest.cert.name) ?? [])];
+  const certName = certs.find((c) => c.code === cert)?.name;
+  // 이어 풀기: 이 종목에서 가장 최근에 풀던 것(회독 미완료 또는 오답 묶음)
+  const recent = (items ?? [])
+    .filter((i) => (i.pass && i.answered > 0 && i.answered < i.total) || i.wrongRun)
+    .sort((a, b) => b.lastActivity - a.lastActivity)[0];
 
   return (
     <div className="app">
@@ -58,13 +69,24 @@ export function Home(props: {
           </span>
           <div>
             <h1>원큐합격</h1>
-            <p className="sub">{certs.length ? certs.join(' · ') : '기사·산업기사 필기 기출'}</p>
+            <p className="sub">{certName ?? '기사·산업기사 필기 기출'}</p>
           </div>
         </div>
         <button className="icon-btn" onClick={props.onSettings} aria-label="백업·설정">
           ⚙
         </button>
       </header>
+
+      {certs.length > 1 && (
+        <nav className="cert-tabs" aria-label="자격종목 선택">
+          {certs.map((c) => (
+            <button key={c.code} className={`cert-tab${c.code === cert ? ' on' : ''}`} aria-pressed={c.code === cert} onClick={() => pickCert(c.code)}>
+              {c.name}
+              <small>{c.packs}회차</small>
+            </button>
+          ))}
+        </nav>
+      )}
 
       {!isStandalone() && (
         <section className="card guide">
@@ -75,16 +97,30 @@ export function Home(props: {
         </section>
       )}
 
-      {resume && (
-        <section className="card resume">
+      {recent && (
+        <section className="card resume" data-testid="resume">
           <p className="muted">이어 풀기</p>
-          <h2>{resume.title}</h2>
-          <p className="hint">
-            {Object.keys(resume.answered).length} / {resume.qids.length}문항 풀이
-          </p>
-          <button className="btn btn-primary btn-block btn-big" onClick={() => props.onStart(resume.sessionId)}>
-            이어서 풀기
-          </button>
+          {recent.wrongRun && recent.wrongRun.updatedAt >= (recent.pass?.updatedAt ?? 0) ? (
+            <>
+              <h2>{recent.wrongRun.title}</h2>
+              <p className="hint">{recent.wrongRunLeft}문항 남음</p>
+              <button className="btn btn-primary btn-block btn-big" onClick={() => props.onSolve({ kind: 'wrong', sessionId: recent.wrongRun!.sessionId })}>
+                이어서 풀기
+              </button>
+            </>
+          ) : (
+            <>
+              <h2>
+                {examLabel(recent.pack.manifest)} · {recent.passNo}회독
+              </h2>
+              <p className="hint">
+                {recent.answered} / {recent.total}문항 풀이
+              </p>
+              <button className="btn btn-primary btn-block btn-big" onClick={() => props.onSolve({ kind: 'pass', packId: recent.pack.packId })}>
+                이어서 풀기
+              </button>
+            </>
+          )}
         </section>
       )}
 
@@ -101,49 +137,66 @@ export function Home(props: {
       {items && items.length > 0 && (
         <section>
           <div className="section-head">
-            <h2>내 문제팩 {items.length}개</h2>
+            <h2>문제팩 {items.length}회차</h2>
             <PackPicker busy={props.busy} onFiles={props.onImport} small />
           </div>
           <ul className="packs">
-            {items.map(({ pack, prog, round }) => (
-              <li key={pack.packId} className="card pack" data-testid={`pack-${pack.packId}`}>
-                <button className="pack-title" onClick={() => props.onPack(pack.packId)}>
-                  <span>
-                    <b>{examLabel(pack.manifest)}</b>
-                    <small className="muted">{pack.manifest.cert.name}</small>
-                  </span>
-                  <span className="muted" aria-hidden="true">
-                    ›
-                  </span>
-                </button>
-                <div className="meter" aria-label={`진도 ${prog.solved}/${prog.total}`}>
-                  <div className="meter-bar" style={{ width: `${(prog.solved / Math.max(1, prog.total)) * 100}%` }} />
-                </div>
-                <p className="meter-text">
-                  진도 {prog.solved}/{prog.total}
-                  {prog.wrongNow > 0 && ` · 다시 볼 문항 ${prog.wrongNow}`}
-                </p>
-                <div className="pack-actions">
-                  {round ? (
-                    <button className="btn btn-primary" onClick={() => props.onStart(round.sessionId)}>
-                      이어 풀기 {Object.keys(round.answered).length}/{round.qids.length}
-                    </button>
-                  ) : (
-                    <button className="btn btn-primary" onClick={() => begin(pack.packId, 'round')}>
-                      회차 풀기
-                    </button>
-                  )}
-                  <button className="btn" onClick={() => setSubjectFor(pack)}>
-                    과목별
+            {items.map((it) => {
+              const done = it.answered >= it.total;
+              const target: Target = { kind: 'pass', packId: it.pack.packId };
+              return (
+                <li key={it.pack.packId} className="card pack" data-testid={`pack-${it.pack.packId}`}>
+                  <button className="pack-title" onClick={() => props.onPack(it.pack.packId)}>
+                    <span>
+                      <b>{examLabel(it.pack.manifest)}</b>
+                      <small className="muted">
+                        {it.pack.manifest.questionCount}문항 · {it.passNo}회독
+                      </small>
+                    </span>
+                    <span className="muted" aria-hidden="true">
+                      ›
+                    </span>
                   </button>
-                  {prog.wrongNow > 0 && (
-                    <button className="btn" onClick={() => begin(pack.packId, 'wrong')}>
-                      오답·모름 {prog.wrongNow}
+                  <div className="meter" aria-label={`진도 ${it.answered}/${it.total}`}>
+                    <div className="meter-bar" style={{ width: `${(it.answered / Math.max(1, it.total)) * 100}%` }} />
+                  </div>
+                  <p className="meter-text" data-testid="pack-progress">
+                    진도 {it.answered}/{it.total}
+                    {it.wrongNow > 0 && ` · 다시 볼 문항 ${it.wrongNow}`}
+                  </p>
+                  <div className="pack-actions">
+                    {done ? (
+                      <button className="btn btn-primary" onClick={() => props.onResult(target)}>
+                        결과 보기
+                      </button>
+                    ) : (
+                      <button className="btn btn-primary" data-testid="pack-solve" onClick={() => props.onSolve(target)}>
+                        {it.answered === 0 ? '풀기 시작' : `이어 풀기 ${it.answered}/${it.total}`}
+                      </button>
+                    )}
+                    <button className="btn" onClick={() => setSubjectFor(it)}>
+                      과목별
                     </button>
-                  )}
-                </div>
-              </li>
-            ))}
+                    {it.answered > 0 && !done && (
+                      <button className="btn" onClick={() => props.onResult(target)}>
+                        성적
+                      </button>
+                    )}
+                    {it.wrongNow > 0 && (
+                      <button
+                        className="btn"
+                        onClick={async () => {
+                          const run = await ensureWrongRun(it.pack.packId);
+                          if (run) props.onSolve({ kind: 'wrong', sessionId: run.sessionId });
+                        }}
+                      >
+                        {it.wrongRun ? `오답·모름 이어 풀기 ${it.wrongRunLeft}` : `오답·모름 ${it.wrongNow}`}
+                      </button>
+                    )}
+                  </div>
+                </li>
+              );
+            })}
           </ul>
         </section>
       )}
@@ -151,19 +204,31 @@ export function Home(props: {
       {subjectFor && (
         <div className="sheet-back" onClick={() => setSubjectFor(null)}>
           <div className="sheet" role="dialog" aria-label="과목 선택" onClick={(e) => e.stopPropagation()}>
-            <h2>{examLabel(subjectFor.manifest)} 과목 선택</h2>
-            {subjectFor.manifest.subjects.map((s) => (
-              <button
-                key={s.no}
-                className="btn btn-block sheet-item"
-                onClick={() => {
-                  setSubjectFor(null);
-                  begin(subjectFor.packId, 'round', s.no);
-                }}
-              >
-                {s.no}과목 {s.name} <small className="muted">{s.count}문항</small>
-              </button>
-            ))}
+            <h2>{examLabel(subjectFor.pack.manifest)} 과목별 풀기</h2>
+            <p className="hint">과목별로 푼 문항도 회차 진도에 함께 쌓입니다.</p>
+            {subjectFor.pack.manifest.subjects.map((sub) => {
+              const b = subjectFor.bySubject.get(sub.no) ?? { answered: 0, total: sub.count };
+              const t: Target = { kind: 'pass', packId: subjectFor.pack.packId, subjectNo: sub.no };
+              const full = b.answered >= b.total;
+              return (
+                <button
+                  key={sub.no}
+                  className="btn btn-block sheet-item"
+                  onClick={() => {
+                    setSubjectFor(null);
+                    if (full) props.onResult(t);
+                    else props.onSolve(t);
+                  }}
+                >
+                  <span>
+                    {sub.no}과목 {sub.name}
+                  </span>
+                  <small className={full ? 'ok-text' : 'muted'}>
+                    {full ? '완료 · 결과' : `${b.answered}/${b.total}`}
+                  </small>
+                </button>
+              );
+            })}
             <button className="btn btn-ghost btn-block" onClick={() => setSubjectFor(null)}>
               닫기
             </button>

@@ -1,21 +1,21 @@
 import { useEffect, useState } from 'react';
 import { db, type PackRow } from '../db';
 import { deletePack } from '../pack/import';
-import { examLabel, packProgress, type PackProgress } from '../study';
+import { examLabel, packSummary, type PackSummary } from '../study';
 import { formatBytes } from '../util';
 
 const SOURCE: Record<string, string> = { 'public-pbt': '공개 기출(PBT)', recalled: '응시자 복원 문제', other: '기타' };
 
 export function PackDetail(props: { packId: string; onBack: () => void; onBackup: () => void; toast: (m: string) => void }) {
   const [pack, setPack] = useState<PackRow | null>(null);
-  const [prog, setProg] = useState<PackProgress | null>(null);
+  const [prog, setProg] = useState<PackSummary | null>(null);
 
   useEffect(() => {
     (async () => {
       const p = await db.packs.get(props.packId);
       if (!p) return props.onBack();
       setPack(p);
-      setProg(await packProgress(p.packId));
+      setProg(await packSummary(p));
     })();
   }, [props.packId]);
 
@@ -45,7 +45,7 @@ export function PackDetail(props: { packId: string; onBack: () => void; onBackup
           <div>
             <dt>문항</dt>
             <dd>
-              {m.questionCount}문항 · 진도 {prog?.solved ?? 0}/{prog?.total ?? 0}
+              {m.questionCount}문항 · {prog?.passNo ?? 1}회독 진도 {prog?.answered ?? 0}/{prog?.total ?? 0}
             </dd>
           </div>
           <div>

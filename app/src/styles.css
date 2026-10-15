@@ -825,3 +825,60 @@ h3 {
 .crash .diag {
   margin: 8px 0 0;
 }
+
+/* ── 자격종목 선택 ── */
+.cert-tabs {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  margin: -4px -16px 14px;
+  padding: 2px 16px 4px;
+  scrollbar-width: none;
+}
+.cert-tab {
+  flex: none;
+  display: grid;
+  justify-items: start;
+  min-height: var(--tap);
+  padding: 6px 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-weight: 700;
+  line-height: 1.2;
+  text-align: left;
+}
+.cert-tab small {
+  font-weight: 500;
+  font-size: 12px;
+  color: var(--muted);
+}
+.cert-tab.on {
+  border-color: var(--primary);
+  background: var(--primary);
+  color: var(--primary-ink);
+}
+.cert-tab.on small {
+  color: inherit;
+  opacity: 0.85;
+}
+.score-btn {
+  display: grid;
+  align-content: center;
+  gap: 0;
+  width: auto;
+  min-width: var(--tap);
+  padding: 0 6px;
+  line-height: 1.05;
+  border: 1px solid var(--line);
+}
+.score-btn small {
+  font-size: 11px;
+  color: var(--muted);
+}
+.score-btn b {
+  font-size: 16px;
+  font-variant-numeric: tabular-nums;
+}

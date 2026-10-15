@@ -209,6 +209,28 @@ export function Settings(props: {
       </section>
 
       <section className="card">
+        <h2>이 기기 데이터 지우기</h2>
+        <p className="hint">
+          Android에서 앱 아이콘을 삭제해도 학습 데이터는 Chrome에 남습니다(다시 설치하면 그대로 보임). 휴대폰을 넘기거나 복원을 시험할 때는 여기서
+          지웁니다. 문제팩·풀이 기록·메모가 모두 지워지고 되돌릴 수 없으니 먼저 백업하세요.
+        </p>
+        <button
+          className="btn btn-danger btn-block"
+          data-testid="wipe"
+          onClick={async () => {
+            if (!window.confirm(`이 기기의 문제팩과 학습 기록(${fp ? formatFingerprint(fp) : ''})을 모두 지웁니다. 백업 파일을 저장했나요?`)) return;
+            if (!window.confirm('정말 지울까요? 되돌릴 수 없습니다.')) return;
+            db.close();
+            await Dexie.delete(db.name);
+            await Dexie.delete(STAGE0_DB_NAME).catch(() => undefined);
+            window.location.reload();
+          }}
+        >
+          문제팩·학습 기록 모두 지우기
+        </button>
+      </section>
+
+      <section className="card">
         <h2>앱 정보·점검</h2>
         <pre className="diag">{diagText()}</pre>
         <div className="test-actions">

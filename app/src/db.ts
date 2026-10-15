@@ -161,6 +161,7 @@ export function describeError(err: unknown): string {
 export const SETTING = {
   lastBackupAt: 'lastBackupAt',
   attemptsAtLastBackup: 'attemptsAtLastBackup',
+  certCode: 'certCode', // 홈에서 고른 자격종목
 } as const;
 
 export async function getSetting<T>(key: string, fallback: T, d: OneQDB = db): Promise<T> {

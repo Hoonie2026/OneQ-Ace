@@ -16,7 +16,9 @@ import { validatePackZip, type Issue, type PackManifest } from './validate';
 
 export type ImportResult =
   | { status: 'invalid'; issues: Issue[] }
-  | { status: 'older' | 'same'; manifest: PackManifest; installedVersion: number }
+  | { status: 'older'; manifest: PackManifest; installedVersion: number }
+  /** identical: 문항·이미지 해시까지 같은 팩(다시 저장할 필요 없음) */
+  | { status: 'same'; manifest: PackManifest; installedVersion: number; identical: boolean }
   | { status: 'imported'; manifest: PackManifest; replacedVersion: number | null; bytes: number; reconcile: ReconcileReport };
 
 export const packIdOf = (qid: string) => qid.replace(/-\d{3}$/, '');
@@ -41,7 +43,8 @@ export async function importPackBytes(
       return { status: 'older', manifest, installedVersion: existing.packVersion };
     }
     if (existing.packVersion === manifest.packVersion && !opts.force) {
-      return { status: 'same', manifest, installedVersion: existing.packVersion };
+      const sig = (m: PackManifest) => m.files.map((f) => `${f.path}:${f.sha256}`).sort().join('|');
+      return { status: 'same', manifest, installedVersion: existing.packVersion, identical: sig(existing.manifest) === sig(manifest) };
     }
   }
 
