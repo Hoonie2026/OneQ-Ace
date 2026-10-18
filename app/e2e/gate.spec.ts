@@ -58,12 +58,12 @@ test('3단계 게이트(5단계 개편 후): 오프라인 과목별 학습·이�
 
   // ① 팩 가져오기
   await page.getByTestId('pack-input').first().setInputFiles(pack);
-  await expect(page.getByText(/문제팩 1회차/)).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByTestId('today-start')).toBeVisible({ timeout: 30_000 });
 
   // ② 비행기 모드에서 다시 열기
   await ctx.setOffline(true);
   await page.reload();
-  await expect(page.getByText(/문제팩 1회차/)).toBeVisible();
+  await expect(page.getByTestId('today-start')).toBeVisible();
 
   const imgOk = async () =>
     page.locator('.zoom-inner img').evaluate((img: HTMLImageElement) => img.complete && img.naturalWidth > 0);
@@ -87,7 +87,7 @@ test('3단계 게이트(5단계 개편 후): 오프라인 과목별 학습·이�
     if (!last) await expect(page.getByTestId('progress')).not.toHaveText(before!);
     return last;
   };
-  const seenText = (n: number) => expect(page.getByTestId('pack-seen')).toContainText(`풀어 본 문항 ${n}/${total}`);
+  const seenText = (n: number) => expect(page.getByTestId('week-goal')).toContainText(`오늘 ${n}문항`);
   /** 과목 학습 한 세션(15문항)을 끝까지. 첫 문항에서 확대·헷갈림·메모를 한 번 해 본다 */
   const studySession = async (nth: number, extras = false) => {
     await page.getByTestId('subject-study').nth(nth).click();
@@ -104,7 +104,7 @@ test('3단계 게이트(5단계 개편 후): 오프라인 과목별 학습·이�
       await goNext();
     }
     await expect(page.getByTestId('result')).toContainText('15/15문항 풀이');
-    await page.getByRole('button', { name: '홈으로' }).click();
+    await page.getByRole('button', { name: '뒤로' }).click();
   };
 
   // ③-1 과목별 학습(ADR 008): 1과목 15문항(확대·헷갈림·메모 포함)
@@ -129,7 +129,7 @@ test('3단계 게이트(5단계 개편 후): 오프라인 과목별 학습·이�
   await expect(page.getByRole('heading', { name: '풀이 결과' })).toBeVisible();
   const counts = await page.locator('.rc b').allTextContents();
   expect(counts.map(Number).reduce((a, b) => a + b, 0)).toBe(15);
-  await page.getByRole('button', { name: '홈으로' }).click();
+  await page.getByRole('button', { name: '뒤로' }).click();
   await seenText(30);
   const solved = 30;
 
@@ -159,26 +159,27 @@ test('3단계 게이트(5단계 개편 후): 오프라인 과목별 학습·이�
   await p2.getByRole('button', { name: '뒤로' }).click();
   await p2.getByTestId('pack-input').first().setInputFiles(pack);
   await expect(p2.getByText(new RegExp(`기록 ${solved + 1}건 이어짐`))).toBeVisible({ timeout: 30_000 });
-  await expect(p2.getByTestId('pack-seen')).toContainText(`풀어 본 문항 ${solved}/${total}`);
+  await expect(p2.getByTestId('week-goal')).toContainText(`오늘 ${solved}문항`);
   expect(await fingerprintText(p2)).toBe(before);
   await expect(p2.locator('.diag')).toContainText('매핑 대기 0건');
 
-  // 같은 팩을 다시 고르면 건너뛰고, 다른 종목 팩을 넣으면 종목 선택이 생긴다
-  await p2.getByRole('button', { name: '뒤로' }).click();
-  await p2.getByTestId('pack-input').first().setInputFiles(pack);
+  // 같은 팩을 다시 고르면 건너뛰고, 다른 종목 팩을 넣으면 종목 선택이 생긴다(문제팩 관리는 설정 화면 — ADR 009)
+  await expect(p2.getByTestId('pack-section')).toContainText('문제팩 1회차');
+  await p2.getByTestId('pack-section').getByTestId('pack-input').setInputFiles(pack);
   await expect(p2.getByText(/같은 팩 1개는 건너뜀/)).toBeVisible();
   const dir = mkdtempSync(join(tmpdir(), 'oneq-cert-'));
   const other = join(dir, 'oneq-TEST-2022-1.zip');
   writeFileSync(other, await makePack({ questions: [{ hash: 'x' }, { hash: 'y' }] }));
-  await p2.getByTestId('pack-input').first().setInputFiles(other);
+  await p2.getByTestId('pack-section').getByTestId('pack-input').setInputFiles(other);
+  await expect(p2.getByTestId('pack-section')).toContainText('문제팩 2회차');
+  await p2.getByRole('button', { name: '뒤로' }).click();
   await expect(p2.getByRole('button', { name: /시험용 종목/ })).toHaveAttribute('aria-pressed', 'true');
-  await expect(p2.getByText(/문제팩 1회차/)).toBeVisible();
   await p2.getByRole('button', { name: /측량|시험용 종목/ }).first().click();
 
   // 학습 기록만 지우기 → 백업 복원 → 문제팩을 다시 가져오지 않아도 바로 이어짐(실기기 2차 요청)
   await p2.getByRole('button', { name: '백업·설정' }).click();
   await p2.getByTestId('wipe-records').click();
-  await expect(p2.getByTestId('pack-seen')).toContainText('풀어 본 문항 0/');
+  await expect(p2.getByTestId('week-goal')).toContainText('오늘 0문항');
   await p2.getByRole('button', { name: '백업·설정' }).click();
   await p2.getByTestId('restore-input').setInputFiles(backupPath);
   await expect(p2.getByTestId('restore-report')).toContainText('백업과 기록 일치');

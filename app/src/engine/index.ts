@@ -6,7 +6,7 @@ export { forecast, examTime, itemExamP, type Forecast, type SubjectForecast, typ
 export { planWeek, weekStartOf, subjectWeights, type WeeklyPlan, type PlannedItem, type Slot, type Shortage } from './plan';
 export { passOutlook, type PassOutlook, type SubjectOutlook, type OutlookStatus } from './outlook';
 export { minutesOn, minutesToday, studyTime, type StudyTime } from './minutes';
-export { buildTodaySession, buildSubjectSession, dueCounts, interleave, retryTail, representativeQid, SESSION_SIZE, type SessionEntry } from './session';
+export { buildTodaySession, buildSubjectSession, buildDailySession, availableCounts, todayState, type StudyAttempt, interleave, retryTail, representativeQid, SESSION_SIZE, type SessionEntry } from './session';
 export { repeatShare, newItemRates, recordedScores, examScore, DEFAULT_REPEAT_SHARE, type RepeatShare, type NewRate } from './exam';
 export { buildMock, rng, type MockExam, type MockStrategy } from './mock';
 export * from './load';

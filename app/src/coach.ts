@@ -5,9 +5,9 @@ import { db as defaultDb, type OneQDB } from './db';
 import { addDays, formatDate, parseDate, startOfDay } from './engine/days';
 import {
   buildMock,
+  availableCounts,
+  buildDailySession,
   buildSubjectSession,
-  buildTodaySession,
-  dueCounts,
   examScore,
   newItemRates,
   recordedScores,
@@ -41,8 +41,9 @@ export interface SubjectView {
   newRate: NewRate;
   /** 과락선을 넘기는 데 필요한 처음 보는 문항 정답률(시험 기준, 0~1). 계획이 없으면 null */
   needNewRate: number | null;
-  /** 복습할 때가 된 문항 수 / 풀어 본 학습 단위 / 전체 학습 단위 / 보유 문항 수 */
-  due: number;
+  /** 오늘 낼 수 있는 문항: 오늘 틀린 것 다시 / 복습할 때가 된 것 / 새 문항(세션 구성과 같은 규칙) */
+  avail: { relearn: number; due: number; fresh: number };
+  /** 풀어 본 학습 단위 / 전체 학습 단위 / 보유 문항 수 */
   seen: number;
   items: number;
   questions: number;
@@ -73,6 +74,8 @@ export interface Coach {
   doneToday: number;
   /** 끝나지 않은 학습 묶음(이어서 풀기) */
   openToday: { sessionId: string; left: number; title: string } | null;
+  /** 오늘 학습 과목 우선순위(맨 앞 = 추천). 낼 문항이 없는 과목은 빠진다 */
+  order: string[];
 }
 
 const r1 = (x: number) => Math.round(x * 10) / 10;
@@ -91,17 +94,17 @@ export async function loadCoach(certCode: string, now = Date.now(), d: OneQDB = 
   }
   const forecast = engineForecast(ctx);
   const outlook = engineOutlook(ctx, now);
-  const { subjects, exam } = examViews(ctx, forecast, outlook, now);
-  return { ctx, subjects, exam, settings: ctx.settings, plan: enginePlan(ctx, now), forecast, outlook, doneToday, openToday };
+  const { subjects, exam, order } = examViews(ctx, forecast, outlook, now);
+  return { ctx, subjects, exam, order, settings: ctx.settings, plan: enginePlan(ctx, now), forecast, outlook, doneToday, openToday };
 }
 
 /** 과목 카드와 실제 시험 기준 예상(ADR 008) */
-export function examViews(ctx: EngineContext, forecast: Forecast | null, outlook: PassOutlook | null, now: number): { subjects: SubjectView[]; exam: ExamView } {
+export function examViews(ctx: EngineContext, forecast: Forecast | null, outlook: PassOutlook | null, now: number): { subjects: SubjectView[]; exam: ExamView; order: string[] } {
   const { bank, mem, attempts } = ctx;
   const rs = repeatShare(bank);
   const rates = newItemRates(bank, attempts);
   const rec = recordedScores(bank, attempts);
-  const due = dueCounts(bank, mem, now);
+  const avail = availableCounts(bank, mem, now, attempts);
   const rule = ctx.settings?.passRule ?? { subjectMin: 40, avgMin: 60 };
   const current = bank.subjects.filter((s) => s.current);
   const bankNow = new Map((forecast?.subjects ?? []).map((s) => [s.key, s.score]));
@@ -118,19 +121,20 @@ export function examViews(ctx: EngineContext, forecast: Forecast | null, outlook
       examProjected: bp == null ? null : examScore(bp, rate, rs.rho),
       newRate: rate,
       needNewRate: bp == null ? null : Math.max(0, Math.min(1, (rule.subjectMin - rs.rho * bp) / (1 - rs.rho) / 100)),
-      due: due.get(s.key) ?? 0,
+      avail: avail.get(s.key) ?? { relearn: 0, due: 0, fresh: 0 },
       seen: its.filter((it) => mem.items.has(it.key)).length,
       items: its.length,
       questions: bank.questionCount.get(s.key) ?? 0,
       recommended: false,
     };
   });
-  // 오늘 추천: 진단이 덜 된 과목(첫 풀이가 가장 적은) → 시험 기준 예상이 가장 낮은 과목. 낼 문항이 없는 과목은 빼고
-  const cand = views.filter((v) => v.due > 0 || v.seen < v.items);
-  const undiag = cand.filter((v) => (mem.priorObs.get(v.key) ?? 0) < OUTLOOK_MIN_OBS);
-  const pickFrom = undiag.length ? undiag.sort((a, b) => (mem.priorObs.get(a.key) ?? 0) - (mem.priorObs.get(b.key) ?? 0)) : cand.sort((a, b) => (a.examProjected ?? a.examNow) - (b.examProjected ?? b.examNow) || b.due - a.due);
-  if (pickFrom[0]) pickFrom[0].recommended = true;
-  // 순서는 과목 순서대로(정렬로 바뀐 배열이 아니라 원래 배열)
+  // 오늘 학습 과목 순서: 진단이 덜 된 과목(첫 풀이가 적은 순) → 시험 기준 예상이 낮은 순. 낼 문항이 없는 과목은 빼고
+  const n = (v: SubjectView) => v.avail.relearn + v.avail.due + v.avail.fresh;
+  const obs = (v: SubjectView) => mem.priorObs.get(v.key) ?? 0;
+  const ordered = views
+    .filter((v) => n(v) > 0)
+    .sort((a, b) => Number(obs(b) < OUTLOOK_MIN_OBS) - Number(obs(a) < OUTLOOK_MIN_OBS) || (obs(a) < OUTLOOK_MIN_OBS ? obs(a) - obs(b) : 0) || (a.examProjected ?? a.examNow) - (b.examProjected ?? b.examNow) || n(b) - n(a));
+  if (ordered[0]) ordered[0].recommended = true;
   const projected = views.every((v) => v.examProjected != null) ? avg(views.map((v) => v.examProjected!)) : null;
   const fail = views.filter((v) => v.examProjected != null && v.examProjected < rule.subjectMin).map((v) => v.name);
   const m = ctx.settings?.safetyMargin ?? 10;
@@ -143,6 +147,7 @@ export function examViews(ctx: EngineContext, forecast: Forecast | null, outlook
   else status = 'pass';
   return {
     subjects: views,
+    order: ordered.map((v) => v.key),
     exam: { rho: rs.rho, rounds: new Set(bank.examDateOf.values()).size, currentAvg: avg(views.map((v) => v.current)), projectedAvg: projected, status, failSubjects: fail },
   };
 }
@@ -154,7 +159,7 @@ export async function startSubject(certCode: string, subjectKey: string, now = D
   const entries = buildSubjectSession(ctx.bank, ctx.mem, subjectKey, now, ctx.attempts, SESSION_SIZE);
   if (!entries.length) return null;
   const name = ctx.bank.subjects.find((s) => s.key === subjectKey)?.name ?? '과목';
-  const run = await createSetRun(certCode, 'today', `${name} 학습`, entries.map((e) => e.qid), { now }, d);
+  const run = await createSetRun(certCode, 'today', `${name} 학습`, entries.map((e) => e.qid), { now, subjectKey }, d);
   return { kind: 'set', sessionId: run.sessionId };
 }
 
@@ -175,25 +180,67 @@ export async function questionHistory(certCode: string, d: OneQDB = defaultDb): 
   return out;
 }
 
-const md = (ts: number) => new Date(ts).toLocaleDateString('ko-KR', { month: 'numeric', day: 'numeric' });
+export const md = (ts: number) => new Date(ts).toLocaleDateString('ko-KR', { month: 'numeric', day: 'numeric' });
 
-/** 과목을 섞은 오늘 학습 한 세션(15문항). 화면에서는 쓰지 않음(ADR 008 — 과목별 + 오늘 추천으로 대체), 시험·이후 후반 섞기 학습용으로 남김 */
+/**
+ * 오늘 학습(ADR 009 — 홈의 유일한 학습 입구): 오늘 틀린 문항 다시 → 추천 과목(복습할 때가 된 것 → 출제빈도 높은 새 문항)
+ * → 모자라면 다음 순위 과목. 15문항씩, "오늘 학습 계속"을 누를 때마다 다시 구성한다
+ */
 export async function startToday(certCode: string, now = Date.now(), d: OneQDB = defaultDb): Promise<Target | null> {
   const ctx = await loadEngine(certCode, d);
-  if (!ctx?.settings) return null;
-  const plan = enginePlan(ctx, now);
-  if (!plan) return null;
-  const entries = buildTodaySession(plan, startOfDay(now), SESSION_SIZE);
+  if (!ctx) return null;
+  const { order } = examViews(ctx, engineForecast(ctx), engineOutlook(ctx, now), now);
+  const entries = buildDailySession(ctx.bank, ctx.mem, order, now, ctx.attempts, SESSION_SIZE);
   if (!entries.length) return null;
-  const run = await createSetRun(certCode, 'today', `오늘 학습 ${md(now)}`, entries.map((e) => e.qid), { now }, d);
+  const run = await createSetRun(certCode, 'today', '오늘 학습', entries.map((e) => e.qid), { now }, d);
   return { kind: 'set', sessionId: run.sessionId };
 }
 
-/** 오늘 학습에서 틀리거나 모른 문항을 한 번 더(6.5 세션 끝 재출제) */
-export async function startRetry(certCode: string, qids: string[], now = Date.now(), d: OneQDB = defaultDb): Promise<Target | null> {
-  if (!qids.length) return null;
-  const run = await createSetRun(certCode, 'today', '틀린·모름 문항 다시', qids, { now }, d);
-  return { kind: 'set', sessionId: run.sessionId };
+export interface DaySummary {
+  date: string;
+  answered: number;
+  correct: number;
+  unknown: number;
+  minutes: number;
+  bySubject: { name: string; answered: number; correct: number }[];
+  currentAvg: number;
+  projectedAvg: number | null;
+  passRule: { subjectMin: number; avgMin: number };
+  /** 계획대로 해도 합격선(평균·과락)에 못 미치는가. 계획이 없거나 진단 전이면 null */
+  short: boolean | null;
+  lowSubjects: string[];
+}
+
+/** 오늘 학습 마치기(ADR 009): 오늘 푼 것 + 현재 점수 → 계획대로 하면 예상 점수. 모의고사 풀이도 포함 */
+export async function daySummary(certCode: string, now = Date.now(), d: OneQDB = defaultDb): Promise<DaySummary | null> {
+  const c = await loadCoach(certCode, now, d);
+  if (!c) return null;
+  const today = startOfDay(now);
+  const todays = c.ctx.attempts.filter((a) => a.ts >= today);
+  const rule = c.settings?.passRule ?? { subjectMin: 40, avgMin: 60 };
+  const by = new Map<string, { name: string; answered: number; correct: number }>();
+  for (const a of todays) {
+    const it = c.ctx.bank.itemOf.get(a.qid);
+    const name = c.ctx.bank.subjects.find((s) => s.key === it?.subjectKey)?.name ?? '기타';
+    const b = by.get(name) ?? { name, answered: 0, correct: 0 };
+    b.answered++;
+    if (a.correct) b.correct++;
+    by.set(name, b);
+  }
+  const short = c.exam.projectedAvg == null || c.exam.status === 'unknown' ? null : c.exam.status === 'fail-subject' || c.exam.status === 'avg-short';
+  return {
+    date: formatDate(today),
+    answered: todays.length,
+    correct: todays.filter((a) => a.correct).length,
+    unknown: todays.filter((a) => a.chosen === 0).length,
+    minutes: Math.round(todays.reduce((t, a) => t + Math.min(a.elapsedMs, 600_000), 0) / 60_000),
+    bySubject: c.subjects.map((s) => by.get(s.name)).filter((x): x is NonNullable<typeof x> => !!x),
+    currentAvg: c.exam.currentAvg,
+    projectedAvg: c.exam.projectedAvg,
+    passRule: rule,
+    short,
+    lowSubjects: c.subjects.filter((s) => s.examProjected != null && s.examProjected < rule.subjectMin).map((s) => s.name),
+  };
 }
 
 /** 모의고사: 현행 과목별 실제 문항 수, 출제빈도 가중 무작위(ADR 006), 문항당 1.5분 */

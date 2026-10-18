@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
-import { loadCoach, startMock, startSubject, type Coach } from '../coach';
+import { loadCoach, startMock, startSubject, startToday, type Coach } from '../coach';
 import { db, describeError, getSetting, isStandalone, setSetting, SETTING, type PackRow } from '../db';
-import { examLabel, type Target } from '../study';
+import type { Target } from '../study';
 import { CoachCard } from './CoachCard';
 import { MockPanel } from './MockPanel';
 import { PackPicker } from './PackPicker';
@@ -15,14 +15,9 @@ interface Cert {
   packs: number;
 }
 
-interface PackLine {
-  pack: PackRow;
-  seen: number;
-}
-
 /**
- * 홈(ADR 008): 종목 → 대시보드(현재 → 시험일 예상, 합격 가능성) → [과목별 | 모의고사]. 회차별 풀이는 없앴고,
- * 문제팩은 아래 목록에서 가져오기·정보·삭제만 한다(회차별 기록은 원장에 그대로 남아 엔진이 쓴다).
+ * 홈(ADR 008·009): 종목 → [시험일 | D-day, 현재 ☞ 계획 이행 시, 오늘 학습] → [과목별 | 모의고사].
+ * 회차별 풀이는 없앴고, 문제팩 관리는 설정 화면으로 옮겼다(처음 가져올 때만 여기서).
  */
 export function Home(props: {
   version: number;
@@ -33,10 +28,10 @@ export function Home(props: {
   onPack: (packId: string) => void;
   onSettings: () => void;
   onPlan: (certCode: string, certName: string) => void;
-  onChanged: () => void;
+  onSummary: (certCode: string) => void;
   toast: (m: string) => void;
 }) {
-  const [packs, setPacks] = useState<PackLine[] | null>(null);
+  const [packs, setPacks] = useState<PackRow[] | null>(null);
   const [certs, setCerts] = useState<Cert[]>([]);
   const [cert, setCert] = useState<string | null>(null);
   const [coach, setCoach] = useState<Coach | null>(null);
@@ -44,15 +39,7 @@ export function Home(props: {
   const [starting, setStarting] = useState(false);
 
   const loadCert = async (code: string | null, all: PackRow[]) => {
-    const mine = all
-      .filter((p) => p.manifest.cert.code === code)
-      .sort((a, b) => b.manifest.exam.year - a.manifest.exam.year || b.manifest.exam.round - a.manifest.exam.round);
-    const lines: PackLine[] = [];
-    for (const p of mine) {
-      const qids = new Set(await db.attempts.where('qid').startsWith(`${p.packId}-`).keys());
-      lines.push({ pack: p, seen: qids.size });
-    }
-    setPacks(lines);
+    setPacks(all.filter((p) => p.manifest.cert.code === code));
     setCoach(code ? await loadCoach(code) : null);
   };
 
@@ -85,13 +72,13 @@ export function Home(props: {
   const mockCount = coach ? coach.ctx.bank.subjects.filter((x) => x.current).reduce((t, x) => t + x.examCount, 0) : 0;
 
   /** 과목 학습·모의고사 시작(엔진이 문항을 고른다) */
-  const start = async (kind: 'subject' | 'mock', subjectKey?: string) => {
+  const start = async (kind: 'today' | 'subject' | 'mock', subjectKey?: string) => {
     if (!cert || starting) return;
     setStarting(true);
     try {
-      const t = kind === 'subject' ? await startSubject(cert, subjectKey!) : await startMock(cert);
+      const t = kind === 'today' ? await startToday(cert) : kind === 'subject' ? await startSubject(cert, subjectKey!) : await startMock(cert);
       if (t) props.onSolve(t);
-      else props.toast(kind === 'subject' ? '오늘 이 과목에서 낼 문항이 없습니다. 다른 과목을 고르세요' : '모의고사를 만들 문항이 없습니다');
+      else props.toast(kind === 'mock' ? '모의고사를 만들 문항이 없습니다' : '오늘 낼 문항이 없습니다. 내일 복습이 준비됩니다');
     } catch (err) {
       props.toast(`시작하지 못했습니다: ${describeError(err)}`);
     } finally {
@@ -150,11 +137,11 @@ export function Home(props: {
         <>
           <CoachCard
             coach={coach}
-            certCode={cert}
+            busy={starting}
             onPlan={() => props.onPlan(cert, certName ?? cert)}
+            onToday={() => start('today')}
             onResume={(sessionId) => props.onSolve({ kind: 'set', sessionId })}
-            onChanged={props.onChanged}
-            toast={props.toast}
+            onFinish={() => props.onSummary(cert)}
           />
 
           <nav className="tabs" role="tablist" aria-label="학습 방법">
@@ -178,27 +165,6 @@ export function Home(props: {
             />
           )}
 
-          <section className="packs-section">
-            <div className="section-head">
-              <h2>문제팩 {packs.length}회차</h2>
-              <PackPicker busy={props.busy} onFiles={props.onImport} small />
-            </div>
-            <ul className="pack-lines">
-              {packs.map(({ pack, seen }) => (
-                <li key={pack.packId}>
-                  <button className="pack-line" onClick={() => props.onPack(pack.packId)} data-testid={`pack-${pack.packId}`}>
-                    <span>{examLabel(pack.manifest)}</span>
-                    <small className="muted" data-testid="pack-seen">
-                      풀어 본 문항 {seen}/{pack.manifest.questionCount}
-                    </small>
-                    <span className="muted" aria-hidden="true">
-                      ›
-                    </span>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          </section>
         </>
       )}
 

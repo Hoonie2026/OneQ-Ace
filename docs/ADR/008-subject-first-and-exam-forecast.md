@@ -1,6 +1,6 @@
 # 008. 학습 구조를 과목별 + 모의고사로 단일화, 예상 점수는 실제 시험 기준
 
-- 상태: 확정 (2026-10-18, 세션 #6, 앱 v0.3.0)
+- 상태: 확정 (2026-10-18, 세션 #6, 앱 v0.3.0). **홈 구성(3번 오늘 추천 배지, 7번 합격 가능성 카드)은 ADR 009로 변경**
 - 관련: ADR 003(회독), 004(학습 흐름), 006·007(엔진), 실기기 5a 결과(`docs/device-tests.md`)
 - 코드: `app/src/engine/exam.ts`, `engine/session.ts`(`buildSubjectSession`), `src/coach.ts`, `ui/Home.tsx`·`CoachCard.tsx`·`SubjectList.tsx`
 

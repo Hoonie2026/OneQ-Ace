@@ -86,8 +86,12 @@ export interface RunRow {
   finishedAt: number | null;
   /** 여러 회차에 걸친 묶음(오늘 학습·모의고사)의 자격종목. 이때 packId는 `${종목}-@${mode}` */
   certCode?: string;
-  /** 모의고사 제한 시간(초) */
+  /** 모의고사 제한 시간(초), 멈춘 시각, 멈춘 시간 합(ms) — ✕로 나가면 시간이 멈춘다 */
   limitSec?: number;
+  pausedAt?: number | null;
+  pausedMs?: number;
+  /** 과목을 골라 시작한 학습 묶음의 과목("이 과목 계속") */
+  subjectKey?: string;
 }
 
 /** 문항에 다시 잇지 못한 기록. 조용히 지우지 않고 여기 보관한다(4.3) */

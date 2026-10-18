@@ -27,6 +27,8 @@ export interface EngineAttempt {
   chosen: number;
   unsure: boolean;
   elapsedMs: number;
+  /** 풀이 방식(round·subject·wrong·today·mock). 모의고사는 정답을 보지 않아 "오늘 학습 끝"으로 치지 않는다 */
+  mode?: string;
 }
 
 export interface PassRule {

@@ -57,6 +57,7 @@ export async function loadEngine(certCode: string, d: OneQDB = defaultDb): Promi
     chosen: a.chosen,
     unsure: a.unsure,
     elapsedMs: a.elapsedMs,
+    mode: a.mode,
   }));
   const settings = await loadPlanSettings(certCode, d);
   if (settings) settings.passRule = { ...latest.manifest.passRule, ...settings.passRule };

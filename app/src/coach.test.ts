@@ -1,6 +1,7 @@
 import 'fake-indexeddb/auto';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { applyMinutes, fmtMinutes, loadCoach, mockHistory, questionHistory, startMock, startRetry, startSubject, startToday } from './coach';
+import { applyMinutes, daySummary, fmtMinutes, loadCoach, mockHistory, questionHistory, startMock, startSubject, startToday } from './coach';
+import { pauseRun, resumeRun, deadlineOf } from './study';
 import { OneQDB } from './db';
 import { loadPlanSettings, savePlanSettings } from './engine';
 import { importPackBytes } from './pack/import';
@@ -44,7 +45,7 @@ describe('홈 대시보드·오늘 학습(5단계)', () => {
     let c = (await loadCoach('TEST', NOW, d))!;
     expect(c.settings).toBeNull();
     expect(c.plan).toBeNull();
-    expect(await startToday('TEST', NOW, d)).toBeNull();
+    expect(c.order).toHaveLength(2); // 계획 없이도 오늘 학습은 된다
 
     await savePlanSettings('TEST', { examDate: '2027-01-18', dailyMinutes: 30 }, d);
     c = (await loadCoach('TEST', NOW, d))!;
@@ -55,7 +56,7 @@ describe('홈 대시보드·오늘 학습(5단계)', () => {
     expect(c.doneToday).toBe(0);
   });
 
-  it('오늘 학습: 15문항 묶음, 회독 진도에는 안 들어가고, 틀린 것만 다시 풀 수 있다', async () => {
+  it('오늘 학습(유일한 입구): 15문항, 회독 진도와 별개, 틀린 문항은 다음 세션 맨 앞에 다시', async () => {
     await twoRounds();
     await savePlanSettings('TEST', { examDate: '2027-01-18' }, d);
     const t = (await startToday('TEST', NOW, d))!;
@@ -67,18 +68,24 @@ describe('홈 대시보드·오늘 학습(5단계)', () => {
     const r = await sessionResult(s, d);
     expect(r.complete).toBe(true);
     expect(r.verdict).toBeNull(); // 오늘 학습은 합격 판정 없음
-    expect(r.subjects.map((x) => x.name)).toEqual(['과목1', '과목2']); // 회차가 달라도 과목명으로 묶음
+    expect(r.subjects.map((x) => x.name)).toEqual(['과목1']); // 추천 과목부터(회차가 달라도 과목명으로 묶음)
     expect(r.wrongQids).toHaveLength(5);
     // 회독 진도는 그대로 0
     const sum = await packSummary((await d.packs.get('TEST-2022-1'))!, d);
     expect(sum.answered).toBe(0);
-    // 틀린 문항 다시
-    const retry = (await startRetry('TEST', r.wrongQids, NOW + 3_600_000, d))!;
-    expect((await loadSession(retry, d))!.qids).toEqual(r.wrongQids);
-    // 홈: 오늘 푼 수, 끝난 묶음은 이어 풀기 없음, 재출제 묶음은 이어 풀기
+    // 오늘 학습 계속: 틀린 5문항이 맨 앞, 오늘 맞힌 10문항은 내일부터
+    const t2 = (await startToday('TEST', NOW + 3_600_000, d))!;
+    const s2 = (await loadSession(t2, d))!;
+    expect(s2.qids.slice(0, 5).sort()).toEqual([...r.wrongQids].sort());
+    expect(s2.qids.some((q) => s.qids.includes(q) && !r.wrongQids.includes(q))).toBe(false);
+    // 홈: 오늘 푼 수, 열린 묶음 이어 풀기
     const c = (await loadCoach('TEST', NOW + 3_600_000, d))!;
     expect(c.doneToday).toBe(15);
-    expect(c.openToday!.left).toBe(5);
+    expect(c.openToday!.left).toBe(15);
+    // 오늘 학습 마치기 요약
+    const sum2 = (await daySummary('TEST', NOW + 3_600_000, d))!;
+    expect([sum2.answered, sum2.correct]).toEqual([15, 10]);
+    expect(sum2.projectedAvg).not.toBeNull();
   });
 
   it('합격 기준 경고의 권장 시간 적용: 오늘부터 시험 전날까지, 더 길게 정한 날은 그대로', async () => {
@@ -102,6 +109,11 @@ describe('모의고사(5단계)', () => {
     expect(s.run.limitSec).toBe(30 * 60);
     s = await solveSet(t, () => 1, 12); // 12문항만 맞히고
     expect(s.run.finishedAt).toBeNull();
+    // ✕로 멈췄다가 10분 뒤 이어서 → 마감이 10분 늦춰짐(실기기 v0.3.0 Q6)
+    const before = deadlineOf(s.run)!;
+    await pauseRun(s.run.sessionId, NOW + 60_000, d);
+    const resumed = await resumeRun((await d.runs.get(s.run.sessionId))!, NOW + 660_000, d);
+    expect(deadlineOf(resumed)! - before).toBe(600_000);
     await finishRun(s.run.sessionId, NOW + 600_000, d); // 제출
     const done = (await loadSession(t, d))!;
     const r = await sessionResult(done, d);
@@ -144,13 +156,18 @@ describe('과목별 학습·실제 시험 기준 예상(ADR 008)', () => {
     const qs = await d.questions.bulkGet(s.qids);
     expect(qs.every((q) => q!.subjectNo === 1)).toBe(true);
     expect(s.qids[0]).toBe('TEST-2022-2-001'); // 2022년 2회 // 2회 출제 문항이 맨 앞(최근 회차 문항으로)
-    s = await solveSet(t, () => 2); // 모두 틀림
+    s = await solveSet(t, (i) => (i < 10 ? 1 : 2)); // 10 맞힘, 5 틀림
     const t2 = (await startSubject('TEST', k1, NOW + 60_000, d))!;
-    expect((await loadSession(t2, d))!.qids).toHaveLength(4); // 오늘 남은 새 문항만
-    // 다음 날: 틀린 문항이 복습으로 먼저
-    const t3 = (await startSubject('TEST', k1, NOW + 86_400_000, d))!;
-    const s3 = (await loadSession(t3, d))!;
-    expect(s.qids.includes(s3.qids[0])).toBe(true);
+    const s2 = (await loadSession(t2, d))!;
+    expect(s2.qids).toHaveLength(9); // 오늘 틀린 5(다시) + 남은 새 문항 4, 오늘 맞힌 10은 내일부터
+    expect(s2.qids.slice(0, 5)).toEqual(s.qids.slice(10)); // 틀린 순서대로 먼저
+    // 모의고사로 푼 문항은 "오늘 끝"이 아니다(실기기 v0.3.0 Q3): 모의고사만 푼 날에도 과목 학습이 비지 않음
+    const mockT = (await startMock('TEST', NOW + 120_000, d))!;
+    await solveSet(mockT, () => 1);
+    const c2 = (await loadCoach('TEST', NOW + 180_000, d))!;
+    const s1v = c2.subjects.find((x) => x.key === k1)!;
+    expect(s1v.avail.relearn).toBe(5);
+    expect(await startSubject('TEST', k1, NOW + 180_000, d)).not.toBeNull();
     // 출제 이력
     const h = await questionHistory('TEST', d);
     expect(h.get('TEST-2022-2-001')).toEqual(['2022년 2회', '2021년 1회']);
@@ -166,13 +183,14 @@ describe('과목별 학습·실제 시험 기준 예상(ADR 008)', () => {
     const c = (await loadCoach('TEST', NOW, d))!;
     const s1 = c.subjects.find((s) => s.key === k1)!;
     expect(s1.current).toBeLessThan(5); // 거의 0점
+    expect(s1.avail.relearn).toBe(15); // 오늘 모름 15 → 다시
     expect(s1.newRate.raw).toBeLessThan(0.05);
     expect(s1.newRate.exam).toBeGreaterThan(0.2); // 시험에선 찍어서 25%
     expect(c.exam.rho).toBeGreaterThan(0.09);
     expect(c.exam.rho).toBeLessThan(0.12); // 회차가 적어 기본값(10%) 쪽
     expect(s1.examProjected!).toBeLessThan(40); // 1회차 문항을 다 외워도 처음 보는 문항이 대부분 → 과락
     expect(c.exam.status === 'unknown' || c.exam.status === 'fail-subject').toBe(true);
-    // 오늘 추천: 진단이 덜 된 과목2
-    expect(c.subjects.find((s) => s.recommended)!.key).not.toBe(k1);
+    // 오늘 학습 순서: 진단이 덜 된 과목2 먼저
+    expect(c.order[0]).not.toBe(k1);
   });
 });

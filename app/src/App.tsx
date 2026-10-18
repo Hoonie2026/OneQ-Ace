@@ -9,6 +9,7 @@ import { ErrorBoundary } from './ui/ErrorBoundary';
 import { Home } from './ui/Home';
 import { PackDetail } from './ui/PackDetail';
 import { PlanSetup } from './ui/PlanSetup';
+import { DaySummary } from './ui/DaySummary';
 import { Result } from './ui/Result';
 import { Settings } from './ui/Settings';
 import { Solve } from './ui/Solve';
@@ -19,6 +20,7 @@ type Screen =
   | { name: 'result'; target: Target }
   | { name: 'pack'; packId: string }
   | { name: 'plan'; certCode: string; certName: string }
+  | { name: 'summary'; certCode: string }
   | { name: 'settings' };
 
 const APP_VERSION = __APP_VERSION__;
@@ -157,19 +159,22 @@ export default function App() {
           onPack={(packId) => go({ name: 'pack', packId })}
           onSettings={() => go({ name: 'settings' })}
           onPlan={(certCode, certName) => go({ name: 'plan', certCode, certName })}
-          onChanged={bump}
+          onSummary={(certCode) => go({ name: 'summary', certCode })}
           toast={flash}
         />
+      )}
+      {screen.name === 'summary' && (
+        <DaySummary certCode={screen.certCode} onHome={home} onPlan={() => go({ name: 'plan', certCode: screen.certCode, certName: '' })} />
       )}
       {screen.name === 'plan' && <PlanSetup certCode={screen.certCode} certName={screen.certName} onBack={home} onSaved={flash} />}
       {screen.name === 'solve' && (
         <Solve target={screen.target} onExit={home} onResult={() => go({ name: 'result', target: screen.target })} />
       )}
       {screen.name === 'result' && (
-        <Result target={screen.target} onHome={home} onSolve={(target) => go({ name: 'solve', target })} toast={flash} />
+        <Result target={screen.target} onHome={home} onSolve={(target) => go({ name: 'solve', target })} onSummary={(certCode) => go({ name: 'summary', certCode })} toast={flash} />
       )}
       {screen.name === 'pack' && (
-        <PackDetail packId={screen.packId} onBack={home} onBackup={() => go({ name: 'settings' })} toast={flash} />
+        <PackDetail packId={screen.packId} onBack={() => go({ name: 'settings' })} onBackup={() => go({ name: 'settings' })} toast={flash} />
       )}
       {screen.name === 'settings' && (
         <Settings
@@ -179,6 +184,9 @@ export default function App() {
           onBack={home}
           onChanged={bump}
           toast={flash}
+          busy={busy}
+          onImport={importFiles}
+          onPack={(packId) => go({ name: 'pack', packId })}
         />
       )}
       </ErrorBoundary>

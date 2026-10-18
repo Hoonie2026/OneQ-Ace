@@ -194,7 +194,7 @@ export async function createSetRun(
   mode: Extract<AttemptMode, 'today' | 'mock'>,
   title: string,
   qids: string[],
-  opts: { limitSec?: number; now?: number } = {},
+  opts: { limitSec?: number; now?: number; subjectKey?: string } = {},
   d: OneQDB = defaultDb,
 ): Promise<RunRow> {
   const now = opts.now ?? Date.now();
@@ -211,9 +211,30 @@ export async function createSetRun(
     finishedAt: null,
     certCode,
     ...(opts.limitSec ? { limitSec: opts.limitSec } : {}),
+    ...(opts.subjectKey ? { subjectKey: opts.subjectKey } : {}),
   };
   await safeWrite(mode === 'mock' ? '모의고사 시작' : '오늘 학습 시작', () => d.runs.put(run));
   return run;
+}
+
+/**
+ * 모의고사 남은 시간 멈춤·다시 흐름(실기기 v0.3.0 Q6): ✕로 나가면 멈추고, 이어서 열면 그만큼 마감을 미룬다.
+ * 마감 = 시작 + 제한 시간 + 멈춘 시간 합(pausedMs). 앱을 강제로 닫으면 멈추지 못한다(시간이 흐름)
+ */
+export async function pauseRun(sessionId: string, now = Date.now(), d: OneQDB = defaultDb): Promise<void> {
+  await safeWrite('모의고사 멈춤', () => d.runs.update(sessionId, { pausedAt: now }));
+}
+
+export async function resumeRun(run: RunRow, now = Date.now(), d: OneQDB = defaultDb): Promise<RunRow> {
+  if (run.pausedAt == null) return run;
+  const pausedMs = (run.pausedMs ?? 0) + Math.max(0, now - run.pausedAt);
+  await safeWrite('모의고사 이어서', () => d.runs.update(run.sessionId, { pausedAt: null, pausedMs }));
+  return { ...run, pausedAt: null, pausedMs };
+}
+
+/** 모의고사 마감 시각 */
+export function deadlineOf(run: RunRow): number | null {
+  return run.limitSec ? run.startedAt + run.limitSec * 1000 + (run.pausedMs ?? 0) : null;
 }
 
 /** 묶음을 끝낸다(모의고사 제출·시간 종료) */

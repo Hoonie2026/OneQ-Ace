@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { db, type AttemptRow, type QuestionRow } from '../db';
-import { examLabel, finishRun, firstUnanswered, loadSession, recordAnswer, saveNote, setUnsure, type Session, type Target } from '../study';
+import { deadlineOf, examLabel, finishRun, firstUnanswered, loadSession, pauseRun, recordAnswer, resumeRun, saveNote, setUnsure, type Session, type Target } from '../study';
 import { ZoomImage } from './ZoomImage';
 import { questionHistory } from '../coach';
 
@@ -12,7 +12,7 @@ const MAX_ELAPSED = 30 * 60 * 1000;
  * 위치는 저장하지 않는다 — 진행 상태는 원장(attempts)에서 계산하므로 앱을 닫아도 그대로다(ADR 003).
  *
  * 모의고사(5단계): 정답을 보여 주지 않고 고르면 다음 문항으로. 남은 시간이 위에 보이고, 제출하거나 시간이 끝나면 채점(성적 화면).
- * 시간은 시작 시각부터 흐른다(앱을 닫아도) — 실제 시험처럼.
+ * ✕로 나가면 남은 시간이 멈추고, 이어서 열면 그때부터 다시 흐른다(앱을 강제로 닫으면 계속 흐름).
  */
 export function Solve(props: { target: Target; onExit: () => void; onResult: () => void }) {
   const [s, setS] = useState<Session | null>(null);
@@ -46,6 +46,8 @@ export function Solve(props: { target: Target; onExit: () => void; onResult: () 
     (async () => {
       const ss = await loadSession(props.target);
       if (!ss) return props.onExit();
+      // 모의고사를 ✕로 멈췄다가 다시 열면 멈춘 시간만큼 마감을 미룬다(실기기 v0.3.0 Q6)
+      if (ss.run.mode === 'mock' && !ss.run.finishedAt && ss.run.pausedAt != null) ss.run = await resumeRun(ss.run);
       const start = firstUnanswered(ss);
       if (start < 0 || (ss.target.kind === 'set' && ss.run.finishedAt)) return props.onResult(); // 다 풀었거나 제출한 묶음이면 성적으로
       setS(ss);
@@ -57,7 +59,7 @@ export function Solve(props: { target: Target; onExit: () => void; onResult: () 
 
   const qid = s?.qids[index];
   const isMock = s?.run.mode === 'mock';
-  const deadline = isMock && s?.run.limitSec ? s.run.startedAt + s.run.limitSec * 1000 : null;
+  const deadline = isMock && s ? deadlineOf(s.run) : null;
 
   // 모의고사 남은 시간. 끝나면 제출
   useEffect(() => {
@@ -148,6 +150,7 @@ export function Solve(props: { target: Target; onExit: () => void; onResult: () 
 
   const exit = async () => {
     await flushNote();
+    if (isMock && s && !s.run.finishedAt) await pauseRun(s.run.sessionId);
     props.onExit();
   };
 

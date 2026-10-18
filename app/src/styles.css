@@ -1308,3 +1308,105 @@ h3 {
   font-size: 12px;
   color: var(--muted);
 }
+
+/* ── 홈 단순화(ADR 009) ── */
+.exam-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.exam-date,
+.exam-dday {
+  display: grid;
+  align-content: center;
+  gap: 2px;
+  min-height: 84px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: var(--bg);
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+}
+.exam-date {
+  border: 0;
+  cursor: pointer;
+}
+.exam-dday {
+  text-align: right;
+}
+.exam-date small,
+.exam-dday small {
+  font-size: 12px;
+  color: var(--muted);
+}
+.exam-date small.link {
+  color: var(--primary);
+  font-weight: 700;
+}
+.exam-date b,
+.exam-dday b {
+  font-size: 22px;
+  line-height: 1.2;
+  font-variant-numeric: tabular-nums;
+}
+.exam-dday b {
+  font-size: 30px;
+}
+.btn-sub {
+  display: block;
+  font-size: 13px;
+  font-weight: 500;
+  opacity: 0.85;
+}
+.btn-big:has(.btn-sub) {
+  flex-direction: column;
+  gap: 0;
+}
+.today-line {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+}
+.today-line .link-btn {
+  color: var(--primary);
+  font-weight: 700;
+}
+.subject-head .subject-score {
+  flex: none;
+  font-size: 14px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.subject-head .subject-score b {
+  color: var(--ink);
+}
+.subject-foot {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+.day-subjects {
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 4px;
+  font-size: 14px;
+}
+.day-subjects li {
+  display: flex;
+  justify-content: space-between;
+}
+.day-verdict {
+  margin: 0;
+  font-size: 15px;
+}
+.hint.center {
+  text-align: center;
+  margin: 0;
+}

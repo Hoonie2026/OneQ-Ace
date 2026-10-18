@@ -16,6 +16,9 @@ import {
 import { db, describeError, getSetting, isStandalone, SETTING, STAGE0_DB_NAME } from '../db';
 import { deleteCert, wipeAll, wipeRecords } from '../wipe';
 import { deviceSummary, formatBytes, readStorageInfo, type StorageInfo } from '../util';
+import { examLabel } from '../study';
+import { PackPicker } from './PackPicker';
+import type { PackRow } from '../db';
 
 export function Settings(props: {
   version: number;
@@ -24,7 +27,11 @@ export function Settings(props: {
   onBack: () => void;
   onChanged: () => void;
   toast: (m: string) => void;
+  busy: boolean;
+  onImport: (files: File[]) => void;
+  onPack: (packId: string) => void;
 }) {
+  const [packs, setPacks] = useState<PackRow[]>([]);
   const [fp, setFp] = useState<Fingerprint | null>(null);
   const [lastBackup, setLastBackup] = useState<number | null>(null);
   const [pending, setPending] = useState(0);
@@ -42,6 +49,11 @@ export function Settings(props: {
     setInfo(await readStorageInfo());
     setStage0(await Dexie.exists(STAGE0_DB_NAME).catch(() => false));
     const packs = await db.packs.toArray();
+    setPacks(
+      [...packs].sort(
+        (a, b) => a.manifest.cert.name.localeCompare(b.manifest.cert.name, 'ko') || b.manifest.exam.year - a.manifest.exam.year || b.manifest.exam.round - a.manifest.exam.round,
+      ),
+    );
     const map = new Map<string, { code: string; name: string; packs: number; attempts: number }>();
     for (const p of packs) {
       const c = map.get(p.manifest.cert.code) ?? { code: p.manifest.cert.code, name: p.manifest.cert.name, packs: 0, attempts: 0 };
@@ -217,6 +229,29 @@ export function Settings(props: {
             </button>
           </div>
         )}
+      </section>
+
+      <section className="card" data-testid="pack-section">
+        <div className="section-head">
+          <h2>문제팩 {packs.length}회차</h2>
+          <PackPicker busy={props.busy} onFiles={props.onImport} small />
+        </div>
+        <p className="hint">처음 공부를 시작할 때 한 번 가져오고, 합격한 뒤 지우거나 동료에게 나눌 때 씁니다.</p>
+        <ul className="pack-lines">
+          {packs.map((p) => (
+            <li key={p.packId}>
+              <button className="pack-line" onClick={() => props.onPack(p.packId)} data-testid={`pack-${p.packId}`}>
+                <span>{examLabel(p.manifest)}</span>
+                <small className="muted">
+                  {p.manifest.cert.name} · {p.manifest.questionCount}문항
+                </small>
+                <span className="muted" aria-hidden="true">
+                  ›
+                </span>
+              </button>
+            </li>
+          ))}
+        </ul>
       </section>
 
       <section className="card">
