@@ -6,7 +6,9 @@
  * - 교차 학습: 같은 과목 연속 3문항 이내
  * - 틀린 문항은 세션 끝에 한 번 더(retryTail)
  */
-import type { Item } from './items';
+import type { Bank, Item } from './items';
+import { dueAt, type MemoryState } from './memory';
+import { startOfDay } from './days';
 import type { PlannedItem, Slot, WeeklyPlan } from './plan';
 
 export const SESSION_SIZE = 15;
@@ -82,4 +84,40 @@ export function buildTodaySession(plan: WeeklyPlan, today: number, size = SESSIO
 /** 세션 끝 재출제: 틀리거나 모른 문항을 한 번 더(같은 과목 연속 규칙은 유지) */
 export function retryTail(entries: SessionEntry[], wrongQids: Set<string>): SessionEntry[] {
   return interleave(entries.filter((e) => wrongQids.has(e.qid)));
+}
+
+/**
+ * 과목별 학습 세션(ADR 008 — 핵심 학습). 그 과목의 전 회차를 하나로 보고 "자동" 순서로 낸다:
+ * ① 복습할 때가 된 문항(틀린 것 먼저, 오래 밀린 것 먼저) → ② 출제빈도가 높은 새 문항(같은 빈도면 최근 회차).
+ * 오늘 이미 푼 문항은 빼고(같은 날 다시 푸는 것은 "틀린 문항 다시"가 맡음), 같은 내용은 최근 회차 문항 하나로 낸다.
+ */
+export function buildSubjectSession(bank: Bank, mem: MemoryState, subjectKey: string, now: number, attempts: { qid: string; ts: number }[], size = SESSION_SIZE): SessionEntry[] {
+  const today = startOfDay(now);
+  const doneToday = new Set(attempts.filter((a) => a.ts >= today).map((a) => bank.itemOf.get(a.qid)?.key).filter(Boolean));
+  const items = bank.items.filter((it) => it.subjectKey === subjectKey && !doneToday.has(it.key));
+  const due: { it: Item; wrong: boolean; due: number }[] = [];
+  const fresh: Item[] = [];
+  for (const it of items) {
+    const m = mem.items.get(it.key);
+    if (!m) fresh.push(it);
+    else {
+      const d = startOfDay(dueAt(m.card, mem.curve));
+      if (d <= today) due.push({ it, wrong: !m.lastCorrect, due: d });
+    }
+  }
+  due.sort((a, b) => Number(b.wrong) - Number(a.wrong) || a.due - b.due || b.it.qids.length - a.it.qids.length);
+  fresh.sort((a, b) => b.qids.length - a.qids.length || (bank.examDateOf.get(b.qids[0]) ?? '').localeCompare(bank.examDateOf.get(a.qids[0]) ?? '') || a.key.localeCompare(b.key));
+  const picked = [...due.map((x) => ({ it: x.it, slot: (x.wrong ? 'weak' : 'review') as Slot })), ...fresh.map((it) => ({ it, slot: 'new' as Slot }))].slice(0, size);
+  return picked.map(({ it, slot }) => ({ qid: representativeQid(it), itemKey: it.key, subjectKey: it.subjectKey, slot }));
+}
+
+/** 과목별 복습할 때가 된 문항 수(오늘 기준) */
+export function dueCounts(bank: Bank, mem: MemoryState, now: number): Map<string, number> {
+  const today = startOfDay(now);
+  const out = new Map<string, number>();
+  for (const it of bank.items) {
+    const m = mem.items.get(it.key);
+    if (m && startOfDay(dueAt(m.card, mem.curve)) <= today) out.set(it.subjectKey, (out.get(it.subjectKey) ?? 0) + 1);
+  }
+  return out;
 }

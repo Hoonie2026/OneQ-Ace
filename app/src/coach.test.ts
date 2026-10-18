@@ -1,6 +1,6 @@
 import 'fake-indexeddb/auto';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { applyMinutes, fmtMinutes, loadCoach, mockHistory, startMock, startRetry, startToday } from './coach';
+import { applyMinutes, fmtMinutes, loadCoach, mockHistory, questionHistory, startMock, startRetry, startSubject, startToday } from './coach';
 import { OneQDB } from './db';
 import { loadPlanSettings, savePlanSettings } from './engine';
 import { importPackBytes } from './pack/import';
@@ -122,5 +122,57 @@ describe('모의고사(5단계)', () => {
     expect(await d.runs.count()).toBe(2);
     await deleteCert('TEST', d);
     expect(await d.runs.count()).toBe(0);
+  });
+});
+
+describe('과목별 학습·실제 시험 기준 예상(ADR 008)', () => {
+  /** 2회차, 2회차의 첫 문항은 1회차 첫 문항과 같은 내용 */
+  async function withRepeat() {
+    for (const round of [1, 2]) {
+      const questions = Array.from({ length: 20 }, (_, i) => ({ hash: round === 2 && i === 0 ? 'r1q0' : `r${round}q${i}`, answer: 1, subjectNo: i < 10 ? 1 : 2 }));
+      await importPackBytes(await makePack({ year: 2020 + round, round, questions }), {}, d);
+    }
+  }
+
+  it('과목 학습: 그 과목만, 출제빈도 높은 문항 먼저, 오늘 푼 문항은 다시 내지 않음', async () => {
+    await withRepeat();
+    const c = (await loadCoach('TEST', NOW, d))!;
+    const k1 = c.subjects[0].key;
+    const t = (await startSubject('TEST', k1, NOW, d))!;
+    let s = (await loadSession(t, d))!;
+    expect(s.qids).toHaveLength(15); // 과목1: 2회차 × 10문항 − 같은 문항 1 = 19 학습 단위
+    const qs = await d.questions.bulkGet(s.qids);
+    expect(qs.every((q) => q!.subjectNo === 1)).toBe(true);
+    expect(s.qids[0]).toBe('TEST-2022-2-001'); // 2022년 2회 // 2회 출제 문항이 맨 앞(최근 회차 문항으로)
+    s = await solveSet(t, () => 2); // 모두 틀림
+    const t2 = (await startSubject('TEST', k1, NOW + 60_000, d))!;
+    expect((await loadSession(t2, d))!.qids).toHaveLength(4); // 오늘 남은 새 문항만
+    // 다음 날: 틀린 문항이 복습으로 먼저
+    const t3 = (await startSubject('TEST', k1, NOW + 86_400_000, d))!;
+    const s3 = (await loadSession(t3, d))!;
+    expect(s.qids.includes(s3.qids[0])).toBe(true);
+    // 출제 이력
+    const h = await questionHistory('TEST', d);
+    expect(h.get('TEST-2022-2-001')).toEqual(['2022년 2회', '2021년 1회']);
+    expect(h.get('TEST-2021-1-005')).toEqual(['2021년 1회']);
+  });
+
+  it('현재 점수는 기록 그대로(모름 0점), 예상은 실제 시험 기준(반복 출제 비율 + 처음 보는 문항 정답률, 모름은 25%)', async () => {
+    await withRepeat();
+    await savePlanSettings('TEST', { examDate: '2027-01-18' }, d);
+    const k1 = (await loadCoach('TEST', NOW, d))!.subjects[0].key;
+    // 과목1 15문항 모두 모름
+    await solveSet((await startSubject('TEST', k1, NOW, d))!, () => 0);
+    const c = (await loadCoach('TEST', NOW, d))!;
+    const s1 = c.subjects.find((s) => s.key === k1)!;
+    expect(s1.current).toBeLessThan(5); // 거의 0점
+    expect(s1.newRate.raw).toBeLessThan(0.05);
+    expect(s1.newRate.exam).toBeGreaterThan(0.2); // 시험에선 찍어서 25%
+    expect(c.exam.rho).toBeGreaterThan(0.09);
+    expect(c.exam.rho).toBeLessThan(0.12); // 회차가 적어 기본값(10%) 쪽
+    expect(s1.examProjected!).toBeLessThan(40); // 1회차 문항을 다 외워도 처음 보는 문항이 대부분 → 과락
+    expect(c.exam.status === 'unknown' || c.exam.status === 'fail-subject').toBe(true);
+    // 오늘 추천: 진단이 덜 된 과목2
+    expect(c.subjects.find((s) => s.recommended)!.key).not.toBe(k1);
   });
 });

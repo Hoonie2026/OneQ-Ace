@@ -29,6 +29,13 @@ export const PRIOR_PSEUDO = 10;
 export const LOW_Z = 1;
 /** 문항당 소요시간 초기값(6.4) */
 export const DEFAULT_SEC_PER_Q = 90;
+/** 계획용 문항당 시간의 범위(초)와, 실측으로 바꾸기 전에 필요한 풀이 수.
+ * 실기기 v0.2.0: "모름"을 빠르게 연달아 누른 기록(0.15초)이 중앙값이 되어 하루 2시간 = 47,368문항으로 계산됐다(5a P2) */
+export const SEC_PER_Q_MIN = 30;
+export const SEC_PER_Q_MAX = 300;
+export const MIN_TIMING_OBS = 20;
+/** 이보다 빨리 답한 풀이는 시간 실측에서 뺀다(읽지 않고 누른 것) */
+export const MIN_ELAPSED_MS = 5_000;
 
 export const scheduler = fsrs({
   request_retention: TARGET_RETENTION,
@@ -94,7 +101,8 @@ export function replay(bank: Bank, attempts: EngineAttempt[]): MemoryState {
   // 과목별 풀이 시간 중앙값(이상치 영향이 적게 중앙값, 10분 초과는 자리 비움으로 보고 제외)
   const times = new Map<string, number[]>();
   for (const a of rows) {
-    if (a.elapsedMs <= 0 || a.elapsedMs > 600_000) continue;
+    // 모름·5초 미만(읽지 않고 누름)·10분 초과(자리 비움)는 풀이 시간으로 보지 않는다
+    if (a.chosen === 0 || a.elapsedMs < MIN_ELAPSED_MS || a.elapsedMs > 600_000) continue;
     const sk = bank.itemOf.get(a.qid)!.subjectKey;
     (times.get(sk) ?? times.set(sk, []).get(sk)!).push(a.elapsedMs);
   }
@@ -156,7 +164,7 @@ export function replay(bank: Bank, attempts: EngineAttempt[]): MemoryState {
     prior,
     priorLow,
     priorObs,
-    secPerQuestion: med != null ? med / 1000 : DEFAULT_SEC_PER_Q,
+    secPerQuestion: med != null && all.length >= MIN_TIMING_OBS ? Math.min(SEC_PER_Q_MAX, Math.max(SEC_PER_Q_MIN, med / 1000)) : DEFAULT_SEC_PER_Q,
     curve: fitCurve(reviews, prior),
   };
 }

@@ -1,12 +1,13 @@
 import { useEffect, useState } from 'react';
-import { loadCoach, startMock, startToday, type Coach } from '../coach';
-import { db, describeError, getSetting, isStandalone, setSetting, SETTING } from '../db';
-import { ensureWrongRun, examLabel, packSummary, type PackSummary, type Target } from '../study';
+import { loadCoach, startMock, startSubject, type Coach } from '../coach';
+import { db, describeError, getSetting, isStandalone, setSetting, SETTING, type PackRow } from '../db';
+import { examLabel, type Target } from '../study';
 import { CoachCard } from './CoachCard';
 import { MockPanel } from './MockPanel';
 import { PackPicker } from './PackPicker';
+import { SubjectList } from './SubjectList';
 
-type Tab = 'rounds' | 'mock';
+type Tab = 'subjects' | 'mock';
 
 interface Cert {
   code: string;
@@ -14,6 +15,15 @@ interface Cert {
   packs: number;
 }
 
+interface PackLine {
+  pack: PackRow;
+  seen: number;
+}
+
+/**
+ * 홈(ADR 008): 종목 → 대시보드(현재 → 시험일 예상, 합격 가능성) → [과목별 | 모의고사]. 회차별 풀이는 없앴고,
+ * 문제팩은 아래 목록에서 가져오기·정보·삭제만 한다(회차별 기록은 원장에 그대로 남아 엔진이 쓴다).
+ */
 export function Home(props: {
   version: number;
   busy: boolean;
@@ -26,68 +36,68 @@ export function Home(props: {
   onChanged: () => void;
   toast: (m: string) => void;
 }) {
-  const [coach, setCoach] = useState<Coach | null>(null);
-  const [tab, setTab] = useState<Tab>('rounds');
-  const [starting, setStarting] = useState(false);
-  const [items, setItems] = useState<PackSummary[] | null>(null);
+  const [packs, setPacks] = useState<PackLine[] | null>(null);
   const [certs, setCerts] = useState<Cert[]>([]);
   const [cert, setCert] = useState<string | null>(null);
-  const [subjectFor, setSubjectFor] = useState<PackSummary | null>(null);
+  const [coach, setCoach] = useState<Coach | null>(null);
+  const [tab, setTab] = useState<Tab>('subjects');
+  const [starting, setStarting] = useState(false);
+
+  const loadCert = async (code: string | null, all: PackRow[]) => {
+    const mine = all
+      .filter((p) => p.manifest.cert.code === code)
+      .sort((a, b) => b.manifest.exam.year - a.manifest.exam.year || b.manifest.exam.round - a.manifest.exam.round);
+    const lines: PackLine[] = [];
+    for (const p of mine) {
+      const qids = new Set(await db.attempts.where('qid').startsWith(`${p.packId}-`).keys());
+      lines.push({ pack: p, seen: qids.size });
+    }
+    setPacks(lines);
+    setCoach(code ? await loadCoach(code) : null);
+  };
 
   useEffect(() => {
     (async () => {
-      const packs = (await db.packs.toArray()).sort(
-        (a, b) => b.manifest.exam.year - a.manifest.exam.year || b.manifest.exam.round - a.manifest.exam.round,
-      );
-      // 자격종목별로 나눈다. 고른 종목은 기억해 두고, 없으면 가장 최근에 가져온 팩의 종목
+      const all = await db.packs.toArray();
       const map = new Map<string, Cert>();
-      for (const p of packs) {
+      for (const p of all) {
         const c = map.get(p.manifest.cert.code) ?? { code: p.manifest.cert.code, name: p.manifest.cert.name, packs: 0 };
         c.packs++;
         map.set(c.code, c);
       }
       const list = [...map.values()].sort((a, b) => a.name.localeCompare(b.name, 'ko'));
       const saved = await getSetting<string | null>(SETTING.certCode, null);
-      const newest = [...packs].sort((a, b) => b.importedAt - a.importedAt)[0]?.manifest.cert.code ?? null;
+      const newest = [...all].sort((a, b) => b.importedAt - a.importedAt)[0]?.manifest.cert.code ?? null;
       const chosen = saved && map.has(saved) ? saved : newest;
       setCerts(list);
       setCert(chosen);
-      setItems(await Promise.all(packs.filter((p) => p.manifest.cert.code === chosen).map((p) => packSummary(p))));
-      setCoach(chosen ? await loadCoach(chosen) : null);
+      await loadCert(chosen, all);
     })();
   }, [props.version]);
 
   const pickCert = async (code: string) => {
     await setSetting(SETTING.certCode, code);
-    const packs = (await db.packs.toArray())
-      .filter((p) => p.manifest.cert.code === code)
-      .sort((a, b) => b.manifest.exam.year - a.manifest.exam.year || b.manifest.exam.round - a.manifest.exam.round);
     setCert(code);
-    setItems(await Promise.all(packs.map((p) => packSummary(p))));
-    setCoach(await loadCoach(code));
+    await loadCert(code, await db.packs.toArray());
   };
 
-  /** 오늘 학습·모의고사 시작(엔진이 문항을 고른다) */
-  const start = async (kind: 'today' | 'mock') => {
+  const certName = certs.find((c) => c.code === cert)?.name;
+  const mockCount = coach ? coach.ctx.bank.subjects.filter((x) => x.current).reduce((t, x) => t + x.examCount, 0) : 0;
+
+  /** 과목 학습·모의고사 시작(엔진이 문항을 고른다) */
+  const start = async (kind: 'subject' | 'mock', subjectKey?: string) => {
     if (!cert || starting) return;
     setStarting(true);
     try {
-      const t = kind === 'today' ? await startToday(cert) : await startMock(cert);
+      const t = kind === 'subject' ? await startSubject(cert, subjectKey!) : await startMock(cert);
       if (t) props.onSolve(t);
-      else props.toast(kind === 'today' ? '오늘 낼 문항이 없습니다. 학습 계획(시험일)을 확인하세요' : '모의고사를 만들 문항이 없습니다');
+      else props.toast(kind === 'subject' ? '오늘 이 과목에서 낼 문항이 없습니다. 다른 과목을 고르세요' : '모의고사를 만들 문항이 없습니다');
     } catch (err) {
       props.toast(`시작하지 못했습니다: ${describeError(err)}`);
     } finally {
       setStarting(false);
     }
   };
-  const mockCount = coach ? coach.ctx.bank.subjects.filter((x) => x.current).reduce((t, x) => t + x.examCount, 0) : 0;
-
-  const certName = certs.find((c) => c.code === cert)?.name;
-  // 이어 풀기: 이 종목에서 가장 최근에 풀던 것(회독 미완료 또는 오답 묶음)
-  const recent = (items ?? [])
-    .filter((i) => (i.pass && i.answered > 0 && i.answered < i.total) || i.wrongRun)
-    .sort((a, b) => b.lastActivity - a.lastActivity)[0];
 
   return (
     <div className="app">
@@ -126,178 +136,70 @@ export function Home(props: {
         </section>
       )}
 
-      {coach && cert && (
-        <CoachCard
-          coach={coach}
-          certCode={cert}
-          busy={starting}
-          onPlan={() => props.onPlan(cert, certName ?? cert)}
-          onToday={() => start('today')}
-          onResumeToday={(sessionId) => props.onSolve({ kind: 'set', sessionId })}
-          onChanged={props.onChanged}
-          toast={props.toast}
-        />
-      )}
-
-      {items && items.length > 0 && (
-        <nav className="tabs" role="tablist" aria-label="학습 방법">
-          <button role="tab" aria-selected={tab === 'rounds'} className={`tab${tab === 'rounds' ? ' on' : ''}`} onClick={() => setTab('rounds')}>
-            회차별
-          </button>
-          <button role="tab" aria-selected={tab === 'mock'} className={`tab${tab === 'mock' ? ' on' : ''}`} onClick={() => setTab('mock')} data-testid="tab-mock">
-            모의고사
-          </button>
-        </nav>
-      )}
-
-      {tab === 'mock' && cert && items && items.length > 0 && (
-        <MockPanel
-          certCode={cert}
-          version={props.version}
-          busy={starting}
-          questionCount={mockCount}
-          onStart={() => start('mock')}
-          onOpen={(sessionId, finished) => (finished ? props.onResult({ kind: 'set', sessionId }) : props.onSolve({ kind: 'set', sessionId }))}
-        />
-      )}
-
-      {tab === 'rounds' && recent && (
-        <section className="card resume" data-testid="resume">
-          <p className="muted">이어 풀기</p>
-          {recent.wrongRun && recent.wrongRun.updatedAt >= (recent.pass?.updatedAt ?? 0) ? (
-            <>
-              <h2>{recent.wrongRun.title}</h2>
-              <p className="hint">{recent.wrongRunLeft}문항 남음</p>
-              <button className="btn btn-primary btn-block btn-big" onClick={() => props.onSolve({ kind: 'wrong', sessionId: recent.wrongRun!.sessionId })}>
-                이어서 풀기
-              </button>
-            </>
-          ) : (
-            <>
-              <h2>
-                {examLabel(recent.pack.manifest)} · {recent.passNo}회독
-              </h2>
-              <p className="hint">
-                {recent.answered} / {recent.total}문항 풀이
-              </p>
-              <button className="btn btn-primary btn-block btn-big" onClick={() => props.onSolve({ kind: 'pass', packId: recent.pack.packId })}>
-                이어서 풀기
-              </button>
-            </>
-          )}
-        </section>
-      )}
-
-      {items && items.length === 0 && (
+      {packs && packs.length === 0 && (
         <section className="card empty">
           <h2>문제팩을 가져오세요</h2>
           <p>
-            사내 게시판에서 받은 <b>oneq-종목-연도-회차.zip</b> 파일을 고릅니다. 여러 개를 한 번에 골라도 됩니다.
+            사내 게시판에서 받은 <b>oneq-종목-연도-회차.zip</b> 파일을 고릅니다. 여러 회차를 한 번에 골라도 됩니다(5~10년치를 권장).
           </p>
           <PackPicker busy={props.busy} onFiles={props.onImport} primary />
         </section>
       )}
 
-      {tab === 'rounds' && items && items.length > 0 && (
-        <section>
-          <div className="section-head">
-            <h2>문제팩 {items.length}회차</h2>
-            <PackPicker busy={props.busy} onFiles={props.onImport} small />
-          </div>
-          <ul className="packs">
-            {items.map((it) => {
-              const done = it.answered >= it.total;
-              const target: Target = { kind: 'pass', packId: it.pack.packId };
-              return (
-                <li key={it.pack.packId} className="card pack" data-testid={`pack-${it.pack.packId}`}>
-                  <button className="pack-title" onClick={() => props.onPack(it.pack.packId)}>
-                    <span>
-                      <b>{examLabel(it.pack.manifest)}</b>
-                      <small className="muted">
-                        {it.pack.manifest.questionCount}문항 · {it.passNo}회독
-                      </small>
-                    </span>
+      {coach && cert && packs && packs.length > 0 && (
+        <>
+          <CoachCard
+            coach={coach}
+            certCode={cert}
+            onPlan={() => props.onPlan(cert, certName ?? cert)}
+            onResume={(sessionId) => props.onSolve({ kind: 'set', sessionId })}
+            onChanged={props.onChanged}
+            toast={props.toast}
+          />
+
+          <nav className="tabs" role="tablist" aria-label="학습 방법">
+            <button role="tab" aria-selected={tab === 'subjects'} className={`tab${tab === 'subjects' ? ' on' : ''}`} onClick={() => setTab('subjects')} data-testid="tab-subjects">
+              과목별
+            </button>
+            <button role="tab" aria-selected={tab === 'mock'} className={`tab${tab === 'mock' ? ' on' : ''}`} onClick={() => setTab('mock')} data-testid="tab-mock">
+              모의고사
+            </button>
+          </nav>
+
+          {tab === 'subjects' && <SubjectList coach={coach} busy={starting} onStudy={(k) => start('subject', k)} />}
+          {tab === 'mock' && (
+            <MockPanel
+              certCode={cert}
+              version={props.version}
+              busy={starting}
+              questionCount={mockCount}
+              onStart={() => start('mock')}
+              onOpen={(sessionId, finished) => (finished ? props.onResult({ kind: 'set', sessionId }) : props.onSolve({ kind: 'set', sessionId }))}
+            />
+          )}
+
+          <section className="packs-section">
+            <div className="section-head">
+              <h2>문제팩 {packs.length}회차</h2>
+              <PackPicker busy={props.busy} onFiles={props.onImport} small />
+            </div>
+            <ul className="pack-lines">
+              {packs.map(({ pack, seen }) => (
+                <li key={pack.packId}>
+                  <button className="pack-line" onClick={() => props.onPack(pack.packId)} data-testid={`pack-${pack.packId}`}>
+                    <span>{examLabel(pack.manifest)}</span>
+                    <small className="muted" data-testid="pack-seen">
+                      풀어 본 문항 {seen}/{pack.manifest.questionCount}
+                    </small>
                     <span className="muted" aria-hidden="true">
                       ›
                     </span>
                   </button>
-                  <div className="meter" aria-label={`진도 ${it.answered}/${it.total}`}>
-                    <div className="meter-bar" style={{ width: `${(it.answered / Math.max(1, it.total)) * 100}%` }} />
-                  </div>
-                  <p className="meter-text" data-testid="pack-progress">
-                    진도 {it.answered}/{it.total}
-                    {it.wrongNow > 0 && ` · 다시 볼 문항 ${it.wrongNow}`}
-                  </p>
-                  <div className="pack-actions">
-                    {done ? (
-                      <button className="btn btn-primary" onClick={() => props.onResult(target)}>
-                        결과 보기
-                      </button>
-                    ) : (
-                      <button className="btn btn-primary" data-testid="pack-solve" onClick={() => props.onSolve(target)}>
-                        {it.answered === 0 ? '풀기 시작' : `이어 풀기 ${it.answered}/${it.total}`}
-                      </button>
-                    )}
-                    <button className="btn" onClick={() => setSubjectFor(it)}>
-                      과목별
-                    </button>
-                    {it.answered > 0 && !done && (
-                      <button className="btn" onClick={() => props.onResult(target)}>
-                        성적
-                      </button>
-                    )}
-                    {it.wrongNow > 0 && (
-                      <button
-                        className="btn"
-                        onClick={async () => {
-                          const run = await ensureWrongRun(it.pack.packId);
-                          if (run) props.onSolve({ kind: 'wrong', sessionId: run.sessionId });
-                        }}
-                      >
-                        {it.wrongRun ? `오답·모름 이어 풀기 ${it.wrongRunLeft}` : `오답·모름 ${it.wrongNow}`}
-                      </button>
-                    )}
-                  </div>
                 </li>
-              );
-            })}
-          </ul>
-        </section>
-      )}
-
-      {subjectFor && (
-        <div className="sheet-back" onClick={() => setSubjectFor(null)}>
-          <div className="sheet" role="dialog" aria-label="과목 선택" onClick={(e) => e.stopPropagation()}>
-            <h2>{examLabel(subjectFor.pack.manifest)} 과목별 풀기</h2>
-            <p className="hint">과목별로 푼 문항도 회차 진도에 함께 쌓입니다.</p>
-            {subjectFor.pack.manifest.subjects.map((sub) => {
-              const b = subjectFor.bySubject.get(sub.no) ?? { answered: 0, total: sub.count };
-              const t: Target = { kind: 'pass', packId: subjectFor.pack.packId, subjectNo: sub.no };
-              const full = b.answered >= b.total;
-              return (
-                <button
-                  key={sub.no}
-                  className="btn btn-block sheet-item"
-                  onClick={() => {
-                    setSubjectFor(null);
-                    if (full) props.onResult(t);
-                    else props.onSolve(t);
-                  }}
-                >
-                  <span>
-                    {sub.no}과목 {sub.name}
-                  </span>
-                  <small className={full ? 'ok-text' : 'muted'}>
-                    {full ? '완료 · 결과' : `${b.answered}/${b.total}`}
-                  </small>
-                </button>
-              );
-            })}
-            <button className="btn btn-ghost btn-block" onClick={() => setSubjectFor(null)}>
-              닫기
-            </button>
-          </div>
-        </div>
+              ))}
+            </ul>
+          </section>
+        </>
       )}
 
       <p className="foot">서버 없음 · 데이터 수집 없음 · 모든 기록은 이 기기에만 저장됩니다</p>

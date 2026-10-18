@@ -45,7 +45,7 @@ export function PackDetail(props: { packId: string; onBack: () => void; onBackup
           <div>
             <dt>문항</dt>
             <dd>
-              {m.questionCount}문항 · {prog?.passNo ?? 1}회독 진도 {prog?.answered ?? 0}/{prog?.total ?? 0}
+              {m.questionCount}문항{prog && prog.answered > 0 ? ` · 회차로 푼 진도 ${prog.answered}/${prog.total}` : ''}
             </dd>
           </div>
           <div>

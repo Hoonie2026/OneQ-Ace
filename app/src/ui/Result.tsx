@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { startRetry, startToday } from '../coach';
+import { startRetry, startSubject } from '../coach';
+import { subjectKey as keyOfName } from '../engine/items';
 import { ensureWrongRun, loadSession, passHistory, restartPass, sessionResult, type PassRecord, type Result as R, type Target } from '../study';
 
 const VERDICT: Record<NonNullable<R['verdict']>, { icon: string; text: string; cls: string }> = {
@@ -15,6 +16,7 @@ export function Result(props: { target: Target; onHome: () => void; onSolve: (t:
   const [packId, setPackId] = useState('');
   const [history, setHistory] = useState<PassRecord[]>([]);
   const [set, setSet] = useState<{ certCode: string; mode: string; finished: boolean } | null>(null);
+  const [subjectKey, setSubjectKey] = useState<string | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -23,7 +25,10 @@ export function Result(props: { target: Target; onHome: () => void; onSolve: (t:
       setPackId(s.pack.packId);
       setRule({ min: s.pack.manifest.passRule.subjectMin, avg: s.pack.manifest.passRule.avgMin });
       if (s.target.kind === 'set') setSet({ certCode: s.run.certCode ?? s.pack.manifest.cert.code, mode: s.run.mode, finished: s.run.finishedAt != null });
-      setRes(await sessionResult(s));
+      const r = await sessionResult(s);
+      setRes(r);
+      // 한 과목 학습이면 "이 과목 계속"
+      if (s.target.kind === 'set' && s.run.mode === 'today' && r.subjects.length === 1) setSubjectKey(keyOfName(r.subjects[0].name));
       if (props.target.kind === 'pass' && !props.target.subjectNo) setHistory(await passHistory(s.pack.packId));
     })();
   }, [JSON.stringify(props.target)]);
@@ -42,11 +47,11 @@ export function Result(props: { target: Target; onHome: () => void; onSolve: (t:
     const run = await ensureWrongRun(packId);
     if (run) props.onSolve({ kind: 'wrong', sessionId: run.sessionId });
   };
-  const nextToday = async () => {
-    if (!set) return;
-    const t = await startToday(set.certCode);
+  const nextSubject = async () => {
+    if (!set || !subjectKey) return;
+    const t = await startSubject(set.certCode, subjectKey);
     if (t) props.onSolve(t);
-    else props.toast('오늘 낼 문항이 없습니다');
+    else props.toast('오늘 이 과목에서 낼 문항이 없습니다');
   };
   const isMock = set?.mode === 'mock';
   const newPass = async () => {
@@ -166,9 +171,9 @@ export function Result(props: { target: Target; onHome: () => void; onSolve: (t:
             이어서 풀기 ({res.total - res.answered}문항 남음)
           </button>
         )}
-        {set?.mode === 'today' && res.complete && (
-          <button className={`btn btn-block${res.wrongQids.length ? '' : ' btn-primary'}`} onClick={nextToday} data-testid="today-next">
-            오늘 학습 계속(다음 15문항)
+        {set?.mode === 'today' && res.complete && subjectKey && (
+          <button className={`btn btn-block${res.wrongQids.length ? '' : ' btn-primary'}`} onClick={nextSubject} data-testid="today-next">
+            이 과목 계속(다음 15문항)
           </button>
         )}
         {res.wrongQids.length > 0 && (!set || res.complete || set.finished) && (

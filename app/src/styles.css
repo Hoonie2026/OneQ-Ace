@@ -1152,3 +1152,159 @@ h3 {
 .history tr.clickable {
   cursor: pointer;
 }
+
+/* ── 5단계 개편(ADR 008): 현재 → 예상, 과목 카드, 문제팩 목록, 타이머, 출제 횟수 ── */
+.score-pair {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.score-pair > div {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+}
+.score-pair small {
+  font-size: 13px;
+  color: var(--muted);
+}
+.score-pair b {
+  font-size: 34px;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+.score-pair .ok b {
+  color: var(--ok);
+}
+.score-pair .bad b {
+  color: var(--fail);
+}
+.score-pair .arrow {
+  font-size: 22px;
+  color: var(--muted);
+}
+.outlook-title {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  opacity: 0.8;
+}
+.subjects {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+}
+.subject {
+  display: grid;
+  gap: 6px;
+}
+.subject.is-rec {
+  border: 2px solid var(--primary);
+}
+.subject-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+.rec-badge {
+  flex: none;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--primary);
+  color: var(--primary-ink);
+  font-size: 12px;
+  font-weight: 700;
+}
+.bar.dual {
+  display: block;
+  overflow: visible;
+}
+.bar.dual .bar-fill {
+  position: absolute;
+  left: 0;
+  top: 0;
+  display: block;
+}
+.bar-fill.ghost {
+  background: var(--ok);
+  opacity: 0.3;
+}
+.bar-fill.ghost.bad {
+  background: var(--fail);
+}
+.subject-score {
+  margin: 0;
+  font-size: 14px;
+}
+.subject-score b.bad {
+  color: var(--fail);
+}
+.subject .meter-text {
+  margin: 0;
+}
+.packs-section {
+  margin-top: 18px;
+}
+.pack-lines {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+.pack-line {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  align-items: center;
+  gap: 10px;
+  min-height: var(--tap);
+  padding: 0 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.mock-timer {
+  margin: 0;
+  padding: 4px 16px;
+  font-size: 14px;
+  color: var(--muted);
+  text-align: center;
+}
+.mock-timer b {
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+.mock-timer.bad b {
+  color: var(--fail);
+}
+.freq-row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px 0;
+}
+.freq-badge {
+  padding: 3px 10px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--check-bg);
+  color: var(--check);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.freq-list {
+  font-size: 12px;
+  color: var(--muted);
+}

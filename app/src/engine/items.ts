@@ -55,6 +55,8 @@ export interface Bank {
   itemOf: Map<string, Item>; // qid → item
   /** 과목별 보유 문항 수 N_s(동일 문항도 각각 센다 — 실제 시험에 각각 출제된 횟수) */
   questionCount: Map<string, number>;
+  /** 문항의 시행일(qid → YYYY-MM-DD). 출제 이력 표시·반복 출제 비율에 쓴다 */
+  examDateOf: Map<string, string>;
 }
 
 /**
@@ -92,7 +94,9 @@ export function buildBank(questions: EngineQuestion[], subjectCounts?: { name: s
   const byKey = new Map<string, Item>();
   const itemOf = new Map<string, Item>();
   const questionCount = new Map<string, number>();
+  const examDateOf = new Map<string, string>();
   for (const q of sorted) {
+    examDateOf.set(q.qid, q.examDate);
     const sk = subjectKey(q.subjectName);
     if (!names.has(sk)) continue;
     questionCount.set(sk, (questionCount.get(sk) ?? 0) + 1);
@@ -106,7 +110,7 @@ export function buildBank(questions: EngineQuestion[], subjectCounts?: { name: s
     it.qids.push(q.qid);
     itemOf.set(q.qid, it);
   }
-  return { subjects, items: [...byKey.values()], itemOf, questionCount };
+  return { subjects, items: [...byKey.values()], itemOf, questionCount, examDateOf };
 }
 
 /** 출제빈도 순 정렬(동일 > 1회). 6단계에서 유사 군집 크기를 반영한다 */

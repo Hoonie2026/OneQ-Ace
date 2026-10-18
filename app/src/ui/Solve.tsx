@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { db, type AttemptRow, type QuestionRow } from '../db';
 import { examLabel, finishRun, firstUnanswered, loadSession, recordAnswer, saveNote, setUnsure, type Session, type Target } from '../study';
 import { ZoomImage } from './ZoomImage';
+import { questionHistory } from '../coach';
 
 const CIRCLED = ['', '①', '②', '③', '④', '⑤'];
 const MAX_ELAPSED = 30 * 60 * 1000;
@@ -22,6 +23,8 @@ export function Solve(props: { target: Target; onExit: () => void; onResult: () 
   const [noteOpen, setNoteOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [nowMs, setNowMs] = useState(Date.now());
+  const [history, setHistory] = useState<Map<string, string[]>>(new Map());
+  const [showRounds, setShowRounds] = useState(false);
   const shownAt = useRef(performance.now());
   const hiddenFor = useRef(0);
   const hiddenAt = useRef<number | null>(null);
@@ -47,6 +50,8 @@ export function Solve(props: { target: Target; onExit: () => void; onResult: () 
       if (start < 0 || (ss.target.kind === 'set' && ss.run.finishedAt)) return props.onResult(); // 다 풀었거나 제출한 묶음이면 성적으로
       setS(ss);
       setIndex(start);
+      // 출제 이력(같은 내용이 나온 회차) — 문항 오른쪽 위 "n회 출제"(ADR 008)
+      questionHistory(ss.run.certCode ?? ss.pack.manifest.cert.code).then(setHistory).catch(() => undefined);
     })();
   }, [JSON.stringify(props.target)]);
 
@@ -82,6 +87,7 @@ export function Solve(props: { target: Target; onExit: () => void; onResult: () 
       setImg(url);
       setNote(n?.text ?? '');
       setNoteOpen(false);
+      setShowRounds(false);
       shownAt.current = performance.now();
       hiddenFor.current = 0;
     })();
@@ -185,9 +191,6 @@ export function Solve(props: { target: Target; onExit: () => void; onResult: () 
         </div>
         {isMock ? (
           <button className="score-btn" onClick={submit} aria-label="제출하고 채점" data-testid="mock-submit">
-            <span className={deadline && deadline - nowMs < 5 * 60_000 ? 'bad' : ''} data-testid="mock-timer">
-              ⏱ {fmtLeft(deadline ? deadline - nowMs : 0)}
-            </span>{' '}
             제출
           </button>
         ) : (
@@ -206,6 +209,19 @@ export function Solve(props: { target: Target; onExit: () => void; onResult: () 
       <div className="solve-progress" aria-hidden="true">
         <div style={{ width: `${(answeredCount / s.qids.length) * 100}%` }} />
       </div>
+      {isMock && (
+        <p className={`mock-timer${deadline && deadline - nowMs < 5 * 60_000 ? ' bad' : ''}`} role="timer" data-testid="mock-timer">
+          남은 시간 <b>{fmtLeft(deadline ? deadline - nowMs : 0)}</b>
+        </p>
+      )}
+      {q && (history.get(q.qid)?.length ?? 0) > 1 && (
+        <div className="freq-row">
+          <button className="freq-badge" onClick={() => setShowRounds((v) => !v)} aria-expanded={showRounds} data-testid="freq-badge">
+            {history.get(q.qid)!.length}회 출제
+          </button>
+          {showRounds && <span className="freq-list">{history.get(q.qid)!.join(' · ')}</span>}
+        </div>
+      )}
 
       {q ? <ZoomImage key={q.qid} src={img} width={q.imgSize[0]} height={q.imgSize[1]} alt={`${q.no}번 문항`} /> : <div className="zoom" />}
 

@@ -56,6 +56,8 @@ export interface PassOutlook {
   minMinutesPerDay: number | null;
   /** 지금 계획 대비 하루 몇 분 더 */
   extraMinutesPerDay: number;
+  /** 보유 기출 전체를 시험일까지 익히는 데(남은 모든 학습 단위) 매일 필요한 시간(분) — 실제 시험 기준 안내에 쓴다(ADR 008) */
+  coverMinutesPerDay: number | null;
   /** 과락만 벗어나는 데(모든 과목 ≥ 과락선 + 여유/2) 필요한 하루 평균 학습시간(분). 문항이 모자라면 null */
   fixMinutesPerDay: number | null;
   /** 과목 진단이 덜 돼(과목당 첫 풀이 OUTLOOK_MIN_OBS건 미만) 투영이 거친가 */
@@ -155,6 +157,7 @@ export function passOutlook(bank: Bank, mem: MemoryState, settings: PlanSettings
   const neededMinutesPerDay = reach(subjTarget, avgTarget);
   // 최소 시간: 여유 없이 과락선·합격선에 딱 닿는 데 필요한 시간(사용자 요청 — "남은 N일 동안 매일 최소 몇 분")
   const minMinutesPerDay = reach(rule.subjectMin, rule.avgMin);
+  const coverMinutesPerDay = perDay([...acts.values()].flat().reduce((t, a) => t + a.cost, 0));
   const plannedPerDay = daysLeft > 0 ? time.minutes / daysLeft : 0;
 
   let subjReachable = true;
@@ -191,6 +194,7 @@ export function passOutlook(bank: Bank, mem: MemoryState, settings: PlanSettings
     daysLeft,
     neededMinutesPerDay,
     minMinutesPerDay,
+    coverMinutesPerDay,
     fixMinutesPerDay,
     extraMinutesPerDay: neededMinutesPerDay == null ? Infinity : Math.max(0, Math.ceil(neededMinutesPerDay - plannedPerDay)),
     rough,

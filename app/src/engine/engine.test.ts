@@ -91,6 +91,19 @@ describe('FSRS 등급(6.2)과 원장 재생', () => {
   });
 });
 
+describe('문항당 풀이 시간(계획용)', () => {
+  it('모름·5초 미만 풀이는 빼고, 30~300초로 제한한다(실기기 v0.2.0: 모름 연타로 하루 47,368문항)', () => {
+    const bank = buildBank(syntheticBank(10));
+    const qids = bank.items.slice(0, 60).map((it) => it.qids[0]);
+    const fast = qids.map((q, i) => att(q, 0, false, { chosen: 0, elapsedMs: 150 + i }));
+    expect(replay(bank, fast).secPerQuestion).toBe(90); // 실측 없음 → 기본값
+    const quick = qids.map((q, i) => att(q, 0, true, { elapsedMs: 8_000 + i }));
+    expect(replay(bank, quick).secPerQuestion).toBe(30); // 하한
+    const normal = qids.map((q, i) => att(q, 0, true, { elapsedMs: 70_000 + i }));
+    expect(replay(bank, normal).secPerQuestion).toBeCloseTo(70, 0);
+  });
+});
+
 describe('예상 점수(6.3)·주간 계획(6.4)·세션(6.5)', () => {
   const qs = syntheticBank(10);
   const bank = buildBank(qs);
