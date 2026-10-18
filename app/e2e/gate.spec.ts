@@ -58,12 +58,12 @@ test('3단계 게이트(5단계 개편 후): 오프라인 과목별 학습·이�
 
   // ① 팩 가져오기
   await page.getByTestId('pack-input').first().setInputFiles(pack);
-  await expect(page.getByTestId('today-start')).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByTestId('go-recommend')).toBeVisible({ timeout: 30_000 });
 
   // ② 비행기 모드에서 다시 열기
   await ctx.setOffline(true);
   await page.reload();
-  await expect(page.getByTestId('today-start')).toBeVisible();
+  await expect(page.getByTestId('go-recommend')).toBeVisible();
 
   const imgOk = async () =>
     page.locator('.zoom-inner img').evaluate((img: HTMLImageElement) => img.complete && img.naturalWidth > 0);

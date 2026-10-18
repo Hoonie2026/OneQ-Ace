@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { loadCoach, startMock, startSubject, startToday, type Coach } from '../coach';
+import { loadCoach, mockHistory, startMock, startSubject, startToday, type Coach } from '../coach';
+import { RecommendView } from './RecommendView';
 import { db, describeError, getSetting, isStandalone, setSetting, SETTING, type PackRow } from '../db';
 import type { Target } from '../study';
 import { CoachCard } from './CoachCard';
@@ -8,7 +9,7 @@ import { PackPicker } from './PackPicker';
 import { SubjectList } from './SubjectList';
 
 /** 홈 안의 보기: 홈 / 과목 골라서 / 모의고사(ADR 010 — 홈에는 오늘 학습만, 나머지는 한 번 더 들어가서) */
-type View = 'home' | 'subjects' | 'mock';
+type View = 'home' | 'recommend' | 'subjects' | 'mock';
 
 interface Cert {
   code: string;
@@ -37,11 +38,14 @@ export function Home(props: {
   const [cert, setCert] = useState<string | null>(null);
   const [coach, setCoach] = useState<Coach | null>(null);
   const [view, setView] = useState<View>('home');
+  const [lastMock, setLastMock] = useState<{ date: string; score: number } | null>(null);
   const [starting, setStarting] = useState(false);
 
   const loadCert = async (code: string | null, all: PackRow[]) => {
     setPacks(all.filter((p) => p.manifest.cert.code === code));
     setCoach(code ? await loadCoach(code) : null);
+    const m = code ? (await mockHistory(code)).find((x) => x.finished) : undefined;
+    setLastMock(m ? { date: new Date(m.startedAt).toLocaleDateString('ko-KR', { month: 'numeric', day: 'numeric' }), score: m.result.avgScore } : null);
   };
 
   useEffect(() => {
@@ -140,8 +144,9 @@ export function Home(props: {
             <CoachCard
               coach={coach}
               busy={starting}
+              lastMock={lastMock}
               onPlan={() => props.onPlan(cert, certName ?? cert)}
-              onToday={() => start('today')}
+              onRecommend={() => setView('recommend')}
               onResume={(sessionId) => props.onSolve({ kind: 'set', sessionId })}
               onFinish={() => props.onSummary(cert)}
               onSubjects={() => setView('subjects')}
@@ -153,9 +158,10 @@ export function Home(props: {
               <button className="icon-btn" onClick={() => setView('home')} aria-label="홈으로">
                 ‹
               </button>
-              <h1>{view === 'subjects' ? '과목 골라서 학습' : '모의고사'}</h1>
+              <h1>{view === 'recommend' ? '시스템 추천 학습' : view === 'subjects' ? '과목별 학습' : '모의고사'}</h1>
             </header>
           )}
+          {view === 'recommend' && <RecommendView coach={coach} busy={starting} onStart={() => start('today')} />}
           {view === 'subjects' && <SubjectList coach={coach} busy={starting} onStudy={(k) => start('subject', k)} />}
           {view === 'mock' && (
             <MockPanel

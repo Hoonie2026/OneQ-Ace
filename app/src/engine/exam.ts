@@ -109,3 +109,19 @@ export function recordedScores(bank: Bank, attempts: EngineAttempt[]): Map<strin
 export function examScore(bankScore: number, rate: NewRate, rho: number): number {
   return Math.round((rho * bankScore + (1 - rho) * 100 * rate.exam) * 10) / 10;
 }
+
+/**
+ * 공부량 → 처음 보는 문항 정답률(ADR 011). 실기기 v0.5.0: 학습시간을 늘려도 시험일 예상 점수가 그대로였다 —
+ * 처음 보는 문항 정답률을 "지금 값 그대로" 두었기 때문(반복 출제분 ρ≈10%만 공부량에 반응).
+ *
+ * 기출을 새로 익히면 처음 보는 문항도 더 맞힌다(시험 효과의 전이 — Pan & Rickard 2018 메타분석, 전이 효과 크기 d≈0.40).
+ * 보유 기출 중 시험일까지 새로 익힐 비율 Δc만큼, 남은 여지(1 − 지금 정답률)의 TRANSFER를 더한다.
+ * 예: 정답률 40%, 남은 기출의 절반(Δc 0.5)을 새로 익히면 40 + 0.3 × 0.5 × 60 = 49%.
+ * TRANSFER는 가정값 — 실사용 기록(첫 풀이 정답률이 학습량에 따라 오르는 정도)으로 다시 맞출 것(백로그)
+ */
+export const TRANSFER = 0.3;
+
+export function projectedRate(rate: NewRate, coverageGain: number): NewRate {
+  const g = Math.max(0, Math.min(1, coverageGain));
+  return { ...rate, exam: rate.exam + TRANSFER * g * (1 - rate.exam), raw: rate.raw + TRANSFER * g * (1 - rate.raw) };
+}

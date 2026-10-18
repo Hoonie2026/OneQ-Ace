@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
-import { fmtMinutes } from '../coach';
+import { examViews, fmtMinutes } from '../coach';
 import { addDays, formatDate, parseDate, startOfDay } from '../engine/days';
-import { DEFAULT_PLAN_SETTINGS, loadPlanSettings, savePlanSettings } from '../engine';
+import { DEFAULT_PLAN_SETTINGS, engineForecast, engineOutlook, loadEngine, loadPlanSettings, savePlanSettings, type EngineContext } from '../engine';
+import { PLAN_WARN_SCORE } from './CoachCard';
 
 const DAILY = [30, 45, 60, 90, 120, 150, 180, 240];
 
@@ -18,9 +19,11 @@ export function PlanSetup(props: { certCode: string; certName: string; onBack: (
   const [special, setSpecial] = useState<Record<string, number>>({});
   const [newDate, setNewDate] = useState(today);
   const [newMin, setNewMin] = useState(180);
+  const [ctx, setCtx] = useState<EngineContext | null>(null);
 
   useEffect(() => {
     (async () => {
+      setCtx(await loadEngine(props.certCode));
       const s = await loadPlanSettings(props.certCode);
       if (s) {
         setExamDate(s.examDate);
@@ -36,6 +39,16 @@ export function PlanSetup(props: { certCode: string; certName: string; onBack: (
   const daysLeft = examDate ? Math.round((parseDate(examDate) - parseDate(today)) / 86_400_000) : null;
   const valid = !!examDate && daysLeft != null && daysLeft > 0;
   const specialList = Object.entries(special).filter(([k]) => !examDate || k < examDate).sort(([a], [b]) => (a < b ? -1 : 1));
+
+  // 이 계획이면 시험일 예상 점수(저장 전 미리보기 — 실기기 v0.5.0: 계획을 바꿔도 예상 점수 변화가 안 보였다)
+  let preview: { avg: number | null; rounds: number } | null = null;
+  if (ctx && valid) {
+    const settings = { ...DEFAULT_PLAN_SETTINGS, ...(ctx.settings ?? {}), examDate, dailyMinutes: daily, studyDaysPerWeek: days, dayMinutes: Object.fromEntries(specialList) };
+    const c2 = { ...ctx, settings };
+    const now = Date.now();
+    const v = examViews(c2, engineForecast(c2), engineOutlook(c2, now), now);
+    preview = { avg: v.exam.projectedAvg, rounds: v.exam.rounds };
+  }
 
   const save = async () => {
     if (!valid) return;
@@ -134,6 +147,19 @@ export function PlanSetup(props: { certCode: string; certName: string; onBack: (
           </button>
         </div>
       </section>
+
+      {preview?.avg != null && (
+        <section className={`card plan-preview ${preview.avg < PLAN_WARN_SCORE ? 'bad' : 'ok'}`} data-testid="plan-preview">
+          <p>
+            이 계획이면 <b>시험일 예상 점수 {preview.avg}점</b>
+          </p>
+          {preview.rounds < 5 && (
+            <p className="hint">
+              보유 기출이 {preview.rounds}회차뿐이라 학습시간을 늘려도 예상 점수가 거의 오르지 않습니다(더 익힐 새 문항이 없음). 문제팩을 10회차 이상 넣으면 시간에 따라 달라집니다.
+            </p>
+          )}
+        </section>
+      )}
 
       <section className="actions">
         <button className="btn btn-primary btn-block" disabled={!valid} onClick={save} data-testid="plan-save">

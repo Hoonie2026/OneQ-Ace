@@ -26,13 +26,13 @@ test('5단계: 학습 계획 → 오늘 학습(계획량 한 묶음·틀린 문�
   page.on('dialog', (dlg) => dlg.accept());
   await page.goto('./');
   await page.getByTestId('pack-input').first().setInputFiles(await packFile());
-  await expect(page.getByTestId('today-start')).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByTestId('go-recommend')).toBeVisible({ timeout: 30_000 });
 
   // 홈(ADR 010): 시험일 | D-day / 현재 점수 | 시험일 예상 점수 / 오늘 학습 / 다른 방법(과목 골라서·모의고사)
   await expect(page.getByTestId('pack-solve')).toHaveCount(0);
   await expect(page.getByTestId('current-avg')).toHaveText('0'); // 안 푼 문항 0점
   await expect(page.getByTestId('plan-open')).toContainText('학습계획 설정 및 재설정');
-  await expect(page.getByTestId('subject-list')).toHaveCount(0); // 과목 목록은 "과목 골라서"에서
+  await expect(page.getByTestId('subject-list')).toHaveCount(0); // 과목 목록은 "과목별 학습"에서
 
   // 학습 계획: 시험일 14일 뒤, 하루 30분(= 20문항)
   await page.getByTestId('plan-open').click();
@@ -44,12 +44,15 @@ test('5단계: 학습 계획 → 오늘 학습(계획량 한 묶음·틀린 문�
   await expect(page.getByTestId('dday')).toHaveText('D-14');
   await expect(page.getByTestId('projected-avg')).not.toHaveText('—');
   await expect(page.getByTestId('plan-warn')).toBeVisible(); // 시험일 예상 70점 미만 → 계획 수정 필요
-  await expect(page.getByTestId('today-plan')).toHaveText('30분 · 약 20문항');
-  await expect(page.getByTestId('today-what')).toBeVisible();
+  await expect(page.getByTestId('today-plan')).toHaveText('30분 · 20문항');
+  await expect(page.getByTestId('plan-open')).toBeVisible();
   await page.screenshot({ path: `test-results/stage5-home0-${info.project.name}.png`, fullPage: true });
 
-  // 오늘 학습: 계획량 20문항을 한 묶음으로 → 끝나면 틀린·모름 문항 한 번 더 → 성적
-  await expect(page.getByTestId('today-start')).toHaveText('오늘 학습 시작 (20문항)');
+  // 시스템 추천 학습: 무엇을 왜 푸는지 안내 → 학습 시작(계획량 20문항 한 묶음) → 끝나면 틀린·모름 한 번 더 → 성적
+  await page.getByTestId('go-recommend').click();
+  await expect(page.getByTestId('today-what')).toContainText('새 문항');
+  await page.screenshot({ path: `test-results/stage5-recommend-${info.project.name}.png`, fullPage: true });
+  await expect(page.getByTestId('today-start')).toHaveText('학습 시작 (20문항)');
   await page.getByTestId('today-start').click();
   await expect(page.getByTestId('progress')).toHaveText('1 / 20');
   let relearned = false;
@@ -81,12 +84,16 @@ test('5단계: 학습 계획 → 오늘 학습(계획량 한 묶음·틀린 문�
   await page.screenshot({ path: `test-results/stage5-summary-${info.project.name}.png`, fullPage: true });
   await page.getByRole('button', { name: '그대로 두고 마치기' }).click();
   await expect(page.getByTestId('week-goal')).toContainText('완료');
-  await expect(page.getByTestId('today-start')).toContainText('오늘 계획 완료 · 더 학습하기');
+  await page.getByTestId('go-recommend').click();
+  await expect(page.getByTestId('recommend')).toContainText('오늘 목표 완료 · 추가 학습');
+  await page.getByRole('button', { name: '홈으로' }).click();
   await expect(page.getByTestId('current-avg')).not.toHaveText('0');
   await page.screenshot({ path: `test-results/stage5-home-${info.project.name}.png`, fullPage: true });
 
-  // 다른 방법: 과목 골라서
+  // 과목별 학습: 과목마다 현재 ☞ 시험일 예상, 풀이 횟수, 학습하기
   await page.getByTestId('go-subjects').click();
+  await expect(page.getByTestId('subject-list')).toContainText('풀이');
+  await page.screenshot({ path: `test-results/stage5-subjects-${info.project.name}.png`, fullPage: true });
   await page.getByTestId('subject-study').first().click();
   await expect(page.getByTestId('progress')).toContainText('1 /');
   await page.getByRole('button', { name: '풀이 멈추고 홈으로' }).click();

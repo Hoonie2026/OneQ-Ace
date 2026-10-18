@@ -7,6 +7,6 @@ export { planWeek, weekStartOf, subjectWeights, type WeeklyPlan, type PlannedIte
 export { passOutlook, type PassOutlook, type SubjectOutlook, type OutlookStatus } from './outlook';
 export { minutesOn, minutesToday, studyTime, type StudyTime } from './minutes';
 export { buildTodaySession, buildSubjectSession, buildDailySession, availableCounts, todayState, type StudyAttempt, interleave, retryTail, representativeQid, SESSION_SIZE, type SessionEntry } from './session';
-export { repeatShare, newItemRates, recordedScores, examScore, DEFAULT_REPEAT_SHARE, type RepeatShare, type NewRate } from './exam';
+export { repeatShare, newItemRates, recordedScores, examScore, projectedRate, TRANSFER, DEFAULT_REPEAT_SHARE, type RepeatShare, type NewRate } from './exam';
 export { buildMock, rng, type MockExam, type MockStrategy } from './mock';
 export * from './load';

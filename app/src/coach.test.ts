@@ -203,3 +203,35 @@ describe('과목별 학습·실제 시험 기준 예상(ADR 008)', () => {
     expect(c.order[0]).not.toBe(k1);
   });
 });
+
+describe('실기기 v0.5.0 보완(ADR 011)', () => {
+  it('학습시간을 늘리면(새로 익힐 기출이 남아 있으면) 시험일 예상 점수가 오른다', async () => {
+    await twoRounds();
+    await savePlanSettings('TEST', { examDate: '2027-01-18', dailyMinutes: 5 }, d);
+    const k1 = (await loadCoach('TEST', NOW, d))!.subjects[0].key;
+    await solveSet((await startSubject('TEST', k1, NOW, d))!, (i) => (i % 2 ? 1 : 0)); // 첫 풀이 기록이 있어야 진단
+    const low = (await loadCoach('TEST', NOW, d))!.exam.projectedAvg!;
+    await savePlanSettings('TEST', { examDate: '2027-01-18', dailyMinutes: 180 }, d);
+    const high = (await loadCoach('TEST', NOW, d))!.exam.projectedAvg!;
+    expect(high).toBeGreaterThan(low);
+  });
+
+  it('모의고사 풀이는 현재 점수·오늘 학습량·추천에 넣지 않는다(이력은 모의고사에만)', async () => {
+    await twoRounds();
+    const before = (await loadCoach('TEST', NOW, d))!;
+    await solveSet((await startMock('TEST', NOW, d))!, () => 1); // 전부 정답
+    const after = (await loadCoach('TEST', NOW + 60_000, d))!;
+    expect(after.exam.currentAvg).toBe(before.exam.currentAvg);
+    expect(after.doneToday).toBe(0);
+    expect((await mockHistory('TEST', d))[0].result.avgScore).toBe(100);
+  });
+
+  it('추천 묶음: 복습은 최대 60%, 나머지는 새 문항', async () => {
+    await twoRounds();
+    const k1 = (await loadCoach('TEST', NOW, d))!.subjects[0].key;
+    await solveSet((await startSubject('TEST', k1, NOW, d))!, () => 2); // 15문항 모두 틀림
+    const c = (await loadCoach('TEST', NOW + 60_000, d))!;
+    expect(c.today.relearn).toBeLessThanOrEqual(Math.ceil(c.today.size * 0.6));
+    expect(c.today.fresh).toBeGreaterThan(0);
+  });
+});

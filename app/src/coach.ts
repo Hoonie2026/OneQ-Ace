@@ -8,10 +8,10 @@ import {
   availableCounts,
   buildDailySession,
   minutesToday,
-  todayState,
   buildSubjectSession,
   examScore,
   newItemRates,
+  projectedRate,
   recordedScores,
   repeatShare,
   engineForecast,
@@ -28,7 +28,7 @@ import {
   type WeeklyPlan,
   DEFAULT_PLAN_SETTINGS,
 } from './engine';
-import { OUTLOOK_MIN_OBS } from './engine/outlook';
+import { NEW_COST_BASE, NEW_COST_WRONG, OUTLOOK_MIN_OBS } from './engine/outlook';
 import { createSetRun, loadSession, sessionResult, setRuns, type Result, type Target } from './study';
 
 /** 과목 카드 하나(과목별 학습 화면) */
@@ -46,6 +46,9 @@ export interface SubjectView {
   needNewRate: number | null;
   /** 오늘 낼 수 있는 문항: 오늘 틀린 것 다시 / 복습할 때가 된 것 / 새 문항(세션 구성과 같은 규칙) */
   avail: { relearn: number; due: number; fresh: number };
+  /** 이 과목 풀이 횟수(모의고사 제외)와 마지막으로 푼 시각 */
+  solves: number;
+  lastTs: number | null;
   /** 풀어 본 학습 단위 / 전체 학습 단위 / 보유 문항 수 */
   seen: number;
   items: number;
@@ -90,8 +93,11 @@ export interface TodayPlan {
   /** 지금 시작하면 낼 문항 수 = 오늘 남은 계획량(다 했으면 추가 15문항) */
   size: number;
   extra: boolean;
-  /** 구성: 오늘 틀린 문항 다시 / 과목별 복습·새 문항(많은 순) */
+  /** 구성(왜 나오는지): 오늘 틀린 문항 다시 / 지난번 틀린·모름 복습 / 맞혔지만 다시 볼 때 된 문항 / 새 문항 */
   relearn: number;
+  wrong: number;
+  review: number;
+  fresh: number;
   bySubject: { name: string; review: number; fresh: number }[];
 }
 
@@ -106,21 +112,26 @@ function todayPlan(ctx: EngineContext, order: string[], doneToday: number, now: 
   const extra = left <= 0;
   const want = extra ? EXTRA_SIZE : left;
   const entries = buildDailySession(ctx.bank, ctx.mem, order, now, ctx.attempts, want);
-  const st = todayState(ctx.bank, ctx.attempts, now);
-  let relearn = 0;
+  const count = (k: string) => entries.filter((e) => e.kind === k).length;
   const by = new Map<string, { name: string; review: number; fresh: number }>();
   for (const e of entries) {
-    if (st.relearn.has(e.itemKey)) {
-      relearn++;
-      continue;
-    }
     const name = ctx.bank.subjects.find((x) => x.key === e.subjectKey)?.name ?? '';
     const b = by.get(name) ?? { name, review: 0, fresh: 0 };
     if (e.slot === 'new') b.fresh++;
     else b.review++;
     by.set(name, b);
   }
-  return { minutes, target, size: entries.length, extra, relearn, bySubject: [...by.values()].sort((a, b) => b.review + b.fresh - (a.review + a.fresh)) };
+  return {
+    minutes,
+    target,
+    size: entries.length,
+    extra,
+    relearn: count('relearn'),
+    wrong: count('wrong'),
+    review: count('review'),
+    fresh: count('new'),
+    bySubject: [...by.values()].sort((a, b) => b.review + b.fresh - (a.review + a.fresh)),
+  };
 }
 
 const r1 = (x: number) => Math.round(x * 10) / 10;
@@ -154,20 +165,40 @@ export function examViews(ctx: EngineContext, forecast: Forecast | null, outlook
   const current = bank.subjects.filter((s) => s.current);
   const bankNow = new Map((forecast?.subjects ?? []).map((s) => [s.key, s.score]));
   const bankProj = new Map((outlook?.subjects ?? []).map((s) => [s.key, s.projected]));
+  // 시험일까지 새로 익힐 기출 비율(ADR 011): 남은 풀이 횟수에서 이미 푼 문항 복습 1회씩을 빼고, 새 문항 하나에 약 3회
+  const itemsOf = new Map(current.map((s) => [s.key, bank.items.filter((it) => it.subjectKey === s.key)]));
+  const seenOf = new Map(current.map((s) => [s.key, itemsOf.get(s.key)!.filter((it) => mem.items.has(it.key)).length]));
+  const unseenTotal = current.reduce((t, s) => t + itemsOf.get(s.key)!.length - seenOf.get(s.key)!, 0);
+  const cap = outlook ? (outlook.plannedMinutes * 60) / mem.secPerQuestion : 0;
+  const newBudget = Math.max(0, cap - [...seenOf.values()].reduce((a, b) => a + b, 0)) / (NEW_COST_BASE + NEW_COST_WRONG * 0.5);
+  const solvesOf = new Map<string, { n: number; last: number }>();
+  for (const a of attempts) {
+    const sk = bank.itemOf.get(a.qid)?.subjectKey;
+    if (!sk) continue;
+    const v = solvesOf.get(sk) ?? { n: 0, last: 0 };
+    v.n++;
+    v.last = Math.max(v.last, a.ts);
+    solvesOf.set(sk, v);
+  }
   const views: SubjectView[] = current.map((s) => {
-    const its = bank.items.filter((it) => it.subjectKey === s.key);
+    const its = itemsOf.get(s.key)!;
     const rate = rates.get(s.key)!;
     const bp = bankProj.get(s.key);
+    const unseen = its.length - seenOf.get(s.key)!;
+    const gain = unseenTotal ? Math.min(unseen, (newBudget * unseen) / unseenTotal) / Math.max(1, its.length) : 0;
+    const rateT = projectedRate(rate, gain);
     return {
       key: s.key,
       name: s.name,
       current: rec.get(s.key) ?? 0,
       examNow: examScore(bankNow.get(s.key) ?? 100 * rate.exam, rate, rs.rho),
-      examProjected: bp == null ? null : examScore(bp, rate, rs.rho),
+      examProjected: bp == null ? null : examScore(bp, rateT, rs.rho),
       newRate: rate,
       needNewRate: bp == null ? null : Math.max(0, Math.min(1, (rule.subjectMin - rs.rho * bp) / (1 - rs.rho) / 100)),
       avail: avail.get(s.key) ?? { relearn: 0, due: 0, fresh: 0 },
-      seen: its.filter((it) => mem.items.has(it.key)).length,
+      seen: seenOf.get(s.key)!,
+      solves: solvesOf.get(s.key)?.n ?? 0,
+      lastTs: solvesOf.get(s.key)?.last ?? null,
       items: its.length,
       questions: bank.questionCount.get(s.key) ?? 0,
       recommended: false,

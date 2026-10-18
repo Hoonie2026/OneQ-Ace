@@ -1499,3 +1499,57 @@ h3 {
 .sub-head {
   margin-top: -4px;
 }
+
+/* ── ADR 011 ── */
+.today-goal {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.today-card .meter-text {
+  margin: 0;
+}
+.center-link {
+  justify-self: center;
+  color: var(--primary);
+  font-weight: 700;
+}
+.mock-card {
+  display: grid;
+  gap: 8px;
+}
+.mock-card h2 {
+  margin: 0;
+}
+.mock-card .hint {
+  margin: 0;
+}
+.rec-rows {
+  list-style: none;
+  margin: 10px 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+.rec-rows li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+}
+.rec-rows li div {
+  display: grid;
+}
+.rec-rows li > span {
+  font-size: 22px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+.plan-preview p {
+  margin: 0;
+}
+.plan-preview.ok b {
+  color: var(--ok);
+}
+.plan-preview.bad b {
+  color: var(--fail);
+}

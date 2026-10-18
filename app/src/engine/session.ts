@@ -19,7 +19,11 @@ export interface SessionEntry {
   itemKey: string;
   subjectKey: string;
   slot: Slot;
+  /** 왜 나왔나(추천 학습 안내용): 오늘 틀린 것 다시 / 지난번 틀린·모름 복습 / 맞혔지만 다시 볼 때 / 새 문항 */
+  kind?: EntryKind;
 }
+
+export type EntryKind = 'relearn' | 'wrong' | 'review' | 'new';
 
 /** 학습 단위에서 보여 줄 문항: 가장 최근 회차의 것(현행 표현) */
 export function representativeQid(item: Item): string {
@@ -113,78 +117,83 @@ export function todayState(bank: Bank, attempts: StudyAttempt[], now: number): {
   return { done, relearn };
 }
 
+/** 한 묶음에서 복습(다시·틀린·맞힌 것 다시 보기)이 차지할 최대 몫. 나머지는 새 문항(새 문항이 모자라면 복습으로 채움) — ADR 011 */
+export const REVIEW_SHARE = 0.6;
+
+interface Cand {
+  it: Item;
+  kind: EntryKind;
+  /** 정렬 키: 작을수록 먼저 */
+  rank: number;
+}
+
 /**
- * 과목별 학습 세션(ADR 008·009). 그 과목의 전 회차를 하나로 보고 "자동" 순서로 낸다:
- * ⓪ 오늘 틀린 문항 다시(먼저 틀린 것부터) → ① 복습할 때가 된 문항(틀린 것 먼저, 오래 밀린 것 먼저) →
- * ② 출제빈도가 높은 새 문항(같은 빈도면 최근 회차). 오늘 맞힌 문항은 내일부터. 같은 내용은 최근 회차 문항 하나로 낸다.
+ * 오늘 낼 수 있는 후보(ADR 011). 오늘 맞힌 문항은 내일부터.
+ * - relearn: 오늘 틀린·모름(먼저 틀린 것부터)
+ * - wrong: 지난번 틀린·모름이고 복습할 때가 된 것(오래 밀린 것부터)
+ * - review: 맞혔지만 복습할 때가 된 것 — FSRS가 맞힌 문항은 간격을 길게(드물게), 헷갈림·오래 걸린 정답은 짧게 잡는다.
+ *   찍어서 맞힌 문항도 이렇게 낮은 빈도로 다시 나온다
+ * - new: 안 푼 문항(출제빈도 높은 것 → 최근 회차)
  */
-export function buildSubjectSession(bank: Bank, mem: MemoryState, subjectKey: string, now: number, attempts: StudyAttempt[], size = SESSION_SIZE, exclude: Set<string> = new Set()): SessionEntry[] {
+function candidates(bank: Bank, mem: MemoryState, subjects: string[], now: number, attempts: StudyAttempt[], exclude: Set<string>): Record<EntryKind, Cand[]> {
   const today = startOfDay(now);
   const st = todayState(bank, attempts, now);
-  const items = bank.items.filter((it) => it.subjectKey === subjectKey && !st.done.has(it.key) && !exclude.has(it.key));
-  const relearn: { it: Item; ts: number }[] = [];
-  const due: { it: Item; wrong: boolean; due: number }[] = [];
-  const fresh: Item[] = [];
-  for (const it of items) {
-    const m = mem.items.get(it.key);
+  const subjRank = new Map(subjects.map((k, i) => [k, i]));
+  const out: Record<EntryKind, Cand[]> = { relearn: [], wrong: [], review: [], new: [] };
+  for (const it of bank.items) {
+    const sr = subjRank.get(it.subjectKey);
+    if (sr == null || st.done.has(it.key) || exclude.has(it.key)) continue;
     const rl = st.relearn.get(it.key);
-    if (rl != null) relearn.push({ it, ts: rl });
-    else if (!m) fresh.push(it);
+    const m = mem.items.get(it.key);
+    if (rl != null) out.relearn.push({ it, kind: 'relearn', rank: rl });
+    else if (!m) out.new.push({ it, kind: 'new', rank: sr * 1e6 - it.qids.length * 1e3 - Number((bank.examDateOf.get(it.qids[0]) ?? '').replace(/-/g, '')) / 1e5 });
     else {
       const d = startOfDay(dueAt(m.card, mem.curve));
-      if (d <= today) due.push({ it, wrong: !m.lastCorrect, due: d });
+      if (d <= today) (m.lastCorrect ? out.review : out.wrong).push({ it, kind: m.lastCorrect ? 'review' : 'wrong', rank: d - it.qids.length });
     }
   }
-  relearn.sort((a, b) => a.ts - b.ts);
-  due.sort((a, b) => Number(b.wrong) - Number(a.wrong) || a.due - b.due || b.it.qids.length - a.it.qids.length);
-  fresh.sort((a, b) => b.qids.length - a.qids.length || (bank.examDateOf.get(b.qids[0]) ?? '').localeCompare(bank.examDateOf.get(a.qids[0]) ?? '') || a.key.localeCompare(b.key));
-  const picked = [
-    ...relearn.map((x) => ({ it: x.it, slot: 'weak' as Slot })),
-    ...due.map((x) => ({ it: x.it, slot: (x.wrong ? 'weak' : 'review') as Slot })),
-    ...fresh.map((it) => ({ it, slot: 'new' as Slot })),
-  ].slice(0, size);
-  return picked.map(({ it, slot }) => ({ qid: representativeQid(it), itemKey: it.key, subjectKey: it.subjectKey, slot }));
-}
-
-/** 과목별로 오늘 낼 수 있는 문항 수(세션 구성과 같은 규칙 — 카드 숫자와 실제 세션이 어긋나지 않게) */
-export function availableCounts(bank: Bank, mem: MemoryState, now: number, attempts: StudyAttempt[]): Map<string, { relearn: number; due: number; fresh: number }> {
-  const today = startOfDay(now);
-  const st = todayState(bank, attempts, now);
-  const out = new Map<string, { relearn: number; due: number; fresh: number }>();
-  for (const it of bank.items) {
-    if (st.done.has(it.key)) continue;
-    const c = out.get(it.subjectKey) ?? { relearn: 0, due: 0, fresh: 0 };
-    const m = mem.items.get(it.key);
-    if (st.relearn.has(it.key)) c.relearn++;
-    else if (!m) c.fresh++;
-    else if (startOfDay(dueAt(m.card, mem.curve)) <= today) c.due++;
-    out.set(it.subjectKey, c);
-  }
+  for (const k of Object.keys(out) as EntryKind[]) out[k].sort((a, b) => a.rank - b.rank || a.it.key.localeCompare(b.it.key));
   return out;
 }
 
 /**
- * 오늘 학습(ADR 009 — 홈의 유일한 입구). 오늘 틀린 문항(모든 과목) 다시 → 추천 과목 세션 → 모자라면 다음 순위 과목.
- * @param order 과목 우선순위(추천 과목이 맨 앞)
+ * 묶음 구성(ADR 011): 복습(오늘 틀린 것 → 지난번 틀린 것 → 맞혔지만 다시 볼 것)은 최대 REVIEW_SHARE까지,
+ * 나머지는 새 문항. 틀린 문항이 쌓여도 매일 분량이 복습으로만 차지 않게 하고, 새 문항이 모자라면 복습으로 채운다.
+ */
+function compose(c: Record<EntryKind, Cand[]>, size: number): SessionEntry[] {
+  const reviews = [...c.relearn, ...c.wrong, ...c.review];
+  const reviewCap = Math.ceil(size * REVIEW_SHARE);
+  const r1 = reviews.slice(0, reviewCap);
+  const n1 = c.new.slice(0, size - r1.length);
+  const r2 = reviews.slice(reviewCap, reviewCap + (size - r1.length - n1.length));
+  const slot = (k: EntryKind): Slot => (k === 'new' ? 'new' : k === 'review' ? 'review' : 'weak');
+  return [...r1, ...r2, ...n1].map(({ it, kind }) => ({ qid: representativeQid(it), itemKey: it.key, subjectKey: it.subjectKey, slot: slot(kind), kind }));
+}
+
+/** 과목별 학습 세션(ADR 008·011): 그 과목의 전 회차를 하나로 보고 compose 규칙으로 */
+export function buildSubjectSession(bank: Bank, mem: MemoryState, subjectKey: string, now: number, attempts: StudyAttempt[], size = SESSION_SIZE, exclude: Set<string> = new Set()): SessionEntry[] {
+  return compose(candidates(bank, mem, [subjectKey], now, attempts, exclude), size);
+}
+
+/** 과목별로 오늘 낼 수 있는 문항 수(세션 구성과 같은 후보 규칙) */
+export function availableCounts(bank: Bank, mem: MemoryState, now: number, attempts: StudyAttempt[]): Map<string, { relearn: number; due: number; fresh: number }> {
+  const c = candidates(bank, mem, bank.subjects.map((s) => s.key), now, attempts, new Set());
+  const out = new Map<string, { relearn: number; due: number; fresh: number }>();
+  const add = (x: Cand, f: 'relearn' | 'due' | 'fresh') => {
+    const v = out.get(x.it.subjectKey) ?? { relearn: 0, due: 0, fresh: 0 };
+    v[f]++;
+    out.set(x.it.subjectKey, v);
+  };
+  c.relearn.forEach((x) => add(x, 'relearn'));
+  [...c.wrong, ...c.review].forEach((x) => add(x, 'due'));
+  c.new.forEach((x) => add(x, 'fresh'));
+  return out;
+}
+
+/**
+ * 시스템 추천 학습(ADR 010·011): 모든 과목을 대상으로 compose 규칙. 새 문항은 추천 과목(order 맨 앞)부터.
+ * @param order 과목 우선순위(추천 과목이 맨 앞). 빠진 과목은 내지 않는다
  */
 export function buildDailySession(bank: Bank, mem: MemoryState, order: string[], now: number, attempts: StudyAttempt[], size = SESSION_SIZE): SessionEntry[] {
-  const out: SessionEntry[] = [];
-  const used = new Set<string>();
-  // ⓪ 오늘 틀린 문항(모든 과목) 먼저
-  const st = todayState(bank, attempts, now);
-  for (const [key] of [...st.relearn].sort((a, b) => a[1] - b[1])) {
-    if (out.length >= size) break;
-    const it = bank.items.find((x) => x.key === key);
-    if (!it || !order.includes(it.subjectKey)) continue;
-    out.push({ qid: representativeQid(it), itemKey: it.key, subjectKey: it.subjectKey, slot: 'weak' });
-    used.add(key);
-  }
-  for (const sk of order) {
-    if (out.length >= size) break;
-    for (const e of buildSubjectSession(bank, mem, sk, now, attempts, size - out.length, used)) {
-      out.push(e);
-      used.add(e.itemKey);
-    }
-  }
-  return out;
+  return compose(candidates(bank, mem, order, now, attempts, new Set()), size);
 }

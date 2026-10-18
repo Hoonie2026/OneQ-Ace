@@ -50,7 +50,8 @@ export async function loadEngine(certCode: string, d: OneQDB = defaultDb): Promi
     clusterId: q.clusterId ?? null,
   }));
   const bank = buildBank(questions, latest.manifest.subjects.map((s) => ({ name: s.name, count: s.count })));
-  const attempts: EngineAttempt[] = (await d.attempts.where('qid').anyOf(rows.map((q) => q.qid)).toArray()).map((a) => ({
+  // 모의고사 풀이는 학습 엔진(기억·점수·추천)에 넣지 않는다 — 모의고사는 모의고사 이력에서만(실기기 v0.5.0, ADR 011)
+  const attempts: EngineAttempt[] = (await d.attempts.where('qid').anyOf(rows.map((q) => q.qid)).toArray()).filter((a) => a.mode !== 'mock').map((a) => ({
     qid: a.qid,
     ts: a.ts,
     correct: a.correct,
