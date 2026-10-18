@@ -40,7 +40,7 @@ export function Result(props: { target: Target; onHome: () => void; onSolve: (t:
     const run = await ensureWrongRun(packId);
     if (run) props.onSolve({ kind: 'wrong', sessionId: run.sessionId });
   };
-  /** 계속(ADR 009): 오늘 학습은 다음 15문항(틀린 문항 다시가 맨 앞에 들어간다), 과목 학습은 그 과목 다음 15문항 */
+  /** 계속(ADR 010): 오늘 학습은 남은 계획량(다 했으면 15문항), 과목 학습은 그 과목 다음 15문항 */
   const next = async () => {
     if (!set) return;
     const t = subjectKey ? await startSubject(set.certCode, subjectKey) : await startToday(set.certCode);
@@ -170,12 +170,11 @@ export function Result(props: { target: Target; onHome: () => void; onSolve: (t:
         )}
         {set?.mode === 'today' && res.complete && (
           <>
-            <button className="btn btn-primary btn-block" onClick={next} data-testid="today-next">
-              {subjectKey ? '이 과목 계속(다음 15문항)' : '오늘 학습 계속(다음 15문항)'}
-            </button>
-            {res.wrongQids.length > 0 && <p className="hint center">틀린·모름 {res.wrongQids.length}문항은 다음 15문항 맨 앞에 다시 나옵니다.</p>}
-            <button className="btn btn-block" onClick={() => props.onSummary(set.certCode)} data-testid="finish-day">
+            <button className="btn btn-primary btn-block" onClick={() => props.onSummary(set.certCode)} data-testid="finish-day">
               오늘 학습 마치기
+            </button>
+            <button className="btn btn-block" onClick={next} data-testid="today-next">
+              {subjectKey ? '이 과목 더 하기(15문항)' : '계속 학습하기'}
             </button>
           </>
         )}

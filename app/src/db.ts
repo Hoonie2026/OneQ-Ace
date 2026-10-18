@@ -92,6 +92,8 @@ export interface RunRow {
   pausedMs?: number;
   /** 과목을 골라 시작한 학습 묶음의 과목("이 과목 계속") */
   subjectKey?: string;
+  /** 오늘 학습 묶음 끝의 "틀린 문항 한 번 더" 묶음(여기서 또 틀려도 다시 만들지 않음) */
+  relearn?: boolean;
 }
 
 /** 문항에 다시 잇지 못한 기록. 조용히 지우지 않고 여기 보관한다(4.3) */

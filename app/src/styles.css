@@ -1410,3 +1410,92 @@ h3 {
   text-align: center;
   margin: 0;
 }
+
+/* ── 홈 구역 나누기(ADR 010) ── */
+.card.exam-row {
+  padding: 10px;
+}
+.score-boxes {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+.score-boxes .card {
+  margin: 0;
+}
+.score-box {
+  display: grid;
+  align-content: start;
+  gap: 2px;
+  min-height: 96px;
+}
+.score-box small {
+  font-size: 13px;
+  color: var(--muted);
+}
+.score-box p {
+  margin: 0;
+  font-size: 15px;
+}
+.score-box b {
+  font-size: 34px;
+  line-height: 1.15;
+  font-variant-numeric: tabular-nums;
+}
+.score-box.ok b {
+  color: var(--ok);
+}
+.score-box.bad b {
+  color: var(--fail);
+}
+.warn-badge {
+  justify-self: start;
+  margin-top: 4px;
+  padding: 3px 10px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--fail-bg);
+  color: var(--fail);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.link-btn.small {
+  font-size: 12px;
+  color: var(--primary);
+}
+.today-card {
+  display: grid;
+  gap: 10px;
+  border: 2px solid var(--primary);
+}
+.today-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+}
+.today-head h2 {
+  margin: 0;
+}
+.today-what {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 2px;
+  font-size: 15px;
+}
+.other-ways {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  margin: 4px 0 8px;
+  font-size: 14px;
+}
+.sub-head {
+  margin-top: -4px;
+}

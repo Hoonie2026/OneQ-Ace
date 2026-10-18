@@ -82,16 +82,21 @@ test('3단계 게이트(5단계 개편 후): 오프라인 과목별 학습·이�
     const before = await page.getByTestId('progress').textContent();
     const last = (await nextBtn().textContent()) === '성적 보기';
     await nextBtn().click();
-    if (last) await expect(page.getByTestId('result')).toBeVisible();
-    else await expect(page.getByTestId('feedback')).toBeHidden();
-    if (!last) await expect(page.getByTestId('progress')).not.toHaveText(before!);
-    return last;
+    if (last) {
+      // 묶음 끝: 틀린 문항이 있으면 "한 번 더" 묶음으로 바로 이어지고(ADR 010), 없으면 성적
+      await expect(page.getByTestId('result').or(page.getByText('방금 틀린·모름 문항 한 번 더'))).toBeVisible();
+      return page.getByTestId('result').isVisible();
+    }
+    await expect(page.getByTestId('feedback')).toBeHidden();
+    await expect(page.getByTestId('progress')).not.toHaveText(before!);
+    return false;
   };
-  const seenText = (n: number) => expect(page.getByTestId('week-goal')).toContainText(`오늘 ${n}문항`);
-  /** 과목 학습 한 세션(15문항)을 끝까지. 첫 문항에서 확대·헷갈림·메모를 한 번 해 본다 */
+  const doneToday = async () => Number((await page.getByTestId('week-goal').textContent())!.match(/오늘 (\d+) \//)![1]);
+  /** 과목 학습 한 세션(15문항 + 틀린 문항 한 번 더)을 끝까지. 첫 문항에서 확대·헷갈림·메모를 한 번 해 본다 */
   const studySession = async (nth: number, extras = false) => {
+    await page.getByTestId('go-subjects').click();
     await page.getByTestId('subject-study').nth(nth).click();
-    for (let k = 0; k < 15; k++) {
+    for (let k = 0; k < 40; k++) {
       await answerOne();
       if (extras && k === 0) {
         await page.getByTestId('zoom-box').dblclick(); // 더블탭 확대 → 원래대로
@@ -101,17 +106,19 @@ test('3단계 게이트(5단계 개편 후): 오프라인 과목별 학습·이�
         await page.getByRole('button', { name: /한 줄 설명/ }).click();
         await page.getByPlaceholder(/한 줄 설명/).fill('시험용 메모');
       }
-      await goNext();
+      if (await goNext()) break;
     }
-    await expect(page.getByTestId('result')).toContainText('15/15문항 풀이');
+    await expect(page.getByTestId('result')).toBeVisible();
     await page.getByRole('button', { name: '뒤로' }).click();
   };
 
-  // ③-1 과목별 학습(ADR 008): 1과목 15문항(확대·헷갈림·메모 포함)
+  // ③-1 과목 골라서 학습(ADR 008·010): 1과목 15문항 + 틀린 문항 한 번 더(확대·헷갈림·메모 포함)
   await studySession(0, true);
-  await seenText(15);
+  const n1 = await doneToday();
+  expect(n1).toBeGreaterThanOrEqual(15);
 
   // ③-2 다른 과목을 7문항 풀다 멈춤 → 앱 종료·다시 열기(오프라인) → 홈에서 이어서
+  await page.getByTestId('go-subjects').click();
   await page.getByTestId('subject-study').nth(1).click();
   for (let k = 0; k < 7; k++) {
     await answerOne();
@@ -122,16 +129,16 @@ test('3단계 게이트(5단계 개편 후): 오프라인 과목별 학습·이�
   await expect(page.getByTestId('today-resume')).toContainText('8문항 남음');
   await page.getByTestId('today-resume').click();
   await expect(page.getByTestId('progress')).toHaveText('8 / 15');
-  for (let guard = 0; guard < 15; guard++) {
+  for (let guard = 0; guard < 40; guard++) {
     await answerOne();
     if (await goNext()) break;
   }
   await expect(page.getByRole('heading', { name: '풀이 결과' })).toBeVisible();
   const counts = await page.locator('.rc b').allTextContents();
-  expect(counts.map(Number).reduce((a, b) => a + b, 0)).toBe(15);
+  expect(counts.map(Number).reduce((a, b) => a + b, 0)).toBeGreaterThan(0);
   await page.getByRole('button', { name: '뒤로' }).click();
-  await seenText(30);
-  const solved = 30;
+  const solved = await doneToday(); // 풀이 기록 수(한 번 더 푼 것 포함)
+  expect(solved).toBeGreaterThanOrEqual(n1 + 15);
 
   // ④ 백업(다운로드)
   const before = await fingerprintText(page);
@@ -159,7 +166,7 @@ test('3단계 게이트(5단계 개편 후): 오프라인 과목별 학습·이�
   await p2.getByRole('button', { name: '뒤로' }).click();
   await p2.getByTestId('pack-input').first().setInputFiles(pack);
   await expect(p2.getByText(new RegExp(`기록 ${solved + 1}건 이어짐`))).toBeVisible({ timeout: 30_000 });
-  await expect(p2.getByTestId('week-goal')).toContainText(`오늘 ${solved}문항`);
+  await expect(p2.getByTestId('week-goal')).toContainText(`오늘 ${solved} /`);
   expect(await fingerprintText(p2)).toBe(before);
   await expect(p2.locator('.diag')).toContainText('매핑 대기 0건');
 
@@ -179,7 +186,7 @@ test('3단계 게이트(5단계 개편 후): 오프라인 과목별 학습·이�
   // 학습 기록만 지우기 → 백업 복원 → 문제팩을 다시 가져오지 않아도 바로 이어짐(실기기 2차 요청)
   await p2.getByRole('button', { name: '백업·설정' }).click();
   await p2.getByTestId('wipe-records').click();
-  await expect(p2.getByTestId('week-goal')).toContainText('오늘 0문항');
+  await expect(p2.getByTestId('week-goal')).toContainText('오늘 0 /');
   await p2.getByRole('button', { name: '백업·설정' }).click();
   await p2.getByTestId('restore-input').setInputFiles(backupPath);
   await expect(p2.getByTestId('restore-report')).toContainText('백업과 기록 일치');

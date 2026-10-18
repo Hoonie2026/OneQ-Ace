@@ -1,6 +1,6 @@
 import 'fake-indexeddb/auto';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { applyMinutes, daySummary, fmtMinutes, loadCoach, mockHistory, questionHistory, startMock, startSubject, startToday } from './coach';
+import { applyMinutes, daySummary, startRelearn, fmtMinutes, loadCoach, mockHistory, questionHistory, startMock, startSubject, startToday } from './coach';
 import { pauseRun, resumeRun, deadlineOf } from './study';
 import { OneQDB } from './db';
 import { loadPlanSettings, savePlanSettings } from './engine';
@@ -56,9 +56,12 @@ describe('홈 대시보드·오늘 학습(5단계)', () => {
     expect(c.doneToday).toBe(0);
   });
 
-  it('오늘 학습(유일한 입구): 15문항, 회독 진도와 별개, 틀린 문항은 다음 세션 맨 앞에 다시', async () => {
+  it('오늘 학습: 오늘 계획량 전체를 한 묶음으로(22.5분 = 15문항), 회독 진도와 별개, 틀린 문항은 바로 한 번 더·다음 묶음 맨 앞', async () => {
     await twoRounds();
-    await savePlanSettings('TEST', { examDate: '2027-01-18' }, d);
+    await savePlanSettings('TEST', { examDate: '2027-01-18', dailyMinutes: 22.5 }, d);
+    const pre = (await loadCoach('TEST', NOW, d))!;
+    expect([pre.today.target, pre.today.size, pre.today.extra]).toEqual([15, 15, false]);
+    expect(pre.today.bySubject.reduce((t, b) => t + b.review + b.fresh, 0)).toBe(15);
     const t = (await startToday('TEST', NOW, d))!;
     expect(t.kind).toBe('set');
     let s = (await loadSession(t, d))!;
@@ -73,7 +76,13 @@ describe('홈 대시보드·오늘 학습(5단계)', () => {
     // 회독 진도는 그대로 0
     const sum = await packSummary((await d.packs.get('TEST-2022-1'))!, d);
     expect(sum.answered).toBe(0);
-    // 오늘 학습 계속: 틀린 5문항이 맨 앞, 오늘 맞힌 10문항은 내일부터
+    // 묶음 끝 "틀린 문항 한 번 더"
+    const rl = (await startRelearn('TEST', r.wrongQids, NOW + 1_800_000, d))!;
+    const rls = (await loadSession(rl, d))!;
+    expect(rls.qids).toEqual(r.wrongQids);
+    expect(rls.run.relearn).toBe(true);
+    await d.runs.delete(rls.run.sessionId);
+    // 계획량을 다 했으면 추가 15문항: 틀린 5문항이 맨 앞, 오늘 맞힌 10문항은 내일부터
     const t2 = (await startToday('TEST', NOW + 3_600_000, d))!;
     const s2 = (await loadSession(t2, d))!;
     expect(s2.qids.slice(0, 5).sort()).toEqual([...r.wrongQids].sort());

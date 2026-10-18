@@ -7,7 +7,8 @@ import { MockPanel } from './MockPanel';
 import { PackPicker } from './PackPicker';
 import { SubjectList } from './SubjectList';
 
-type Tab = 'subjects' | 'mock';
+/** 홈 안의 보기: 홈 / 과목 골라서 / 모의고사(ADR 010 — 홈에는 오늘 학습만, 나머지는 한 번 더 들어가서) */
+type View = 'home' | 'subjects' | 'mock';
 
 interface Cert {
   code: string;
@@ -35,7 +36,7 @@ export function Home(props: {
   const [certs, setCerts] = useState<Cert[]>([]);
   const [cert, setCert] = useState<string | null>(null);
   const [coach, setCoach] = useState<Coach | null>(null);
-  const [tab, setTab] = useState<Tab>('subjects');
+  const [view, setView] = useState<View>('home');
   const [starting, setStarting] = useState(false);
 
   const loadCert = async (code: string | null, all: PackRow[]) => {
@@ -135,26 +136,28 @@ export function Home(props: {
 
       {coach && cert && packs && packs.length > 0 && (
         <>
-          <CoachCard
-            coach={coach}
-            busy={starting}
-            onPlan={() => props.onPlan(cert, certName ?? cert)}
-            onToday={() => start('today')}
-            onResume={(sessionId) => props.onSolve({ kind: 'set', sessionId })}
-            onFinish={() => props.onSummary(cert)}
-          />
-
-          <nav className="tabs" role="tablist" aria-label="학습 방법">
-            <button role="tab" aria-selected={tab === 'subjects'} className={`tab${tab === 'subjects' ? ' on' : ''}`} onClick={() => setTab('subjects')} data-testid="tab-subjects">
-              과목별
-            </button>
-            <button role="tab" aria-selected={tab === 'mock'} className={`tab${tab === 'mock' ? ' on' : ''}`} onClick={() => setTab('mock')} data-testid="tab-mock">
-              모의고사
-            </button>
-          </nav>
-
-          {tab === 'subjects' && <SubjectList coach={coach} busy={starting} onStudy={(k) => start('subject', k)} />}
-          {tab === 'mock' && (
+          {view === 'home' && (
+            <CoachCard
+              coach={coach}
+              busy={starting}
+              onPlan={() => props.onPlan(cert, certName ?? cert)}
+              onToday={() => start('today')}
+              onResume={(sessionId) => props.onSolve({ kind: 'set', sessionId })}
+              onFinish={() => props.onSummary(cert)}
+              onSubjects={() => setView('subjects')}
+              onMock={() => setView('mock')}
+            />
+          )}
+          {view !== 'home' && (
+            <header className="page-head sub-head">
+              <button className="icon-btn" onClick={() => setView('home')} aria-label="홈으로">
+                ‹
+              </button>
+              <h1>{view === 'subjects' ? '과목 골라서 학습' : '모의고사'}</h1>
+            </header>
+          )}
+          {view === 'subjects' && <SubjectList coach={coach} busy={starting} onStudy={(k) => start('subject', k)} />}
+          {view === 'mock' && (
             <MockPanel
               certCode={cert}
               version={props.version}
@@ -164,7 +167,6 @@ export function Home(props: {
               onOpen={(sessionId, finished) => (finished ? props.onResult({ kind: 'set', sessionId }) : props.onSolve({ kind: 'set', sessionId }))}
             />
           )}
-
         </>
       )}
 

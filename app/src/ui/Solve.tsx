@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { db, type AttemptRow, type QuestionRow } from '../db';
 import { deadlineOf, examLabel, finishRun, firstUnanswered, loadSession, pauseRun, recordAnswer, resumeRun, saveNote, setUnsure, type Session, type Target } from '../study';
 import { ZoomImage } from './ZoomImage';
-import { questionHistory } from '../coach';
+import { questionHistory, startRelearn } from '../coach';
 
 const CIRCLED = ['', '①', '②', '③', '④', '⑤'];
 const MAX_ELAPSED = 30 * 60 * 1000;
@@ -14,7 +14,7 @@ const MAX_ELAPSED = 30 * 60 * 1000;
  * 모의고사(5단계): 정답을 보여 주지 않고 고르면 다음 문항으로. 남은 시간이 위에 보이고, 제출하거나 시간이 끝나면 채점(성적 화면).
  * ✕로 나가면 남은 시간이 멈추고, 이어서 열면 그때부터 다시 흐른다(앱을 강제로 닫으면 계속 흐름).
  */
-export function Solve(props: { target: Target; onExit: () => void; onResult: () => void }) {
+export function Solve(props: { target: Target; onExit: () => void; onResult: () => void; onSolve?: (t: Target) => void }) {
   const [s, setS] = useState<Session | null>(null);
   const [index, setIndex] = useState(0);
   const [loaded, setLoaded] = useState<QuestionRow | null>(null);
@@ -139,7 +139,15 @@ export function Solve(props: { target: Target; onExit: () => void; onResult: () 
     const after = s.qids.findIndex((x, i) => i > index && !s.answers.has(x));
     const any = firstUnanswered(s);
     const target = after >= 0 ? after : any;
-    if (target < 0) return props.onResult();
+    if (target < 0) {
+      // 오늘 학습 묶음을 다 풀었으면 틀린·모름 문항을 한 번 더 — 같은 흐름에서 바로(ADR 010)
+      if (s.run.mode === 'today' && !s.run.relearn && props.onSolve) {
+        const wrong = s.qids.filter((x) => s.answers.get(x) && !s.answers.get(x)!.correct);
+        const t = wrong.length ? await startRelearn(s.run.certCode ?? s.pack.manifest.cert.code, wrong) : null;
+        if (t) return props.onSolve(t);
+      }
+      return props.onResult();
+    }
     setIndex(target);
   };
 
@@ -212,6 +220,7 @@ export function Solve(props: { target: Target; onExit: () => void; onResult: () 
       <div className="solve-progress" aria-hidden="true">
         <div style={{ width: `${(answeredCount / s.qids.length) * 100}%` }} />
       </div>
+      {s.run.relearn && <p className="mock-timer">방금 틀린·모름 문항 한 번 더</p>}
       {isMock && (
         <p className={`mock-timer${deadline && deadline - nowMs < 5 * 60_000 ? ' bad' : ''}`} role="timer" data-testid="mock-timer">
           남은 시간 <b>{fmtLeft(deadline ? deadline - nowMs : 0)}</b>

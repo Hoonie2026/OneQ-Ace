@@ -194,7 +194,7 @@ export async function createSetRun(
   mode: Extract<AttemptMode, 'today' | 'mock'>,
   title: string,
   qids: string[],
-  opts: { limitSec?: number; now?: number; subjectKey?: string } = {},
+  opts: { limitSec?: number; now?: number; subjectKey?: string; relearn?: boolean } = {},
   d: OneQDB = defaultDb,
 ): Promise<RunRow> {
   const now = opts.now ?? Date.now();
@@ -212,6 +212,7 @@ export async function createSetRun(
     certCode,
     ...(opts.limitSec ? { limitSec: opts.limitSec } : {}),
     ...(opts.subjectKey ? { subjectKey: opts.subjectKey } : {}),
+    ...(opts.relearn ? { relearn: true } : {}),
   };
   await safeWrite(mode === 'mock' ? '모의고사 시작' : '오늘 학습 시작', () => d.runs.put(run));
   return run;

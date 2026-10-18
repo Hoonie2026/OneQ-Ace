@@ -7,6 +7,8 @@ import {
   buildMock,
   availableCounts,
   buildDailySession,
+  minutesToday,
+  todayState,
   buildSubjectSession,
   examScore,
   newItemRates,
@@ -24,6 +26,7 @@ import {
   type PassOutlook,
   type PlanSettings,
   type WeeklyPlan,
+  DEFAULT_PLAN_SETTINGS,
 } from './engine';
 import { OUTLOOK_MIN_OBS } from './engine/outlook';
 import { createSetRun, loadSession, sessionResult, setRuns, type Result, type Target } from './study';
@@ -76,6 +79,48 @@ export interface Coach {
   openToday: { sessionId: string; left: number; title: string } | null;
   /** 오늘 학습 과목 우선순위(맨 앞 = 추천). 낼 문항이 없는 과목은 빠진다 */
   order: string[];
+  /** 오늘 학습 미리보기(ADR 010): 오늘 계획 시간·문항 수와, 지금 시작하면 나올 구성 */
+  today: TodayPlan;
+}
+
+export interface TodayPlan {
+  /** 오늘 계획 학습시간(분)과 그 시간에 풀 문항 수(계획이 없으면 기본 하루 60분) */
+  minutes: number;
+  target: number;
+  /** 지금 시작하면 낼 문항 수 = 오늘 남은 계획량(다 했으면 추가 15문항) */
+  size: number;
+  extra: boolean;
+  /** 구성: 오늘 틀린 문항 다시 / 과목별 복습·새 문항(많은 순) */
+  relearn: number;
+  bySubject: { name: string; review: number; fresh: number }[];
+}
+
+/** 오늘 계획량을 다 한 뒤 더 할 때 한 번에 내는 문항 수 */
+export const EXTRA_SIZE = 15;
+
+function todayPlan(ctx: EngineContext, order: string[], doneToday: number, now: number): TodayPlan {
+  const settings = ctx.settings ?? { ...DEFAULT_PLAN_SETTINGS, examDate: '9999-12-31' };
+  const minutes = minutesToday(settings, startOfDay(now));
+  const target = Math.max(0, Math.round((minutes * 60) / ctx.mem.secPerQuestion));
+  const left = target - doneToday;
+  const extra = left <= 0;
+  const want = extra ? EXTRA_SIZE : left;
+  const entries = buildDailySession(ctx.bank, ctx.mem, order, now, ctx.attempts, want);
+  const st = todayState(ctx.bank, ctx.attempts, now);
+  let relearn = 0;
+  const by = new Map<string, { name: string; review: number; fresh: number }>();
+  for (const e of entries) {
+    if (st.relearn.has(e.itemKey)) {
+      relearn++;
+      continue;
+    }
+    const name = ctx.bank.subjects.find((x) => x.key === e.subjectKey)?.name ?? '';
+    const b = by.get(name) ?? { name, review: 0, fresh: 0 };
+    if (e.slot === 'new') b.fresh++;
+    else b.review++;
+    by.set(name, b);
+  }
+  return { minutes, target, size: entries.length, extra, relearn, bySubject: [...by.values()].sort((a, b) => b.review + b.fresh - (a.review + a.fresh)) };
 }
 
 const r1 = (x: number) => Math.round(x * 10) / 10;
@@ -95,7 +140,7 @@ export async function loadCoach(certCode: string, now = Date.now(), d: OneQDB = 
   const forecast = engineForecast(ctx);
   const outlook = engineOutlook(ctx, now);
   const { subjects, exam, order } = examViews(ctx, forecast, outlook, now);
-  return { ctx, subjects, exam, order, settings: ctx.settings, plan: enginePlan(ctx, now), forecast, outlook, doneToday, openToday };
+  return { ctx, subjects, exam, order, today: todayPlan(ctx, order, doneToday, now), settings: ctx.settings, plan: enginePlan(ctx, now), forecast, outlook, doneToday, openToday };
 }
 
 /** 과목 카드와 실제 시험 기준 예상(ADR 008) */
@@ -183,16 +228,26 @@ export async function questionHistory(certCode: string, d: OneQDB = defaultDb): 
 export const md = (ts: number) => new Date(ts).toLocaleDateString('ko-KR', { month: 'numeric', day: 'numeric' });
 
 /**
- * 오늘 학습(ADR 009 — 홈의 유일한 학습 입구): 오늘 틀린 문항 다시 → 추천 과목(복습할 때가 된 것 → 출제빈도 높은 새 문항)
- * → 모자라면 다음 순위 과목. 15문항씩, "오늘 학습 계속"을 누를 때마다 다시 구성한다
+ * 오늘 학습(ADR 009·010 — 홈의 기본 입구): **오늘 남은 계획량 전체를 한 묶음으로**(다 했으면 추가 15문항).
+ * 순서: 오늘 틀린 문항 다시 → 추천 과목(복습할 때가 된 것 → 출제빈도 높은 새 문항) → 다음 순위 과목.
+ * 묶음을 다 풀면 틀린 문항을 한 번 더(startRelearn)
  */
 export async function startToday(certCode: string, now = Date.now(), d: OneQDB = defaultDb): Promise<Target | null> {
   const ctx = await loadEngine(certCode, d);
   if (!ctx) return null;
   const { order } = examViews(ctx, engineForecast(ctx), engineOutlook(ctx, now), now);
-  const entries = buildDailySession(ctx.bank, ctx.mem, order, now, ctx.attempts, SESSION_SIZE);
+  const doneToday = ctx.attempts.filter((a) => a.ts >= startOfDay(now)).length;
+  const tp = todayPlan(ctx, order, doneToday, now);
+  const entries = buildDailySession(ctx.bank, ctx.mem, order, now, ctx.attempts, tp.extra ? EXTRA_SIZE : Math.max(1, tp.target - doneToday));
   if (!entries.length) return null;
   const run = await createSetRun(certCode, 'today', '오늘 학습', entries.map((e) => e.qid), { now }, d);
+  return { kind: 'set', sessionId: run.sessionId };
+}
+
+/** 오늘 학습 묶음 끝: 그 묶음에서 틀리거나 모른 문항을 한 번 더(같은 흐름 안에서 바로 이어짐) */
+export async function startRelearn(certCode: string, qids: string[], now = Date.now(), d: OneQDB = defaultDb): Promise<Target | null> {
+  if (!qids.length) return null;
+  const run = await createSetRun(certCode, 'today', '오늘 학습 · 틀린 문항 한 번 더', qids, { now, relearn: true }, d);
   return { kind: 'set', sessionId: run.sessionId };
 }
 
