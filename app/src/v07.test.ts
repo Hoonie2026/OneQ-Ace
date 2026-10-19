@@ -147,3 +147,29 @@ describe('웹검색 검색어(v0.7)', () => {
     expect(googleUrl('a b')).toBe('https://www.google.com/search?q=a%20b');
   });
 });
+
+describe('v0.7.1', () => {
+  it('오늘 학습 마치기: 열린 오늘 학습 묶음을 닫고(기록은 그대로) 오늘 결과를 센다', async () => {
+    const { finishToday, todayStatus } = await import('./coach');
+    await importPackBytes(await makePack({ questions: Array.from({ length: 6 }, (_, i) => ({ hash: `f${i}`, answer: 1 })) }), {}, d);
+    await savePlanSettings('TEST', { examDate: '2027-02-01', dailyMinutes: 6 }, d); // 6분 ÷ 1.5분 = 4문항
+    const qids = ['TEST-2022-1-001', 'TEST-2022-1-002', 'TEST-2022-1-003'];
+    const run = await createSetRun('TEST', 'today', '오늘 학습', qids, { now: NOW }, d);
+    let s = (await loadSession({ kind: 'set', sessionId: run.sessionId }, d))!;
+    ({ session: s } = await recordAnswer(s, (await d.questions.get(qids[0]))!, 1, 30_000, { now: NOW }, d));
+    ({ session: s } = await recordAnswer(s, (await d.questions.get(qids[1]))!, 0, 30_000, { now: NOW + 1 }, d));
+    const st = (await todayStatus('TEST', NOW + 2, d))!;
+    expect(st).toEqual({ target: 4, done: 2, correct: 1, wrong: 0, unknown: 1 });
+    expect(await finishToday('TEST', NOW + 3, d)).toBe(1);
+    expect((await d.runs.get(run.sessionId))!.finishedAt).toBe(NOW + 3);
+    expect(await d.attempts.count()).toBe(2);
+    expect(await finishToday('TEST', NOW + 4, d)).toBe(0);
+  });
+
+  it('웹검색은 구글 AI 모드(udm=50)로, 개념 설명을 묻는 문장', async () => {
+    const { aiModeUrl } = await import('./search');
+    const u = new URL(aiModeUrl('단곡선의 중앙종거', '측량및지형공간정보기사'));
+    expect(u.searchParams.get('udm')).toBe('50');
+    expect(u.searchParams.get('q')).toBe('단곡선의 중앙종거 — 측량및지형공간정보기사 필기 시험 대비로 이 개념을 쉽게 설명해 줘');
+  });
+});

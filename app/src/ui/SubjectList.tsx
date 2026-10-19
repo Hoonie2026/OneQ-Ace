@@ -11,7 +11,7 @@ export function SubjectList(props: { coach: Coach; busy: boolean; onStudy: (subj
   return (
     <>
       <p className="hint">
-        현재 점수 = 이 과목을 지금 시험 보면(최근 답 기준, 안 푼 문항·모름·오답 0점). 시험일 예상 = 학습계획대로 공부했을 때. 막대의 진한 부분이 현재, 옅은 부분이 시험일 예상, 세로선은 과락선 {rule.subjectMin}점.
+        <b>막대 = 시험일 예상 점수</b>(학습계획대로 공부했을 때), <b>진한 세로선 = 현재 점수</b>(지금 시험 보면 — 최근 답 기준, 안 푼 문항·모름·오답 0점), 점선 = 과락선 {rule.subjectMin}점.
       </p>
       <ul className="subjects" data-testid="subject-list">
         {coach.subjects.map((s) => {
@@ -33,10 +33,15 @@ export function SubjectList(props: { coach: Coach; busy: boolean; onStudy: (subj
                   점
                 </span>
               </div>
-              <div className="bar dual" role="img" aria-label={`${s.name} 현재 ${s.current}점${proj != null ? `, 시험일 예상 ${proj}점` : ''}`}>
-                {proj != null && <span className={`bar-fill ghost${proj < rule.subjectMin ? ' bad' : ''}`} style={{ width: `${proj}%` }} />}
-                <span className={`bar-fill${s.current < rule.subjectMin ? ' bad' : s.current < rule.avgMin ? ' warn' : ''}`} style={{ width: `${s.current}%` }} />
-                <i className="bar-line" style={{ left: `${rule.subjectMin}%` }} />
+              {/* v0.7.1(실기기 의견): 막대 = 시험일 예상, 선 = 현재 위치 */}
+              <div className="bar dual" role="img" aria-label={`${s.name} 시험일 예상 ${proj ?? '—'}점, 현재 ${s.current}점`} data-testid="subject-bar">
+                {proj != null && (
+                  <span className={`bar-fill${proj < rule.subjectMin ? ' bad' : proj < rule.avgMin ? ' warn' : ''}`} style={{ width: `${proj}%` }} data-testid="bar-projected" />
+                )}
+                <i className="bar-line pass" style={{ left: `${rule.subjectMin}%` }} />
+                <i className="bar-line now" style={{ left: `${Math.min(99.5, s.current)}%` }} data-testid="bar-current">
+                  <em>현재 {s.current}</em>
+                </i>
               </div>
               <div className="subject-foot">
                 <span className="muted">

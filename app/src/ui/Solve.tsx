@@ -2,8 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import { db, type AttemptRow, type QuestionRow } from '../db';
 import { deadlineOf, examLabel, finishRun, firstUnanswered, loadSession, pauseRun, recordAnswer, resumeRun, saveNote, type Session, type Target } from '../study';
 import { ZoomImage } from './ZoomImage';
-import { questionMeta, startRelearn } from '../coach';
-import { googleUrl, searchQuery } from '../search';
+import { questionMeta, startRelearn, startSubject, startToday, todayStatus, type TodayStatus } from '../coach';
+import { aiModeUrl, searchQuery } from '../search';
 
 const CIRCLED = ['', '①', '②', '③', '④', '⑤'];
 const MAX_ELAPSED = 30 * 60 * 1000;
@@ -19,7 +19,7 @@ const MAX_ELAPSED = 30 * 60 * 1000;
  * 답하기 전에 검색했으면 그 풀이는 "자신 없이 맞힘"(unsure)으로 기록한다. "헷갈림" 단추는 없애고,
  * "한 줄 설명"은 **메모**로 — 메모가 있는 문항은 다시 풀 때 "메모 있음"이 보인다(다른 회차의 같은 문항 메모 포함).
  */
-export function Solve(props: { target: Target; onExit: () => void; onResult: () => void; onSolve?: (t: Target) => void }) {
+export function Solve(props: { target: Target; onExit: () => void; onResult: () => void; onSolve?: (t: Target) => void; onSummary?: (certCode: string) => void }) {
   const [s, setS] = useState<Session | null>(null);
   const [index, setIndex] = useState(0);
   const [loaded, setLoaded] = useState<QuestionRow | null>(null);
@@ -34,6 +34,10 @@ export function Solve(props: { target: Target; onExit: () => void; onResult: () 
   const [otherNote, setOtherNote] = useState('');
   /** 답하기 전에 웹검색한 문항 */
   const searched = useRef(new Set<string>());
+  /** 오늘 학습 진행(오늘 학습·과목 학습 묶음만). 목표를 넘는 답을 하면 다음 단추에서 "오늘 목표 달성" 상자(v0.7.1) */
+  const [today, setToday] = useState<TodayStatus | null>(null);
+  const [goalPending, setGoalPending] = useState(false);
+  const [goalOpen, setGoalOpen] = useState(false);
   const [showRounds, setShowRounds] = useState(false);
   const shownAt = useRef(performance.now());
   const hiddenFor = useRef(0);
@@ -61,6 +65,7 @@ export function Solve(props: { target: Target; onExit: () => void; onResult: () 
       const start = firstUnanswered(ss);
       if (start < 0 || (ss.target.kind === 'set' && ss.run.finishedAt)) return props.onResult(); // 다 풀었거나 제출한 묶음이면 성적으로
       setS(ss);
+      if (ss.run.mode === 'today') todayStatus(ss.run.certCode ?? ss.pack.manifest.cert.code).then(setToday).catch(() => undefined);
       setIndex(start);
       // 출제 이력(같은 내용이 나온 회차) — 문항 오른쪽 위 "n회 출제"(ADR 008)
       questionMeta(ss.run.certCode ?? ss.pack.manifest.cert.code)
@@ -153,6 +158,12 @@ export function Solve(props: { target: Target; onExit: () => void; onResult: () 
         return;
       }
       if (navigator.vibrate) navigator.vibrate(res.attempt.correct ? 15 : [30, 40, 30]);
+      if (today) {
+        const a = res.attempt;
+        const t = { ...today, done: today.done + 1, correct: today.correct + (a.correct ? 1 : 0), unknown: today.unknown + (a.chosen === 0 ? 1 : 0), wrong: today.wrong + (!a.correct && a.chosen !== 0 ? 1 : 0) };
+        setToday(t);
+        if (t.target > 0 && today.done < t.target && t.done >= t.target) setGoalPending(true);
+      }
     } finally {
       setSaving(false);
     }
@@ -166,6 +177,12 @@ export function Solve(props: { target: Target; onExit: () => void; onResult: () 
   const next = async () => {
     if (!s) return;
     await flushNote();
+    if (goalPending) {
+      // 방금 답으로 오늘 목표를 채웠다 → 결과를 보여 주고 계속할지 묻는다
+      setGoalPending(false);
+      setGoalOpen(true);
+      return;
+    }
     // 다음 안 푼 문항(뒤로 갔다 왔으면 원래 자리로). 남은 것이 없으면 성적
     const after = s.qids.findIndex((x, i) => i > index && !s.answers.has(x));
     const any = firstUnanswered(s);
@@ -182,6 +199,30 @@ export function Solve(props: { target: Target; onExit: () => void; onResult: () 
     setIndex(target);
   };
 
+  const certCode = s ? s.run.certCode ?? s.pack.manifest.cert.code : '';
+  /**
+   * 오늘 목표 달성 → 계속.
+   * - 시스템 추천 학습: 지금 묶음을 닫고 오늘 기록(오늘 틀린·모름 먼저 → 복습 → 새 문항)으로 다시 추천
+   * - 과목별 학습: 그 과목을 고른 것이므로 남은 문항을 이어서, 다 풀었으면 그 과목에서 다시 추천
+   */
+  const continueToday = async () => {
+    if (!s) return;
+    setGoalOpen(false);
+    const left = s.qids.some((x) => !s.answers.has(x));
+    if (s.run.subjectKey && left) return next();
+    await finishRun(s.run.sessionId);
+    const t = s.run.subjectKey ? await startSubject(certCode, s.run.subjectKey) : await startToday(certCode);
+    if (t && props.onSolve) props.onSolve(t);
+    else props.onExit();
+  };
+  const endToday = async () => {
+    if (!s) return;
+    await finishRun(s.run.sessionId);
+    setGoalOpen(false);
+    if (props.onSummary) props.onSummary(certCode);
+    else props.onExit();
+  };
+
   const prev = async () => {
     await flushNote();
     setIndex((i) => Math.max(0, i - 1));
@@ -193,12 +234,13 @@ export function Solve(props: { target: Target; onExit: () => void; onResult: () 
     props.onExit();
   };
 
-  /** 문항 핵심 낱말로 구글 검색(새 탭). 답하기 전이면 이 풀이를 "자신 없이 맞힘"으로 */
+  /** 문항 핵심 낱말로 구글 검색 AI 모드(새 탭). 답하기 전이면 이 풀이를 "자신 없이 맞힘"으로 */
   const webSearch = () => {
-    if (!q) return;
+    if (!q || !s) return;
     if (!attempt) searched.current.add(q.qid);
-    const subjName = (s && (s.packs.get(q.packId) ?? s.pack).manifest.subjects.find((x) => x.no === q.subjectNo)?.name) ?? '';
-    window.open(googleUrl(searchQuery(q.text ?? '', subjName)), '_blank', 'noopener');
+    const m = (s.packs.get(q.packId) ?? s.pack).manifest;
+    const subjName = m.subjects.find((x) => x.no === q.subjectNo)?.name ?? '';
+    window.open(aiModeUrl(searchQuery(q.text ?? '', subjName), m.cert.name), '_blank', 'noopener');
   };
 
   const submit = async () => {
@@ -301,7 +343,7 @@ export function Solve(props: { target: Target; onExit: () => void; onResult: () 
               ✎ {note ? '메모 수정' : '메모 쓰기'}
             </button>
             <button className="chip-btn" onClick={webSearch} data-testid="search-after">
-              🔎 개념 검색
+              🔎 웹검색
             </button>
           </div>
           {noteOpen && (
@@ -317,6 +359,46 @@ export function Solve(props: { target: Target; onExit: () => void; onResult: () 
             />
           )}
         </section>
+      )}
+
+      {goalOpen && today && (
+        <div className="modal-back" role="dialog" aria-modal="true" aria-labelledby="goal-title" data-testid="goal-box">
+          <section className="modal">
+            <h2 id="goal-title">🎉 오늘 학습 목표 달성</h2>
+            <p className="muted">
+              오늘 목표 {today.target}문항을 다 풀었습니다.
+            </p>
+            <ul className="goal-stats">
+              <li>
+                <small>푼 문항</small>
+                <b>{today.done}</b>
+              </li>
+              <li className="ok">
+                <small>정답</small>
+                <b>{today.correct}</b>
+              </li>
+              <li className="bad">
+                <small>오답</small>
+                <b>{today.wrong}</b>
+              </li>
+              <li className="unk">
+                <small>모름</small>
+                <b>{today.unknown}</b>
+              </li>
+            </ul>
+            <p className="goal-score">
+              오늘 성적 <b data-testid="goal-score">{today.done ? Math.round((today.correct / today.done) * 100) : 0}</b>점 <small className="muted">(정답 ÷ 푼 문항)</small>
+            </p>
+            <div className="stack">
+              <button className="btn btn-primary btn-block btn-big" onClick={continueToday} data-testid="goal-continue">
+                계속 학습하기 (오늘 기록으로 추천)
+              </button>
+              <button className="btn btn-block" onClick={endToday} data-testid="goal-end">
+                오늘 학습 마치기
+              </button>
+            </div>
+          </section>
+        </div>
       )}
 
       <footer className="solve-bottom">

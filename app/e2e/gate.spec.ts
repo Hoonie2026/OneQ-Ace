@@ -82,6 +82,15 @@ test('3단계 게이트(5단계 개편 후): 오프라인 과목별 학습·이�
     const before = await page.getByTestId('progress').textContent();
     const last = (await nextBtn().textContent()) === '성적 보기';
     await nextBtn().click();
+    // 오늘 목표(하루 1시간 = 40문항)를 채우면 "오늘 학습 목표 달성" 상자 — 과목 학습은 계속하면 그 과목을 이어서(v0.7.1)
+    if (await page.getByTestId('goal-box').isVisible()) {
+      await expect(page.getByTestId('goal-box')).toContainText('오늘 학습 목표 달성');
+      await page.getByTestId('goal-continue').click();
+      if (last) {
+        await expect(page.getByTestId('progress')).toContainText('1 /');
+        return false; // 그 과목 새 묶음으로 이어짐
+      }
+    }
     if (last) {
       // 묶음 끝: 틀린 문항이 있으면 "한 번 더" 묶음으로 바로 이어지고(ADR 010), 없으면 성적
       await expect(page.getByTestId('result').or(page.getByText('방금 틀린·모름 문항 한 번 더'))).toBeVisible();

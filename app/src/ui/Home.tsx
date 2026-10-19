@@ -114,7 +114,7 @@ export function Home(props: {
           <select value={cert ?? ''} onChange={(e) => pickCert(e.target.value)} aria-label="자격종목 선택" data-testid="cert-select">
             {certs.map((c) => (
               <option key={c.code} value={c.code}>
-                {c.name} · {c.packs}회차
+                {c.name}
               </option>
             ))}
           </select>
@@ -157,8 +157,8 @@ export function Home(props: {
           )}
           {view !== 'home' && (
             <header className="page-head sub-head">
-              <button className="icon-btn" onClick={() => setView('home')} aria-label="홈으로">
-                ‹
+              <button className="back-btn" onClick={() => setView('home')} aria-label="홈으로" data-testid="back-home">
+                <span aria-hidden="true">←</span> 홈
               </button>
               <h1>{view === 'recommend' ? '시스템 추천 학습' : view === 'subjects' ? '과목별 학습' : '모의고사'}</h1>
             </header>

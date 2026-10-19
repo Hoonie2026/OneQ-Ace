@@ -31,7 +31,7 @@ import {
 import { LEARNED_R, OUTLOOK_MIN_OBS } from './engine/outlook';
 import { TRANSFER_REF_ITEMS } from './engine/exam';
 import { trivialConcepts, type ExamShares } from './engine/similar';
-import { createSetRun, loadSession, sessionResult, setRuns, type Result, type Target } from './study';
+import { createSetRun, finishRun, loadSession, sessionResult, setRuns, type Result, type Target } from './study';
 
 /** 과목 카드 하나(과목별 학습 화면) */
 export interface SubjectView {
@@ -286,6 +286,36 @@ export async function startToday(certCode: string, now = Date.now(), d: OneQDB =
   if (!entries.length) return null;
   const run = await createSetRun(certCode, 'today', '오늘 학습', entries.map((e) => e.qid), { now }, d);
   return { kind: 'set', sessionId: run.sessionId };
+}
+
+/** 오늘 학습 진행(v0.7.1): 목표 문항 수와 오늘 푼 결과(모의고사 제외). 풀이 화면이 "오늘 목표 달성" 상자에 쓴다 */
+export interface TodayStatus {
+  target: number;
+  done: number;
+  correct: number;
+  wrong: number;
+  unknown: number;
+}
+
+export async function todayStatus(certCode: string, now = Date.now(), d: OneQDB = defaultDb): Promise<TodayStatus | null> {
+  const ctx = await loadEngine(certCode, d);
+  if (!ctx) return null;
+  const settings = ctx.settings ?? { ...DEFAULT_PLAN_SETTINGS, examDate: '9999-12-31' };
+  const target = Math.max(0, Math.round((minutesToday(settings, startOfDay(now)) * 60) / ctx.mem.secPerQuestion));
+  const todays = ctx.attempts.filter((a) => a.ts >= startOfDay(now));
+  const correct = todays.filter((a) => a.correct).length;
+  const unknown = todays.filter((a) => a.chosen === 0).length;
+  return { target, done: todays.length, correct, wrong: todays.length - correct - unknown, unknown };
+}
+
+/**
+ * 오늘 학습 마치기(v0.7.1 — 실기기 의견): 열려 있는 오늘 학습 묶음을 닫는다. 푼 기록은 원장에 그대로 남고,
+ * 홈은 "이어서 학습" 대신 "시스템 추천 학습"을 보여 준다(남은 문항은 다음 추천에서 오늘 기록을 바탕으로 다시 고른다)
+ */
+export async function finishToday(certCode: string, now = Date.now(), d: OneQDB = defaultDb): Promise<number> {
+  const open = (await setRuns(certCode, 'today', d)).filter((r) => !r.finishedAt);
+  for (const r of open) await finishRun(r.sessionId, now, d);
+  return open.length;
 }
 
 /** 오늘 학습 묶음 끝: 그 묶음에서 틀리거나 모른 문항을 한 번 더(같은 흐름 안에서 바로 이어짐) */

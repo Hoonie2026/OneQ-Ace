@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { daySummary, type DaySummary as S } from '../coach';
+import { daySummary, finishToday, type DaySummary as S } from '../coach';
 
 /**
  * 오늘 학습 마치기(ADR 009 — 실기기 v0.3.0 Q5): 오늘 푼 것, 현재 점수 ☞ 계획 이행 시 예상 점수, 학습 계획을 고칠지 묻는다.
@@ -8,7 +8,10 @@ import { daySummary, type DaySummary as S } from '../coach';
 export function DaySummary(props: { certCode: string; onHome: () => void; onPlan: () => void }) {
   const [s, setS] = useState<S | null>(null);
   useEffect(() => {
-    daySummary(props.certCode).then((x) => (x ? setS(x) : props.onHome()));
+    // 오늘 학습 마치기 = 열린 오늘 학습 묶음을 닫는다(기록은 그대로) → 홈은 "시스템 추천 학습"(v0.7.1)
+    finishToday(props.certCode)
+      .then(() => daySummary(props.certCode))
+      .then((x) => (x ? setS(x) : props.onHome()));
   }, [props.certCode]);
   if (!s) return <div className="app" />;
   const rate = s.answered ? Math.round((s.correct / s.answered) * 100) : 0;

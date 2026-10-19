@@ -168,7 +168,7 @@ export default function App() {
       )}
       {screen.name === 'plan' && <PlanSetup certCode={screen.certCode} certName={screen.certName} onBack={home} onSaved={flash} />}
       {screen.name === 'solve' && (
-        <Solve target={screen.target} onExit={home} onResult={() => go({ name: 'result', target: screen.target })} onSolve={(target) => go({ name: 'solve', target })} />
+        <Solve target={screen.target} onExit={home} onResult={() => go({ name: 'result', target: screen.target })} onSolve={(target) => go({ name: 'solve', target })} onSummary={(certCode) => go({ name: 'summary', certCode })} />
       )}
       {screen.name === 'result' && (
         <Result target={screen.target} onHome={home} onSolve={(target) => go({ name: 'solve', target })} onSummary={(certCode) => go({ name: 'summary', certCode })} toast={flash} />

@@ -54,3 +54,12 @@ export function searchQuery(text: string, subjectName = ''): string {
 export function googleUrl(query: string): string {
   return `https://www.google.com/search?q=${encodeURIComponent(query)}`;
 }
+
+/**
+ * 구글 검색 "AI 모드"(v0.7.1 — 사용자 요청). `udm=50`이 AI 모드 화면을 연다(구글 검색 URL 매개변수).
+ * AI 모드는 대화형이라 낱말 나열 대신 "개념을 설명해 달라"는 문장으로 묻는다. 문제 전체·보기는 보내지 않는다(정답을 바로 알려 주지 않게)
+ */
+export function aiModeUrl(keywords: string, certName = ''): string {
+  const ask = `${keywords} — ${certName ? `${certName} 필기 시험 대비로 ` : ''}이 개념을 쉽게 설명해 줘`;
+  return `https://www.google.com/search?udm=50&q=${encodeURIComponent(ask)}`;
+}

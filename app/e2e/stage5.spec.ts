@@ -48,41 +48,37 @@ test('5단계: 학습 계획 → 오늘 학습(계획량 한 묶음·틀린 문�
   await expect(page.getByTestId('plan-open')).toBeVisible();
   await page.screenshot({ path: `test-results/stage5-home0-${info.project.name}.png`, fullPage: true });
 
-  // 시스템 추천 학습: 무엇을 왜 푸는지 안내 → 학습 시작(계획량 20문항 한 묶음) → 끝나면 틀린·모름 한 번 더 → 성적
+  // 시스템 추천 학습: 무엇을 왜 푸는지 안내 → 학습 시작(계획량 20문항 한 묶음) → 목표를 채우면 "오늘 학습 목표 달성" 상자(v0.7.1)
   await page.getByTestId('go-recommend').click();
   await expect(page.getByTestId('today-what')).toContainText('새 문항');
   await page.screenshot({ path: `test-results/stage5-recommend-${info.project.name}.png`, fullPage: true });
   await expect(page.getByTestId('today-start')).toHaveText('학습 시작 (20문항)');
   await page.getByTestId('today-start').click();
   await expect(page.getByTestId('progress')).toHaveText('1 / 20');
-  let relearned = false;
-  for (let k = 0; k < 60; k++) {
-    const before = await page.getByTestId('progress').textContent();
+  for (let k = 0; k < 20; k++) {
+    await expect(page.getByTestId('progress')).toHaveText(`${k + 1} / 20`);
     await page.getByRole('button', { name: k % 3 ? '모름' : `${(k % 4) + 1}번` }).click();
     await expect(page.getByTestId('feedback')).toBeVisible();
-    const last = (await page.getByRole('button', { name: /^(다음 →|성적 보기)$/ }).textContent()) === '성적 보기';
     await page.getByRole('button', { name: /^(다음 →|성적 보기)$/ }).click();
-    if (last) {
-      if (!relearned) {
-        await expect(page.getByText('방금 틀린·모름 문항 한 번 더')).toBeVisible();
-        relearned = true;
-        continue;
-      }
-      break;
-    }
-    await expect(page.getByTestId('progress')).not.toHaveText(before!);
   }
-  await expect(page.getByTestId('result')).toBeVisible();
-  await expect(page.getByTestId('finish-day')).toHaveText('오늘 학습 마치기');
-  await expect(page.getByTestId('today-next')).toHaveText('계속 학습하기');
-  await page.screenshot({ path: `test-results/stage5-result-${info.project.name}.png`, fullPage: true });
+  // 목표 달성 상자: 푼 문항·정답·오답·모름·성적 → 계속 학습하기(오늘 기록으로 다시 추천 — 틀린·모름 문항부터)
+  await expect(page.getByTestId('goal-box')).toBeVisible();
+  await expect(page.getByTestId('goal-box')).toContainText('20');
+  await page.screenshot({ path: `test-results/stage5-goal-${info.project.name}.png`, fullPage: true });
+  await page.getByTestId('goal-continue').click();
+  await expect(page.getByTestId('progress')).toContainText('1 /');
+  await page.getByRole('button', { name: '1번' }).click();
+  await page.getByRole('button', { name: '풀이 멈추고 홈으로' }).click();
+  await expect(page.getByTestId('today-resume')).toBeVisible();
 
-  // 오늘 학습 마치기: 현재 ☞ 시험일 예상 + 계획을 고칠지
+  // 오늘 학습 마치기 → 그대로 두고 마치기: 열린 묶음이 닫혀 홈은 "시스템 추천 학습"(v0.7.1 — 실기기 의견)
   await page.getByTestId('finish-day').click();
   await expect(page.getByTestId('day-summary')).toBeVisible();
   await expect(page.getByTestId('summary-verdict')).toBeVisible();
   await page.screenshot({ path: `test-results/stage5-summary-${info.project.name}.png`, fullPage: true });
   await page.getByRole('button', { name: '그대로 두고 마치기' }).click();
+  await expect(page.getByTestId('go-recommend')).toBeVisible();
+  await expect(page.getByTestId('today-resume')).toHaveCount(0);
   await expect(page.getByTestId('week-goal')).toContainText('완료');
   await page.getByTestId('go-recommend').click();
   await expect(page.getByTestId('recommend')).toContainText('오늘 목표 완료 · 추가 학습');

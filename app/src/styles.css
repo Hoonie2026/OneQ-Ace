@@ -580,6 +580,36 @@ h3 {
 .bar-line.avg {
   opacity: 0.3;
 }
+/* 과목별 학습(v0.7.1): 과락선은 점선, 현재 점수는 진한 선 + 이름표 */
+.bar-line.pass {
+  width: 0;
+  background: none;
+  border-left: 2px dashed var(--muted);
+  opacity: 0.7;
+}
+.bar-line.now {
+  top: -5px;
+  bottom: -5px;
+  width: 3px;
+  margin-left: -1px;
+  border-radius: 2px;
+  background: var(--ink);
+  opacity: 1;
+}
+.bar-line.now em {
+  position: absolute;
+  bottom: calc(100% + 1px);
+  left: 50%;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  font-style: normal;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--ink);
+}
+.subject .bar.dual {
+  margin-top: 20px;
+}
 
 /* ── 풀이 화면 ── */
 .solve {
@@ -1530,6 +1560,26 @@ h3 {
   margin: 4px 0 8px;
   font-size: 14px;
 }
+/* 홈으로 돌아가기(v0.7.1 — "‹"보다 잘 보이게) */
+.back-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 40px;
+  padding: 0 14px 0 10px;
+  border: 1px solid var(--primary);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--primary);
+  font: inherit;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+  flex: none;
+}
+.back-btn span {
+  font-size: 18px;
+}
 .sub-head {
   margin-top: -4px;
 }
@@ -1646,4 +1696,68 @@ h3 {
 }
 .pack-hint {
   margin: 0 16px;
+}
+
+/* ── 오늘 학습 목표 달성 상자(v0.7.1) ── */
+.modal-back {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: rgb(0 0 0 / 0.45);
+}
+.modal {
+  width: min(420px, 100%);
+  padding: 20px 18px 18px;
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: 0 10px 30px rgb(0 0 0 / 0.25);
+}
+.modal h2 {
+  margin: 0 0 4px;
+  font-size: 20px;
+}
+.goal-stats {
+  list-style: none;
+  margin: 14px 0 10px;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+}
+.goal-stats li {
+  display: grid;
+  justify-items: center;
+  padding: 8px 4px;
+  border-radius: 10px;
+  background: var(--bg);
+}
+.goal-stats small {
+  font-size: 12px;
+  color: var(--muted);
+}
+.goal-stats b {
+  font-size: 20px;
+  font-variant-numeric: tabular-nums;
+}
+.goal-stats .ok b {
+  color: var(--ok);
+}
+.goal-stats .bad b {
+  color: var(--fail);
+}
+.goal-stats .unk b {
+  color: var(--check);
+}
+.goal-score {
+  margin: 0 0 14px;
+  text-align: center;
+  font-size: 16px;
+}
+.goal-score b {
+  font-size: 26px;
+  color: var(--primary);
 }
