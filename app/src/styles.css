@@ -2125,3 +2125,47 @@ ul.plain {
   color: var(--muted);
   font-size: 11px;
 }
+
+/* v0.8.2 — 홈 글자 크기·"학습계획 설정(재설정)" 한 줄(실기기 X1) */
+.exam-row {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+.exam-dday {
+  min-width: 96px;
+}
+.exam-date .plan-link {
+  white-space: nowrap;
+  font-size: clamp(14px, 4.2vw, 16px);
+}
+.exam-date small,
+.exam-dday small {
+  font-size: 15px;
+}
+.cert-select span {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--ink);
+}
+.cert-select select {
+  font-size: 17px;
+}
+.score-box small {
+  font-size: 16px;
+  color: var(--ink);
+  font-weight: 600;
+}
+.score-box .link-btn.small {
+  font-size: 15px;
+}
+.headline {
+  margin: 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 6px;
+  font-size: 16px;
+  line-height: 1.5;
+}
+.big-num {
+  font-size: 30px;
+  font-weight: 800;
+}

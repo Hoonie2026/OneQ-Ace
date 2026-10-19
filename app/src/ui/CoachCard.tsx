@@ -46,7 +46,7 @@ export function CoachCard(props: {
         <button className="exam-date" onClick={props.onPlan} data-testid="plan-open">
           <small>시험일{settings ? ` · ${settings.examDate.slice(0, 4)}년` : ''}</small>
           <b>{examDay ?? '아직 정하지 않음'}</b>
-          <span className="plan-link">학습계획 설정(재설정) ›</span>
+          <span className="plan-link">학습계획 설정(재설정)</span>
         </button>
         <div className="exam-dday">
           <small>오늘 기준</small>

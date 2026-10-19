@@ -32,6 +32,7 @@ test('5단계: 학습 계획 → 오늘 학습(계획량 한 묶음·틀린 문�
   await expect(page.getByTestId('pack-solve')).toHaveCount(0);
   await expect(page.getByTestId('current-avg')).toHaveText('0'); // 안 푼 문항 0점
   await expect(page.getByTestId('plan-open')).toContainText('학습계획 설정(재설정)');
+  await expect(page.getByTestId('plan-open')).not.toContainText('›');
   await expect(page.getByTestId('subject-list')).toHaveCount(0); // 과목 목록은 "과목별 학습"에서
 
   // 학습 계획: 시험일 14일 뒤, 하루 30분(= 20문항)
@@ -55,6 +56,7 @@ test('5단계: 학습 계획 → 오늘 학습(계획량 한 묶음·틀린 문�
   await expect(page.getByTestId('forecast-table')).toContainText('과목');
   await expect(page.getByTestId('forecast-avg')).toContainText('평균(홈 점수)');
   await expect(page.getByTestId('forecast-view')).not.toContainText('계획과 실제 학습량');
+  await expect(page.getByTestId('forecast-ceiling')).toContainText('최고');
   await expect(page.getByTestId('forecast-view')).not.toContainText('합격 가능성');
   await page.screenshot({ path: `test-results/stage5-forecast-${info.project.name}.png`, fullPage: true });
   await page.getByTestId('back-home').click();
