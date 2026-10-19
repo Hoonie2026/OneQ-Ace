@@ -145,6 +145,7 @@ test('3단계 게이트(5단계 개편 후): 오프라인 과목별 학습·이�
     await goNext();
   }
   await page.getByRole('button', { name: '풀이 멈추고 홈으로' }).click();
+  await page.getByTestId('dialog-choice-later').click(); // ✕ → 나중에 이어서 하기(v0.8.3)
   await page.reload();
   await expect(page.getByTestId('today-resume')).toContainText('13문항 남음');
   await page.getByTestId('today-resume').click();

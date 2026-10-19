@@ -5,11 +5,12 @@ import { VARIANT_TRANSFER } from '../engine/similar';
 
 const pct = (x: number) => `${Math.round(x * 100)}%`;
 const r1 = (x: number) => Math.round(x * 10) / 10;
+const f1 = (x: number) => x.toFixed(1);
 const mean = (xs: number[]) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : 0);
 
 /**
- * 시험일 예상 점수 계산 보기(ADR 014 — v0.8.2 실기기 의견 X2: 두괄식·개조식, 수식 반복 없이).
- * ① 핵심(예상 점수 · 기출/처음 보는 문항 몫 · 지금 정답률로 오를 수 있는 최고 점수) ② 과목별 표(+ 평균 = 홈 점수) ③ 자주 묻는 질문 ④ 한계
+ * 시험일 예상 점수 계산 보기(ADR 014 — v0.8.2 두괄식·개조식, v0.8.3 의견: 출제 유형 그림 복원, 표의 단위를 모두 "점(100점 만점)"으로 통일, 실제 산식).
+ * ① 핵심 ② 실제 시험 출제 유형(보유 팩 기준, 막대 그림) ③ 과목별 예상(기출 문항 점수·신규 문항 점수·시험 예상 점수 + 평균) ④ 산식(평균 값 대입) ⑤ 자주 묻는 질문 ⑥ 한계
  */
 export function ForecastView(props: { coach: Coach }) {
   const { coach } = props;
@@ -29,6 +30,15 @@ export function ForecastView(props: { coach: Coach }) {
   const nowRate = mean(subjects.map((s) => s.newRate.exam));
   const measured = subjects.some((s) => s.newRate.n > 0);
 
+  const aB = rows.length ? mean(rows.map((s) => s.bankProjected!)) : 0;
+  const aN = rows.length ? 100 * mean(rows.map((s) => s.rateProjected!)) : 0;
+  const per100 = (x: number) => Math.round(x * 100);
+  const seg = [
+    { cls: 's-same', name: '기출과 같은 문항', share: sh.same, note: '기출 문항 점수만큼 맞힘' },
+    { cls: 's-var', name: '변형 문항', share: sh.variant, note: '숫자·표현만 바꾼 같은 개념' },
+    { cls: 's-fresh', name: '신규 문항', share: sh.fresh, note: '보유 기출에 없는 문제' },
+  ];
+
   return (
     <section className="stack forecast" data-testid="forecast-view">
       <div className="card" data-testid="forecast-key">
@@ -37,36 +47,59 @@ export function ForecastView(props: { coach: Coach }) {
         </h2>
         <ul className="headline">
           <li>학습계획대로 공부했을 때 {subjects.length}과목 예상 점수의 평균입니다.</li>
-          <li>
-            실제 시험 문항 = 기출(같은 문항 {pct(sh.same)} + 변형 {pct(sh.variant)}) + <b>처음 보는 문항 {pct(sh.fresh)}</b>
-            <small className="muted"> — 보유 기출 {exam.rounds}회차 기준 실측</small>
-          </li>
-          <li>기출 몫은 공부할수록 오르고, 처음 보는 문항 몫은 내가 처음 보는 문제를 맞히는 비율(지금 {pct(nowRate)})에 달려 있습니다.</li>
+          <li>기출 몫은 공부할수록 오르고, 신규 문항 몫은 내가 처음 보는 문제를 맞히는 실력(지금 {Math.round(100 * nowRate)}점)에 달려 있습니다.</li>
           <li data-testid="forecast-ceiling">
-            그래서 기출을 모두 익혀 시험날까지 기억해도 지금 정답률로는 <b>약 {ceiling}점</b>이 최고입니다. 처음 보는 문제를 더 맞히게 되면 이 선도 함께 오릅니다.
+            기출을 모두 익혀 시험날까지 기억해도 지금 실력으로는 <b>약 {ceiling}점</b>이 최고입니다. 신규 문항을 더 맞히게 되면 이 선도 함께 오릅니다.
           </li>
         </ul>
         {exam.status === 'unknown' && <p className="hint">과목마다 처음 푼 문항이 10개가 안 돼 진단 중 — 숫자가 크게 바뀔 수 있습니다.</p>}
-        {!measured && <p className="hint">아직 풀이 기록이 없어 처음 보는 문항 정답률을 찍기(25%)로 계산했습니다.</p>}
+        {!measured && <p className="hint">아직 풀이 기록이 없어 신규 문항 점수를 찍기(25점)로 계산했습니다.</p>}
+      </div>
+
+      <div className="card" data-testid="forecast-shares">
+        <h3>실제 시험은 어디서 나오나 (보유 기출 {exam.rounds}회차 기준)</h3>
+        <div className="share-bar big" role="img" aria-label={seg.map((x) => `${x.name} ${pct(x.share)}`).join(', ')}>
+          {seg.map((x) => (
+            <span key={x.cls} className={x.cls} style={{ width: pct(x.share) }}>
+              {x.share >= 0.12 ? pct(x.share) : ''}
+            </span>
+          ))}
+        </div>
+        <ul className="share-tiles">
+          {seg.map((x) => (
+            <li key={x.cls}>
+              <i className={x.cls} />
+              <span>
+                <b>{x.name}</b>
+                <small>{x.note}</small>
+              </span>
+              <b className="num">
+                {pct(x.share)}
+                <small>100문항 중 약 {per100(x.share)}개</small>
+              </b>
+            </li>
+          ))}
+        </ul>
+        <p className="hint">측량 기출 34회차를 서로 대조해 잰 출제 경향(앞 회차를 많이 가질수록 기출 몫이 커짐)에, 지금 넣은 문제팩끼리 대조한 결과를 더했습니다.</p>
       </div>
 
       <div className="card">
-        <h3>과목별 예상(계획대로)</h3>
+        <h3>과목별 예상 (계획대로, 100점 만점)</h3>
         <table className="mini-table calc-table" data-testid="forecast-table">
           <thead>
             <tr>
               <th>과목</th>
-              <th>기출 점수</th>
-              <th>처음 보는 문항</th>
-              <th>시험 예상</th>
+              <th>기출 문항 점수</th>
+              <th>신규 문항 점수</th>
+              <th>시험 예상 점수</th>
             </tr>
           </thead>
           <tbody>
             {subjects.map((s) => (
               <tr key={s.key}>
                 <td>{s.name}</td>
-                <td>{s.bankProjected != null ? r1(s.bankProjected) : '—'}</td>
-                <td>{s.rateProjected != null ? pct(s.rateProjected) : '—'}</td>
+                <td>{s.bankProjected != null ? f1(s.bankProjected) : '—'}</td>
+                <td>{s.rateProjected != null ? f1(100 * s.rateProjected) : '—'}</td>
                 <td className={s.examProjected != null && s.examProjected < rule.subjectMin ? 'bad' : ''}>
                   <b>{s.examProjected ?? '—'}</b>
                 </td>
@@ -75,19 +108,43 @@ export function ForecastView(props: { coach: Coach }) {
             {rows.length === subjects.length && rows.length > 0 && (
               <tr className="avg-row" data-testid="forecast-avg">
                 <td>평균(홈 점수)</td>
-                <td>{r1(mean(rows.map((s) => s.bankProjected!)))}</td>
-                <td>{pct(mean(rows.map((s) => s.rateProjected!)))}</td>
+                <td>{f1(aB)}</td>
+                <td>{f1(aN)}</td>
                 <td>{exam.projectedAvg}</td>
               </tr>
             )}
           </tbody>
         </table>
         <ul className="plain">
-          <li>기출 점수: 보유 기출을 시험일에 다시 풀면 맞힐 비율</li>
-          <li>처음 보는 문항: 한 번도 안 본 문제를 맞힐 비율</li>
-          <li>시험 예상: 두 값을 ① 문항 구성 비율대로 섞은 값 · {rule.subjectMin}점 미만 빨강</li>
+          <li>
+            <b>기출 문항 점수</b>: 보유 기출을 시험일에 다시 풀면 받을 점수 — 문항마다 시험일 기억률로 계산
+          </li>
+          <li>
+            <b>신규 문항 점수</b>: 처음 보는 문제를 풀면 받을 점수 — 최근 첫 풀이 정답률 + 학습 효과
+          </li>
+          <li>
+            <b>시험 예상 점수</b>: 아래 산식 · {rule.subjectMin}점 미만 빨강(과락 위험)
+          </li>
         </ul>
       </div>
+
+      {rows.length > 0 && (
+        <div className="card" data-testid="forecast-formula">
+          <h3>시험 예상 점수 산식</h3>
+          <p className="formula">
+            시험 예상 = 기출 문항 점수 × {pct(sh.same)}
+            <br />+ (신규 + {VARIANT_TRANSFER} × (기출 − 신규)) × {pct(sh.variant)}
+            <br />+ 신규 문항 점수 × {pct(sh.fresh)}
+          </p>
+          <p className="calc-example">
+            평균으로 넣으면: {f1(aB)} × {pct(sh.same)} + ({f1(aN)} + {VARIANT_TRANSFER} × ({f1(aB)} − {f1(aN)})) × {pct(sh.variant)} + {f1(aN)} × {pct(sh.fresh)} ≈{' '}
+            <b>{f1(sh.same * aB + sh.variant * (aN + VARIANT_TRANSFER * (aB - aN)) + sh.fresh * aN)}점</b>
+          </p>
+          <p className="hint">
+            변형 문항은 신규 문항보다 쉽고(같은 개념) 기출보다는 어렵다고 보고, 둘 사이에서 기출 쪽으로 {Math.round(VARIANT_TRANSFER * 100)}% 다가간 점수로 계산합니다.
+          </p>
+        </div>
+      )}
 
       <div className="card">
         <h3>자주 묻는 질문</h3>
@@ -98,16 +155,16 @@ export function ForecastView(props: { coach: Coach }) {
             회독 수가 아니라 문항마다 <b>맞혔는지·언제 풀었는지</b>로 계산합니다(FSRS 기억 모형). 3회독이라도 틀린 문항은 낮게, 간격을 두고 거듭 맞힌 문항은 높게 잡힙니다.
           </li>
           <li>
-            <b>처음 보는 문항은 찍기 확률인가요?</b>
+            <b>신규 문항 점수는 찍기 확률인가요?</b>
             <br />
-            아니요. ① 내가 최근 처음 푼 문항 30개의 정답률(기록이 없을 때만 25%) ② 기출을 익힐수록 남은 여지의 최대 {pct(TRANSFER)}가 더 오름(시험 효과의 전이 —
-            메타분석 Pan & Rickard 2018) ③ 변형 문항은 원래 기출 성적의 {Math.round(VARIANT_TRANSFER * 100)}%를 반영합니다.
+            아니요. ① 내가 최근 처음 푼 문항 30개의 정답률(기록이 없을 때만 25점) ② 기출을 익힐수록 남은 여지의 최대 {pct(TRANSFER)}가 더 오름(시험 효과의 전이 —
+            메타분석 Pan & Rickard 2018) ③ 변형 문항은 위 산식처럼 기출 성적을 반영합니다.
           </li>
           <li>
             <b>시간을 아무리 늘려도 점수가 더 안 오르는 이유는?</b>
             <br />
-            기출 몫은 거의 다 채워도, 처음 보는 문항 몫({pct(sh.fresh)})은 시간을 늘린다고 바로 오르지 않기 때문입니다. 공부하며 처음 보는 문제 정답률이 실제로 오르면(앱이 매일
-            다시 잼) 예상과 최고 점수가 함께 오릅니다. 기출 회차를 더 넣으면 기출 몫도 커집니다.
+            기출 몫은 거의 다 채워도, 신규 문항 몫({pct(sh.fresh)})은 시간을 늘린다고 바로 오르지 않기 때문입니다. 공부하며 처음 보는 문제를 실제로 더 맞히면(앱이 매일 다시 잼)
+            예상과 최고 점수가 함께 오릅니다. 기출 회차를 더 넣으면 기출 몫도 커집니다.
           </li>
         </ul>
       </div>

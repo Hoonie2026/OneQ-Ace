@@ -4,7 +4,7 @@ import { deadlineOf, examLabel, finishRun, firstUnanswered, loadSession, pauseRu
 import { ZoomImage } from './ZoomImage';
 import { questionMeta, startRelearn, startSubject, startToday, todayStatus, type TodayStatus } from '../coach';
 import { aiModeUrl, searchQuery } from '../search';
-import { askConfirm } from './Dialog';
+import { askChoice, askConfirm } from './Dialog';
 
 const CIRCLED = ['', '①', '②', '③', '④', '⑤'];
 const MAX_ELAPSED = 30 * 60 * 1000;
@@ -235,9 +235,22 @@ export function Solve(props: { target: Target; onExit: () => void; onResult: () 
     setIndex((i) => Math.max(0, i - 1));
   };
 
+  /**
+   * ✕(v0.8.3 — 실기기 의견): 오늘 학습(시스템 추천·과목별·다시 풀기) 도중이면 [오늘 학습 마치기] [나중에 이어서 하기] 중에서 고른다.
+   * 마치기 = 이 묶음을 닫고 오늘 학습 요약으로(기록은 그대로), 이어서 = 묶음을 열어 둔 채 홈(홈에 "이어서 학습")
+   */
   const exit = async () => {
     await flushNote();
     if (isMock && s && !s.run.finishedAt) await pauseRun(s.run.sessionId);
+    if (s && s.run.mode === 'today' && !s.run.finishedAt) {
+      const left = s.qids.filter((x) => !s.answers.has(x)).length;
+      const pick = await askChoice(`이 묶음에 ${left}문항이 남았습니다. 푼 기록은 그대로 남습니다.`, [
+        { value: 'later', text: '나중에 이어서 하기', primary: true },
+        { value: 'end', text: '오늘 학습 마치기' },
+      ], { title: '학습을 멈출까요?', cancelText: '계속 풀기' });
+      if (pick === 'end') return endToday();
+      if (pick !== 'later') return;
+    }
     props.onExit();
   };
 
@@ -412,7 +425,7 @@ export function Solve(props: { target: Target; onExit: () => void; onResult: () 
             <div className="stack">
               <button className="btn btn-primary btn-block btn-big" onClick={continueToday} data-testid="goal-continue">
                 {!s.run.subjectKey && !s.run.relearn && s.qids.some((x) => s.answers.get(x) && !s.answers.get(x)!.correct)
-                  ? `계속 학습하기 (틀린·모름 ${s.qids.filter((x) => s.answers.get(x) && !s.answers.get(x)!.correct).length}문항 다시 풀기부터)`
+                  ? `오답/모름 ${s.qids.filter((x) => s.answers.get(x) && !s.answers.get(x)!.correct).length}문항 다시 풀기`
                   : '계속 학습하기 (오늘 기록으로 추천)'}
               </button>
               <button className="btn btn-block" onClick={endToday} data-testid="goal-end">

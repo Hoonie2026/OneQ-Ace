@@ -12,16 +12,18 @@ interface Req {
   cancelText: string | null; // null이면 확인 단추만(안내)
   danger: boolean;
   copyText?: string;
-  resolve: (ok: boolean) => void;
+  /** 여러 단추(askChoice) — 있으면 okText/cancelText 대신 이것을 세로로 */
+  choices?: { value: string; text: string; primary?: boolean }[];
+  resolve: (ok: boolean | string) => void;
 }
 
 let seq = 0;
 let push: ((r: Req) => void) | null = null;
 const queue: Req[] = [];
 
-function open(r: Omit<Req, 'id' | 'resolve'>): Promise<boolean> {
-  return new Promise((resolve) => {
-    const req = { ...r, id: ++seq, resolve };
+function open<T extends boolean | string>(r: Omit<Req, 'id' | 'resolve'>): Promise<T> {
+  return new Promise<T>((resolve) => {
+    const req = { ...r, id: ++seq, resolve: resolve as (v: boolean | string) => void };
     if (push) push(req);
     else queue.push(req);
   });
@@ -29,12 +31,17 @@ function open(r: Omit<Req, 'id' | 'resolve'>): Promise<boolean> {
 
 /** 확인 창: [취소] [확인]. 확인이면 true */
 export function askConfirm(message: string, opts: { title?: string; okText?: string; cancelText?: string; danger?: boolean } = {}): Promise<boolean> {
-  return open({ title: opts.title, message, okText: opts.okText ?? '확인', cancelText: opts.cancelText ?? '취소', danger: !!opts.danger });
+  return open<boolean>({ title: opts.title, message, okText: opts.okText ?? '확인', cancelText: opts.cancelText ?? '취소', danger: !!opts.danger });
+}
+
+/** 여러 갈래 중 고르기(v0.8.3): 고른 value, [취소 단추(cancelText)]면 null */
+export function askChoice(message: string, choices: { value: string; text: string; primary?: boolean }[], opts: { title?: string; cancelText?: string } = {}): Promise<string | null> {
+  return open<string | boolean>({ title: opts.title, message, okText: '', cancelText: opts.cancelText ?? '취소', danger: false, choices }).then((v) => (typeof v === 'string' ? v : null));
 }
 
 /** 안내 창: [확인]만. 복사할 글을 길게 눌러 고를 수 있게 보여 줄 수도 있다 */
 export function showNotice(message: string, opts: { title?: string; copyText?: string } = {}): Promise<boolean> {
-  return open({ title: opts.title, message, okText: '확인', cancelText: null, danger: false, copyText: opts.copyText });
+  return open<boolean>({ title: opts.title, message, okText: '확인', cancelText: null, danger: false, copyText: opts.copyText });
 }
 
 export function DialogHost() {
@@ -48,7 +55,7 @@ export function DialogHost() {
   }, []);
   const cur = list[0];
   if (!cur) return null;
-  const close = (ok: boolean) => {
+  const close = (ok: boolean | string) => {
     cur.resolve(ok);
     setList((l) => l.slice(1));
   };
@@ -60,6 +67,20 @@ export function DialogHost() {
           {cur.message}
         </p>
         {cur.copyText && <textarea className="dlg-copy" readOnly value={cur.copyText} rows={6} onFocus={(e) => e.currentTarget.select()} />}
+        {cur.choices ? (
+          <div className="dlg-choices">
+            {cur.choices.map((c) => (
+              <button key={c.value} className={`btn dlg-btn btn-block ${c.primary ? 'btn-primary' : ''}`} onClick={() => close(c.value)} data-testid={`dialog-choice-${c.value}`}>
+                {c.text}
+              </button>
+            ))}
+            {cur.cancelText && (
+              <button className="btn dlg-btn btn-block" onClick={() => close(false)} data-testid="dialog-cancel">
+                {cur.cancelText}
+              </button>
+            )}
+          </div>
+        ) : (
         <div className={`dlg-actions${cur.cancelText ? '' : ' one'}`}>
           {cur.cancelText && (
             <button className="btn dlg-btn" onClick={() => close(false)} data-testid="dialog-cancel">
@@ -70,6 +91,7 @@ export function DialogHost() {
             {cur.okText}
           </button>
         </div>
+        )}
       </section>
     </div>
   );

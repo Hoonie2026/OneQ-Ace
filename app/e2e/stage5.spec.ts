@@ -87,7 +87,7 @@ test('5단계: 학습 계획 → 오늘 학습(계획량 한 묶음·틀린 문�
   await expect(page.getByTestId('goal-box')).toBeVisible();
   await expect(page.getByTestId('goal-box')).toContainText('20');
   await page.screenshot({ path: `test-results/stage5-goal-${info.project.name}.png`, fullPage: true });
-  await expect(page.getByTestId('goal-continue')).toContainText('다시 풀기부터');
+  await expect(page.getByTestId('goal-continue')).toContainText('오답/모름');
   await page.getByTestId('goal-continue').click();
   // 계속 → 먼저 틀린·모름 "다시 풀기"(주황 띠·다시 풀기 n/m — v0.7.2)
   await expect(page.getByTestId('relearn-banner')).toContainText('다시 풀기 · 1 /');
@@ -96,6 +96,7 @@ test('5단계: 학습 계획 → 오늘 학습(계획량 한 묶음·틀린 문�
   await expect(page.getByTestId('progress')).toContainText('1 /');
   await page.getByRole('button', { name: '1번' }).click();
   await page.getByRole('button', { name: '풀이 멈추고 홈으로' }).click();
+  await page.getByTestId('dialog-choice-later').click(); // ✕ → 나중에 이어서 하기(v0.8.3)
   await expect(page.getByTestId('today-resume')).toBeVisible();
 
   // 오늘 학습 마치기 → 홈으로(v0.8.1 — 학습계획 단추는 홈에만): 열린 묶음이 닫혀 홈은 "시스템 추천 학습"(v0.7.1 — 실기기 의견)
@@ -120,6 +121,7 @@ test('5단계: 학습 계획 → 오늘 학습(계획량 한 묶음·틀린 문�
   await page.getByTestId('subject-study').first().click();
   await expect(page.getByTestId('progress')).toContainText('1 /');
   await page.getByRole('button', { name: '풀이 멈추고 홈으로' }).click();
+  await page.getByTestId('dialog-choice-later').click(); // ✕ → 나중에 이어서 하기(v0.8.3)
   await expect(page.getByTestId('today-resume')).toBeVisible();
 
   // 모의고사: 정답 숨김, 타이머와 제출 버튼이 따로
