@@ -81,3 +81,18 @@ export async function readStorageInfo(): Promise<StorageInfo> {
   }
   return info;
 }
+
+/**
+ * 손가락으로 확대한 화면을 원래 크기로(v0.8.1 실기기 의견): 홈을 확대한 채 학습 화면으로 가면 확대가 그대로 남고,
+ * 풀이 화면은 문제 그림 상자가 자체 확대(핀치)를 쓰느라 페이지 축소가 잘 안 돼 아래 보기·다음 단추가 화면 밖에 남았다.
+ * viewport에 잠시 maximum-scale=1을 넣으면 브라우저가 배율을 1로 되돌린다(곧바로 원래 값으로 — 이후 확대는 그대로 가능)
+ */
+export function resetPageZoom(): void {
+  const vv = window.visualViewport;
+  if (!vv || vv.scale <= 1.01) return;
+  const meta = document.querySelector('meta[name="viewport"]');
+  if (!meta) return;
+  const orig = meta.getAttribute('content') ?? 'width=device-width, initial-scale=1';
+  meta.setAttribute('content', `${orig.replace(/,\s*maximum-scale=[^,]*/g, '')}, maximum-scale=1`);
+  window.setTimeout(() => meta.setAttribute('content', orig), 500);
+}

@@ -1,8 +1,7 @@
-/** v0.8.0(ADR 014): 합격 가능성·실제 학습량 점검·필요 학습시간·추천 묶음(과목 진단·시험 직전 총정리) */
+/** v0.8.0(ADR 014): 실제 학습량 점검·필요 학습시간·추천 묶음(과목 진단·시험 직전 총정리) */
 import 'fake-indexeddb/auto';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { buildBank, replay, DEFAULT_PLAN_SETTINGS, engineForecast, engineOutlook, type EngineAttempt, type PlanSettings } from './engine';
-import { passChance, passProbability } from './engine/chance';
 import { addDays, formatDate, startOfDay } from './engine/days';
 import { examRecall, recallAt } from './engine/memory';
 import { buildDailySession, DIAG_OBS, FINAL_DAYS } from './engine/session';
@@ -36,20 +35,6 @@ function world(rounds: number, days: number, perDay: number, rate: number, setti
   const coach = { ctx, subjects: v.subjects, exam: v.exam, settings: s } as unknown as Coach;
   return { bank, mem, attempts, settings: s, ctx, coach };
 }
-
-describe('합격 가능성(passChance)', () => {
-  it('예상 오차 0이면 이항 계산과 같고, 점수가 오르면 커진다. 과락 과목이 있으면 낮다', () => {
-    const s = [62, 64, 58, 66, 61];
-    expect(passChance(s, { subjectMin: 40, avgMin: 60 }, 20, 0)).toBeCloseTo(passProbability(s), 10);
-    expect(passChance(s.map((x) => x + 5))).toBeGreaterThan(passChance(s));
-    expect(passChance([75, 75, 75, 75, 75])).toBeGreaterThan(0.95);
-    expect(passChance([70, 70, 20, 70, 70])).toBeLessThan(0.1); // 20문항 중 8개 이상을 맞혀야 하는데 실력 20%
-  });
-  it('예상 오차를 넣으면 아슬아슬한 점수의 합격 가능성이 50% 쪽으로 당겨진다(과신하지 않음)', () => {
-    const high = [72, 72, 72, 72, 72];
-    expect(passChance(high)).toBeLessThan(passProbability(high));
-  });
-});
 
 describe('최근 실제 학습량(recentPace)', () => {
   it('어제까지 최근 기록으로 하루 평균 분과 계획 대비 비율', () => {
@@ -95,7 +80,6 @@ describe('계획 비례 조정·필요 학습시간', () => {
     expect(ins.pace!.ratio).toBeLessThan(0.9);
     expect(ins.atPace).not.toBeNull();
     expect(ins.atPace!.avg).toBeLessThanOrEqual(ins.plan!.avg);
-    expect(ins.atPace!.chance).toBeLessThanOrEqual(ins.plan!.chance);
   });
 });
 

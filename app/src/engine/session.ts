@@ -202,7 +202,7 @@ function candidates(bank: Bank, mem: MemoryState, subjects: string[], now: numbe
 
 /**
  * 과목 진단(ADR 014): 첫 풀이가 DIAG_OBS건 안 된 과목이 있으면 그 과목들의 새 문항을 모자란 만큼 **번갈아** 맨 앞에.
- * 진단이 끝나야 과목별 예상 점수·합격 가능성이 나온다 — 한 과목씩 몰아 풀면 5과목 진단에 5일이 걸렸다
+ * 진단이 끝나야 과목별 예상 점수가 나온다 — 한 과목씩 몰아 풀면 5과목 진단에 5일이 걸렸다
  */
 function diagFirst(list: Cand[], subjects: string[], mem: MemoryState): Cand[] {
   const need = new Map(subjects.map((k) => [k, Math.max(0, DIAG_OBS - (mem.priorObs.get(k) ?? 0))]));

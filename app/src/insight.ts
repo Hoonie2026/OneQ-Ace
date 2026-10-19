@@ -1,7 +1,7 @@
 /**
  * 예상·경고의 신뢰(ADR 014 — v0.8.0). 홈의 "학습 점검" 카드와 예상 점수 풀이 화면이 쓴다.
  *
- * - 계획대로 하면: 시험일 예상 점수(실제 시험 기준 — coach.examViews)와 합격 가능성(passChance)
+ * - 계획대로 하면: 시험일 예상 점수(실제 시험 기준 — coach.examViews). 합격 가능성(%)은 v0.8.1에서 뺐다(사용자 결정 — 복잡함)
  * - 최근 실제 학습량 그대로면: 어제까지 최근 PACE_DAYS일의 실제 풀이 시간으로 남은 계획을 같은 비율로 줄이거나 늘려 다시 계산.
  *   계획을 세워 놓고 그만큼 못 하면 "계획대로 하면" 예상은 너무 낙관적이다 — 실제 속도를 따로 보여 준다
  * - 합격에 필요한 하루 학습시간: 남은 계획(평소 하루 시간·날짜별 시간)을 같은 비율로 키웠을 때 실제 시험 기준 예상이
@@ -10,7 +10,7 @@
  * 모두 "모형의 어림"이다 — 합격을 보장하지 않는다. 가정과 한계는 학습 원리 화면에 그대로 적는다.
  */
 import { addDays, daysBetween, formatDate, parseDate, startOfDay } from './engine/days';
-import { engineForecast, engineOutlook, passChance, studyTime, type EngineContext, type PlanSettings } from './engine';
+import { engineForecast, engineOutlook, studyTime, type EngineContext, type PlanSettings } from './engine';
 import { examViews, type Coach, type ExamStatus } from './coach';
 
 /** 실제 학습량을 재는 기간(어제까지 최근 며칠) */
@@ -40,8 +40,6 @@ export interface Pace {
 export interface Projection {
   avg: number;
   subjects: { key: string; name: string; score: number }[];
-  /** 합격 가능성(0~1) */
-  chance: number;
   fail: string[];
   status: ExamStatus;
 }
@@ -91,7 +89,7 @@ export function scaledSettings(s: PlanSettings, f: number, now: number): PlanSet
   return { ...s, dailyMinutes: s.dailyMinutes * f, dayMinutes };
 }
 
-/** 주어진 계획으로 실제 시험 기준 시험일 예상(합격 가능성 포함) */
+/** 주어진 계획으로 실제 시험 기준 시험일 예상 */
 export function projectWith(ctx: EngineContext, settings: PlanSettings, now: number): Projection | null {
   const c2 = { ...ctx, settings };
   const v = examViews(c2, engineForecast(c2), engineOutlook(c2, now), now);
@@ -104,7 +102,6 @@ function toProjection(subjects: Coach['subjects'], avg: number | null, status: E
   return {
     avg,
     subjects: list,
-    chance: passChance(list.map((s) => s.score), rule),
     fail: list.filter((s) => s.score < rule.subjectMin).map((s) => s.name),
     status,
   };
@@ -151,7 +148,7 @@ export function computeInsight(coach: Coach, now = Date.now()): Insight {
   const need = daysLeft > 0 ? { safe: requiredDaily(ctx, now, 'safe'), min: requiredDaily(ctx, now, 'min') } : { safe: null, min: null };
   let level: InsightLevel;
   const bad = (p: Projection | null) => !!p && (p.status === 'fail-subject' || p.status === 'avg-short');
-  const tight = (p: Projection | null) => !!p && (p.status === 'tight' || p.chance < 0.7);
+  const tight = (p: Projection | null) => !!p && p.status === 'tight';
   if (coach.exam.status === 'unknown') level = 'unknown';
   else if (!plan) level = 'no-plan';
   else if (bad(plan) || bad(atPace)) level = 'risk';
@@ -160,4 +157,3 @@ export function computeInsight(coach: Coach, now = Date.now()): Insight {
   return { level, plan, pace, atPace, need, dailyMinutes };
 }
 
-export const pctText = (p: number) => (p >= 0.995 ? '99% 이상' : p < 0.01 ? '1% 미만' : `${Math.round(p * 100)}%`);

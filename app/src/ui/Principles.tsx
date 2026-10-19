@@ -74,9 +74,9 @@ const CARDS: Card[] = [
   {
     icon: '⚖',
     title: '약한 과목 먼저 — 과락 막기',
-    what: '과목 하나라도 40점 미만이면 평균이 높아도 불합격입니다. 같은 시간이면 가장 낮은 과목을 올리는 것이 합격 가능성을 가장 많이 올립니다.',
-    evidence: <>합격 가능성을 과목별 점수로 계산해 보면, 과락선에 가까운 과목의 1점이 이미 안전한 과목의 1점보다 몇 배 값집니다(이 앱의 계산 — 아래 검증 참고).</>,
-    app: `새 문항을 과목마다 합격 가능성에 보태는 정도에 비례해 나눕니다 — 과락선에 가까운 과목이 가장 많이, 안전한 과목도 잊지 않을 만큼 조금씩. 처음에는 과목마다 ${DIAG_OBS}문항씩 번갈아 풀어 실력을 진단합니다(진단이 끝나야 예상 점수가 나옵니다).`,
+    what: '과목 하나라도 40점 미만이면 평균이 높아도 불합격입니다. 같은 시간이면 가장 낮은 과목을 올리는 것이 합격에 가장 크게 보탭니다.',
+    evidence: <>합격 확률을 과목별 점수로 계산해 보면, 과락선에 가까운 과목의 1점이 이미 안전한 과목의 1점보다 몇 배 값집니다(이 앱의 계산 — 아래 검증 참고).</>,
+    app: `새 문항을 과목마다 합격에 보태는 정도에 비례해 나눕니다 — 과락선에 가까운 과목이 가장 많이, 안전한 과목도 잊지 않을 만큼 조금씩. 처음에는 과목마다 ${DIAG_OBS}문항씩 번갈아 풀어 실력을 진단합니다(진단이 끝나야 예상 점수가 나옵니다).`,
   },
   {
     icon: '📚',
@@ -119,7 +119,7 @@ const REFS: { n: number; text: string; url: string }[] = [
  * 학습 원리(ADR 014 — 사용자 요청: 망각 곡선·간격 반복 등 검증된 방법을 근거와 함께 보여 줘 앱의 알고리즘을 믿고 따를 수 있게).
  * 홈 맨 아래 "학습 원리" 단추로 연다. 원리마다 ① 무엇 ② 근거(연구) ③ 앱에서는 — 그리고 이 앱을 어떻게 검증했는지와 한계
  */
-export function Principles(props: { onForecast: (() => void) | null }) {
+export function Principles() {
   const g = GATE_SUMMARY;
   return (
     <section className="stack principles" data-testid="principles">
@@ -131,7 +131,7 @@ export function Principles(props: { onForecast: (() => void) | null }) {
           <li>틀린·모른 문항은 그 자리에서 한 번 더</li>
           <li>문항마다 잊을 때쯤 복습(FSRS) — 하루 분량의 최대 {pct(REVIEW_SHARE)}</li>
           <li>나머지는 새 문항 — 과락 위험이 큰 과목에 많이</li>
-          <li>매일 기록으로 시험일 점수와 합격 가능성을 다시 계산</li>
+          <li>매일 기록으로 시험일 예상 점수를 다시 계산</li>
         </ol>
       </div>
 
@@ -152,21 +152,16 @@ export function Principles(props: { onForecast: (() => void) | null }) {
 
       <article className="card principle" data-testid="principle-forecast">
         <h3>
-          <span aria-hidden="true">🎯</span> 시험일 예상 점수와 합격 가능성
+          <span aria-hidden="true">🎯</span> 시험일 예상 점수
         </h3>
         <p>
           ① 실제 시험 문항을 "보유 기출과 같은 문항 / 변형 / 처음 보는 문항"으로 나누고 ② 문항마다 시험일 아침의 기억률(FSRS)로 맞힐 확률을 계산한 뒤 ③ 남은 학습시간으로 더 익힐
-          문항을 더하고 ④ 과목당 20문항 시험의 운과 예상 오차를 넣어 "모든 과목 40점 이상 + 평균 60점 이상"일 확률을 냅니다.
+          문항을 더해 과목별 점수를 내고, 그 평균을 홈에 보여 줍니다. 홈의 "계산 보기"에서 내 숫자로 확인할 수 있습니다.
         </p>
         <p className="ev">
           <span className="tag">경고</span> 계획대로 해도, 또는 최근 실제 학습량 그대로면 합격이 어렵거나 아슬아슬할 때 홈에 "학습 점검" 카드가 뜨고, 합격에 필요한 하루 학습시간을 알려
           줍니다.
         </p>
-        {props.onForecast && (
-          <button className="link-btn" onClick={props.onForecast}>
-            내 숫자로 계산 과정 보기 ›
-          </button>
-        )}
       </article>
 
       <article className="card principle" data-testid="principle-gate">
@@ -179,13 +174,13 @@ export function Principles(props: { onForecast: (() => void) | null }) {
         </p>
         <ul className="plain">
           <li>
-            합격 가능성(시나리오 평균): 앱 추천 <b>{pct(g.appPass)}</b> · 회차 순서대로 {pct(g.sequentialPass)} · 주간 계획 엔진(4단계 방식) {pct(g.enginePass)}
+            가상 시험 합격률(시나리오 평균): 앱 추천 <b>{pct(g.appPass)}</b> · 회차 순서대로 {pct(g.sequentialPass)} · 주간 계획 엔진(4단계 방식) {pct(g.enginePass)}
           </li>
           <li>
             시험 전날 예상 평균과 실제 점수 차이: 27번 중 24번이 ±{g.typicalError}점 안. 빨리 잊는 학습자가 60일 공부한 경우만 약 {g.worstError}점 높게 예상했습니다(모형보다
             훨씬 빨리 잊는 사람은 예상보다 낮게 나올 수 있다는 뜻 — 복습 문제를 자주 틀린다면 학습시간을 넉넉히 잡으세요)
           </li>
-          <li>복습 비중 40%·60%·80%를 비교해 합격 가능성이 가장 높았던 60%를 씁니다.</li>
+          <li>복습 비중 40%·60%·80%를 비교해 합격률이 가장 높았던 60%를 씁니다.</li>
           <li>새 문항을 한 과목에 몰아주는 것보다 과목별 비중대로 나눌 때 빨리 잊는 학습자의 과락(37점)이 사라졌습니다.</li>
         </ul>
       </article>

@@ -1,5 +1,5 @@
 /**
- * 5단계 흐름 시뮬레이션(모바일 에뮬레이션, ADR 008 개편 후): 학습 계획 → 홈(현재 → 시험일 예상, 합격 가능성)
+ * 5단계 흐름 시뮬레이션(모바일 에뮬레이션, ADR 008 개편 후): 학습 계획 → 홈(현재 → 시험일 예상)
  * → 과목별 학습 15문항(오늘 추천 과목) → 틀린 문항 다시·이 과목 계속 → 모의고사(정답 숨김·타이머와 제출 분리) → 성적 이력.
  * 화면 사진은 test-results/stage5-*.png
  */
@@ -31,7 +31,7 @@ test('5단계: 학습 계획 → 오늘 학습(계획량 한 묶음·틀린 문�
   // 홈(ADR 010): 시험일 | D-day / 현재 점수 | 시험일 예상 점수 / 오늘 학습 / 다른 방법(과목 골라서·모의고사)
   await expect(page.getByTestId('pack-solve')).toHaveCount(0);
   await expect(page.getByTestId('current-avg')).toHaveText('0'); // 안 푼 문항 0점
-  await expect(page.getByTestId('plan-open')).toContainText('학습계획 설정 및 재설정');
+  await expect(page.getByTestId('plan-open')).toContainText('학습계획 설정(재설정)');
   await expect(page.getByTestId('subject-list')).toHaveCount(0); // 과목 목록은 "과목별 학습"에서
 
   // 학습 계획: 시험일 14일 뒤, 하루 30분(= 20문항)
@@ -43,7 +43,8 @@ test('5단계: 학습 계획 → 오늘 학습(계획량 한 묶음·틀린 문�
   await page.getByTestId('plan-save').click();
   await expect(page.getByTestId('dday')).toHaveText('D-14');
   await expect(page.getByTestId('projected-avg')).not.toHaveText('—');
-  await expect(page.getByTestId('plan-warn')).toBeVisible(); // 시험일 예상 70점 미만 → 계획 수정 필요
+  await expect(page.getByTestId('plan-warn')).toHaveCount(0); // v0.8.1: 배지 없음, 점수 색만(60 미만 빨강)
+  await expect(page.locator('.score-box.bad')).toBeVisible();
   await expect(page.getByTestId('today-plan')).toHaveText('30분 · 20문항');
   await expect(page.getByTestId('plan-open')).toBeVisible();
   await page.screenshot({ path: `test-results/stage5-home0-${info.project.name}.png`, fullPage: true });
@@ -52,6 +53,9 @@ test('5단계: 학습 계획 → 오늘 학습(계획량 한 묶음·틀린 문�
   await page.getByTestId('forecast-open').click();
   await expect(page.getByTestId('forecast-view')).toBeVisible();
   await expect(page.getByTestId('forecast-table')).toContainText('과목');
+  await expect(page.getByTestId('forecast-avg')).toContainText('평균(홈 점수)');
+  await expect(page.getByTestId('forecast-view')).not.toContainText('계획과 실제 학습량');
+  await expect(page.getByTestId('forecast-view')).not.toContainText('합격 가능성');
   await page.screenshot({ path: `test-results/stage5-forecast-${info.project.name}.png`, fullPage: true });
   await page.getByTestId('back-home').click();
   await page.getByTestId('principles-open').click();
@@ -92,12 +96,12 @@ test('5단계: 학습 계획 → 오늘 학습(계획량 한 묶음·틀린 문�
   await page.getByRole('button', { name: '풀이 멈추고 홈으로' }).click();
   await expect(page.getByTestId('today-resume')).toBeVisible();
 
-  // 오늘 학습 마치기 → 그대로 두고 마치기: 열린 묶음이 닫혀 홈은 "시스템 추천 학습"(v0.7.1 — 실기기 의견)
+  // 오늘 학습 마치기 → 홈으로(v0.8.1 — 학습계획 단추는 홈에만): 열린 묶음이 닫혀 홈은 "시스템 추천 학습"(v0.7.1 — 실기기 의견)
   await page.getByTestId('finish-day').click();
   await expect(page.getByTestId('day-summary')).toBeVisible();
   await expect(page.getByTestId('summary-verdict')).toBeVisible();
   await page.screenshot({ path: `test-results/stage5-summary-${info.project.name}.png`, fullPage: true });
-  await page.getByRole('button', { name: '그대로 두고 마치기' }).click();
+  await page.getByTestId('summary-home').click();
   await expect(page.getByTestId('go-recommend')).toBeVisible();
   await expect(page.getByTestId('today-resume')).toHaveCount(0);
   await expect(page.getByTestId('week-goal')).toContainText('완료');

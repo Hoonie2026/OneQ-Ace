@@ -2,10 +2,10 @@ import { useEffect, useState } from 'react';
 import { daySummary, finishToday, type DaySummary as S } from '../coach';
 
 /**
- * 오늘 학습 마치기(ADR 009 — 실기기 v0.3.0 Q5): 오늘 푼 것, 현재 점수 ☞ 계획 이행 시 예상 점수, 학습 계획을 고칠지 묻는다.
- * 합격 가능성 카드 대신 이 한 화면에서 간단히 알린다.
+ * 오늘 학습 마치기(ADR 009 — 실기기 v0.3.0 Q5): 오늘 푼 것, 현재 점수 ☞ 계획 이행 시 예상 점수.
+ * 학습 계획 바꾸기는 홈의 "학습계획 설정(재설정)" 한 곳에서(v0.8.1 — 접근 경로 일원화).
  */
-export function DaySummary(props: { certCode: string; onHome: () => void; onPlan: () => void }) {
+export function DaySummary(props: { certCode: string; onHome: () => void }) {
   const [s, setS] = useState<S | null>(null);
   useEffect(() => {
     // 오늘 학습 마치기 = 열린 오늘 학습 묶음을 닫는다(기록은 그대로) → 홈은 "시스템 추천 학습"(v0.7.1)
@@ -62,17 +62,14 @@ export function DaySummary(props: { certCode: string; onHome: () => void; onPlan
             : s.short == null
               ? '과목마다 10문항 이상 풀면 시험일 예상이 정확해집니다.'
               : s.short
-                ? `지금 계획대로면 합격선(과목 ${s.passRule.subjectMin}점·평균 ${s.passRule.avgMin}점)에 못 미칩니다${s.lowSubjects.length ? ` — ${s.lowSubjects.join(', ')}` : ''}. 학습 계획을 고칠까요?`
-                : '지금 계획대로면 합격선을 넘습니다. 계획을 고칠까요?'}
+                ? `지금 계획대로면 합격선(과목 ${s.passRule.subjectMin}점·평균 ${s.passRule.avgMin}점)에 못 미칩니다${s.lowSubjects.length ? ` — ${s.lowSubjects.join(', ')}` : ''}. 홈의 "학습계획 설정(재설정)"에서 학습시간을 늘려 보세요.`
+                : '지금 계획대로면 합격선을 넘습니다.'}
         </p>
       </section>
 
       <section className="actions">
-        <button className={`btn btn-block${s.short ? ' btn-primary' : ''}`} onClick={props.onPlan} data-testid="summary-plan">
-          학습 계획 고치기
-        </button>
-        <button className={`btn btn-block${s.short ? '' : ' btn-primary'}`} onClick={props.onHome}>
-          그대로 두고 마치기
+        <button className="btn btn-block btn-primary" onClick={props.onHome} data-testid="summary-home">
+          홈으로
         </button>
       </section>
     </div>

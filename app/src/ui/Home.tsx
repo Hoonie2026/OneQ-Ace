@@ -10,6 +10,7 @@ import { SubjectList } from './SubjectList';
 import { ForecastView } from './ForecastView';
 import { Principles } from './Principles';
 import { computeInsight, type Insight } from '../insight';
+import { resetPageZoom } from '../util';
 
 /** 홈 안의 보기: 홈 / 과목 골라서 / 모의고사(ADR 010 — 홈에는 오늘 학습만, 나머지는 한 번 더 들어가서) */
 type View = 'home' | 'recommend' | 'subjects' | 'mock' | 'forecast' | 'principles';
@@ -55,10 +56,11 @@ export function Home(props: {
 
   // 보기를 바꾸면 맨 위부터(학습 원리 단추는 홈 맨 아래에 있다)
   useEffect(() => {
+    resetPageZoom();
     window.scrollTo?.(0, 0);
   }, [view]);
 
-  // 합격 가능성·실제 학습량 점검은 계산이 무거워(이분 탐색) 홈을 먼저 그린 뒤 채운다
+  // 학습 점검(실제 학습량·필요 시간)은 계산이 무거워(이분 탐색) 홈을 먼저 그린 뒤 채운다
   useEffect(() => {
     setInsight(null);
     if (!coach) return;
@@ -197,9 +199,9 @@ export function Home(props: {
               <h1>{TITLES[view]}</h1>
             </header>
           )}
-          {view === 'recommend' && <RecommendView coach={coach} busy={starting} onStart={() => start('today')} onPrinciples={() => setView('principles')} />}
-          {view === 'forecast' && <ForecastView coach={coach} insight={insight} onPlan={() => props.onPlan(cert, certName ?? cert)} onPrinciples={() => setView('principles')} />}
-          {view === 'principles' && <Principles onForecast={coach.exam.projectedAvg != null ? () => setView('forecast') : null} />}
+          {view === 'recommend' && <RecommendView coach={coach} busy={starting} onStart={() => start('today')} />}
+          {view === 'forecast' && <ForecastView coach={coach} />}
+          {view === 'principles' && <Principles />}
           {view === 'subjects' && <SubjectList coach={coach} busy={starting} onStudy={(k) => start('subject', k)} />}
           {view === 'mock' && (
             <MockPanel

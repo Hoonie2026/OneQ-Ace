@@ -2092,3 +2092,36 @@ ul.plain {
   color: var(--primary);
   word-break: break-word;
 }
+
+/* v0.8.1 — 학습계획 단추 크게, 예상 점수 3색(60 미만 빨강 · 75 미만 주황 · 75 이상 초록) */
+.exam-date .plan-link {
+  margin-top: 4px;
+  font-size: 16px;
+  font-weight: 800;
+  color: var(--primary);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.score-box.warn b {
+  color: var(--check);
+}
+.plan-preview.warn b {
+  color: var(--check);
+}
+.calc-example {
+  margin: 8px 0;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: var(--bg);
+  font-size: 14px;
+  line-height: 1.6;
+}
+.mini-table tr.avg-row td {
+  border-top: 2px solid var(--ink);
+  font-weight: 800;
+}
+.mini-table td small {
+  display: block;
+  color: var(--muted);
+  font-size: 11px;
+}

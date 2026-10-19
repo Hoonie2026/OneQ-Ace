@@ -4,7 +4,7 @@ import { backupDue } from './backup';
 import { describeError, STORAGE_ERROR_EVENT } from './db';
 import { describeIssues, importPackFile } from './pack/import';
 import { examLabel, type Target } from './study';
-import { formatBytes } from './util';
+import { formatBytes, resetPageZoom } from './util';
 import { ErrorBoundary } from './ui/ErrorBoundary';
 import { Home } from './ui/Home';
 import { PackDetail } from './ui/PackDetail';
@@ -59,6 +59,7 @@ export default function App() {
   // 화면 전환 시 맨 위로. 중괄호 필수: Chrome 150대부터 scrollTo()가 Promise를 돌려주는데,
   // 화살표 함수가 그것을 반환하면 React가 정리 함수로 호출해 앱 전체가 멈춘다(2026-10-15 실기기 검은 화면)
   useEffect(() => {
+    resetPageZoom(); // 확대한 채로 다음 화면에 가지 않게(v0.8.1)
     window.scrollTo(0, 0);
   }, [screen]);
 
@@ -165,7 +166,7 @@ export default function App() {
         />
       )}
       {screen.name === 'summary' && (
-        <DaySummary certCode={screen.certCode} onHome={home} onPlan={() => go({ name: 'plan', certCode: screen.certCode, certName: '' })} />
+        <DaySummary certCode={screen.certCode} onHome={home} />
       )}
       {screen.name === 'plan' && <PlanSetup certCode={screen.certCode} certName={screen.certName} onBack={home} onSaved={flash} />}
       {screen.name === 'solve' && (

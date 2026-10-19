@@ -1,32 +1,35 @@
-import { fmtMinutes, type Coach } from '../coach';
-import { MODEL_SD } from '../engine/chance';
-import { TRANSFER } from '../engine/exam';
+import type { Coach } from '../coach';
+import { examScoreMix, TRANSFER } from '../engine/exam';
 import { MIN_CALIBRATION_OBS } from '../engine/memory';
 import { LATE_DAYS } from '../engine/outlook';
 import { VARIANT_TRANSFER } from '../engine/similar';
-import { pctText, PACE_DAYS, type Insight } from '../insight';
 
 const pct = (x: number) => `${Math.round(x * 100)}%`;
 const r1 = (x: number) => Math.round(x * 10) / 10;
+const mean = (xs: number[]) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : 0);
 
 /**
- * 시험일 예상 점수 계산 보기(ADR 014 — 사용자 요청: 예상 점수가 어떻게 나왔는지 내 숫자로).
- * 홈의 "계산 보기"로 연다. 계산 순서대로 ① 시험 문항 구성 ② 과목별 ③ 기출 점수의 시험일 값 ④ 합격 가능성 ⑤ 실제 학습량, 그리고 가정·한계
+ * 시험일 예상 점수 계산 보기(ADR 014, v0.8.1 실기기 의견 W1·W4 반영).
+ * ① 시험 문항 구성 ② 예상점수 산정근거(두 숫자 ⓐ·ⓑ의 뜻 → 과목별 표 + 평균 줄(= 홈 점수) → 계산 예) ③ "지금 → 시험일" 계산 방법 · 가정과 한계.
+ * 학습계획 바꾸기·학습 원리는 홈에서만(접근 경로 일원화) — 여기에는 단추를 두지 않는다
  */
-export function ForecastView(props: { coach: Coach; insight: Insight | null; onPlan: () => void; onPrinciples: () => void }) {
-  const { coach, insight } = props;
+export function ForecastView(props: { coach: Coach }) {
+  const { coach } = props;
   const { exam, subjects, outlook, ctx } = coach;
   const sh = exam.shares;
   const rule = coach.settings?.passRule ?? { subjectMin: 40, avgMin: 60 };
   const curveObs = ctx.mem.curve.obs;
-  const plan = insight?.plan ?? null;
+  const rows = subjects.filter((s) => s.examProjected != null && s.bankProjected != null && s.rateProjected != null);
+  const ex = [...rows].sort((a, b) => a.examProjected! - b.examProjected!)[0];
+  const questions = subjects.reduce((t, s) => t + s.questions, 0);
+
   return (
     <section className="stack forecast" data-testid="forecast-view">
       <div className="card">
-        <h2>
-          시험일 예상 {exam.projectedAvg ?? '—'}점{plan && exam.status !== 'unknown' ? ` · 합격 가능성 ${pctText(plan.chance)}` : ''}
-        </h2>
-        <p className="hint">지금까지의 풀이 기록으로, 학습계획대로 공부한다고 볼 때 실제 시험(과목당 20문항)에서 받을 점수의 어림입니다.</p>
+        <h2>시험일 예상 {exam.projectedAvg ?? '—'}점</h2>
+        <p className="hint">
+          지금까지의 풀이 기록으로, 학습계획대로 공부한다고 볼 때 실제 시험에서 받을 점수의 어림입니다. 과목별 예상 점수의 <b>평균</b>이 홈에 보이는 점수입니다(② 표 맨 아래 줄).
+        </p>
         {exam.status === 'unknown' && <p className="hint">아직 과목마다 처음 푼 문항이 10개가 안 돼 실력 진단 중입니다 — 숫자가 크게 바뀔 수 있습니다.</p>}
       </div>
 
@@ -55,14 +58,42 @@ export function ForecastView(props: { coach: Coach; insight: Insight | null; onP
       </div>
 
       <div className="card">
-        <h3>② 과목별 계산</h3>
+        <h3>② 예상점수 산정근거</h3>
+        <p>과목마다 두 숫자로 계산합니다.</p>
+        <ul className="plain">
+          <li>
+            <b>ⓐ 기출 점수</b> — 가지고 있는 기출 {questions ? `${questions.toLocaleString()}문항` : ''}을 그날 모두 다시 푼다면 맞힐 비율(100점 만점).
+            <br />
+            <small className="muted">
+              왼쪽 = 오늘까지 공부한 것만으로 시험을 본다면(더 공부하지 않고, 안 푼 문항은 ⓑ만큼) → 오른쪽 = 학습계획대로 남은 기간 공부하고, 그사이 잊는 것까지 계산한 시험일 값
+            </small>
+          </li>
+          <li>
+            <b>ⓑ 처음 보는 문항 정답률</b> — 한 번도 안 본 문항을 맞히는 비율.
+            <br />
+            <small className="muted">왼쪽 = 최근 처음 푼 문항의 정답률(모름은 찍어서 25%) → 오른쪽 = 계획대로 기출을 익히면서 실력이 붙어 조금 오른 값</small>
+          </li>
+          <li>
+            <b>시험 예상</b> = 같은 문항({pct(sh.same)})은 ⓐ만큼, 처음 보는 문항({pct(sh.fresh)})은 ⓑ만큼, 변형({pct(sh.variant)})은 ⓑ와 ⓐ 사이(ⓐ 쪽으로{' '}
+            {Math.round(VARIANT_TRANSFER * 100)}%)만큼 맞힌다고 보고 더한 값
+          </li>
+        </ul>
         <table className="mini-table calc-table" data-testid="forecast-table">
           <thead>
             <tr>
               <th>과목</th>
-              <th>기출 점수</th>
-              <th>처음 보는 문항 정답률</th>
-              <th>시험 예상</th>
+              <th>
+                ⓐ 기출 점수
+                <small>지금 멈추면 → 계획대로</small>
+              </th>
+              <th>
+                ⓑ 처음 보는 문항
+                <small>지금 멈추면 → 계획대로</small>
+              </th>
+              <th>
+                시험 예상
+                <small>계획대로</small>
+              </th>
             </tr>
           </thead>
           <tbody>
@@ -80,88 +111,50 @@ export function ForecastView(props: { coach: Coach; insight: Insight | null; onP
                 </td>
               </tr>
             ))}
+            {rows.length === subjects.length && rows.length > 0 && (
+              <tr className="avg-row" data-testid="forecast-avg">
+                <td>평균(홈 점수)</td>
+                <td>
+                  {r1(mean(rows.map((s) => s.bankNow)))} → {r1(mean(rows.map((s) => s.bankProjected!)))}
+                </td>
+                <td>
+                  {pct(mean(rows.map((s) => s.newRate.exam)))} → {pct(mean(rows.map((s) => s.rateProjected!)))}
+                </td>
+                <td>{exam.projectedAvg}</td>
+              </tr>
+            )}
           </tbody>
         </table>
-        <p className="formula">
-          시험 예상 = 같은 문항 {pct(sh.same)} × 기출 점수 + 변형 {pct(sh.variant)} × (정답률 + {VARIANT_TRANSFER} × (기출 점수 − 정답률)) + 처음 보는 문항 {pct(sh.fresh)} × 정답률
-        </p>
-        <p className="hint">
-          "지금 → 시험일". 기출 점수는 보유 기출 전체를 시험일에 다시 풀면 맞힐 비율, 처음 보는 문항 정답률은 최근 처음 푼 문항의 정답률(모름은 찍어서 25%로)입니다.
-        </p>
+        {ex && (
+          <p className="calc-example" data-testid="forecast-example">
+            계산 예 — {ex.name}: ⓐ {r1(ex.bankProjected!)}점, ⓑ {pct(ex.rateProjected!)}
+            <br />
+            {pct(sh.same)} × {r1(ex.bankProjected!)} + {pct(sh.variant)} × ({r1(100 * ex.rateProjected!)} + {VARIANT_TRANSFER} × ({r1(ex.bankProjected!)} − {r1(100 * ex.rateProjected!)})) +{' '}
+            {pct(sh.fresh)} × {r1(100 * ex.rateProjected!)} ≈ <b>{examScoreMix(ex.bankProjected!, { ...ex.newRate, exam: ex.rateProjected! }, sh)}점</b>
+          </p>
+        )}
+        <p className="hint">과목 점수가 {rule.subjectMin}점 미만이면 빨간색(과락 위험)입니다.</p>
       </div>
 
       <div className="card">
-        <h3>③ 기출 점수의 시험일 값</h3>
+        <h3>③ "계획대로" 값은 어떻게 계산하나</h3>
         <ul className="plain">
           <li>
-            푼 문항: 문항마다 FSRS로 <b>시험일 아침의 기억률</b>을 계산하고, 맞힐 확률 = 기억률 + (1 − 기억률) × 처음 보는 문항 정답률(잊어도 찍거나 추론해 맞힐 수 있음).
+            <b>ⓐ 기출 점수</b>: 푼 문항마다 FSRS(간격 반복 알고리즘)로 시험일 아침의 기억률을 계산합니다. 맞힐 확률 = 기억률 + (1 − 기억률) × ⓑ(잊어도 찍거나 추론해 맞힐 수
+            있음). 안 푼 문항은 ⓑ만큼.
           </li>
           <li>
-            남은 학습시간{outlook ? `(${Math.round(outlook.plannedMinutes / 6) / 10}시간)` : ''}: 시험일 예상이 가장 낮은 과목부터 익힐 문항을 채워 넣고, 시험 직전 {LATE_DAYS}일은
-            총정리 복습에 쓴다고 봅니다.
+            남은 학습시간{outlook ? `(학습계획 기준 약 ${Math.round(outlook.plannedMinutes / 60)}시간)` : ''}으로 더 익힐 문항을 예상이 가장 낮은 과목부터 채워 넣고, 시험 직전{' '}
+            {LATE_DAYS}일은 이미 익힌 문항의 총정리 복습에 쓴다고 봅니다.
           </li>
           <li>
-            처음 보는 문항 정답률도 기출을 많이 익힐수록 오른다고 봅니다(전이 — 남은 여지의 최대 {pct(TRANSFER)}).
+            <b>ⓑ 처음 보는 문항 정답률</b>: 기출을 새로 익히는 만큼 남은 여지(100% − 지금 정답률)의 최대 {pct(TRANSFER)}가 오른다고 봅니다(학습의 전이).
           </li>
           <li>
             내 망각 속도: {curveObs >= MIN_CALIBRATION_OBS ? `복습 풀이 ${curveObs}건으로 보정한 개인 망각 곡선` : `복습 풀이가 ${MIN_CALIBRATION_OBS}건 쌓일 때까지는 평균적인 학습자 곡선(지금 ${curveObs}건)`}.
-            오래 안 본 문항은 두 망각 모형(멱함수·지수) 사이로 보수적으로 잡습니다.
+            오래 안 본 문항은 보수적으로(더 잊는 쪽으로) 잡습니다.
           </li>
         </ul>
-      </div>
-
-      <div className="card">
-        <h3>④ 합격 가능성</h3>
-        <p>
-          과목마다 20문항을 푸는 실제 시험에서 <b>모든 과목 {rule.subjectMin}점 이상 + 평균 {rule.avgMin}점 이상</b>일 확률입니다.
-        </p>
-        <ul className="plain">
-          <li>시험 운: 실력이 같아도 20문항 시험의 과목 점수는 ±11점쯤 흔들립니다(이항분포로 정확히 계산).</li>
-          <li>예상의 오차: 예상 점수 자체도 ±{MODEL_SD}점(표준편차)쯤 틀릴 수 있다고 보고 함께 넣었습니다(가상 학습자 시험의 예상 오차).</li>
-        </ul>
-        {plan && exam.status !== 'unknown' && (
-          <table className="mini-table" data-testid="forecast-chance">
-            <tbody>
-              <tr>
-                <td>계획대로 하면</td>
-                <td>
-                  {plan.avg}점 · <b>{pctText(plan.chance)}</b>
-                </td>
-              </tr>
-              {insight?.atPace && (
-                <tr>
-                  <td>최근 학습량 그대로면</td>
-                  <td>
-                    {insight.atPace.avg}점 · <b>{pctText(insight.atPace.chance)}</b>
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        )}
-      </div>
-
-      <div className="card">
-        <h3>⑤ 계획과 실제 학습량</h3>
-        {insight?.pace ? (
-          <p>
-            최근 {insight.pace.days}일(어제까지, 최대 {PACE_DAYS}일) 실제 풀이 시간은 하루 평균 <b>{fmtMinutes(insight.pace.minutesPerDay)}</b>, 같은 기간 계획은{' '}
-            {fmtMinutes(insight.pace.plannedPerDay)}입니다({Math.round(insight.pace.ratio * 100)}%). 쉬는 날도 포함한 평균이고, 문항당 최대 5분까지만 셉니다(모의고사 시간 제외).
-            {insight.atPace ? ' 실제가 계획보다 적어, 남은 기간도 같은 비율로 공부한다고 보고 따로 계산했습니다(④).' : ' 계획대로 진행 중입니다.'}
-          </p>
-        ) : (
-          <p className="hint">기록이 3일 이상 쌓이면 실제 학습량(하루 평균 풀이 시간)과 계획을 비교해 보여 줍니다.</p>
-        )}
-        {insight && (insight.need.safe != null || insight.need.min != null) && (
-          <p data-testid="forecast-need">
-            여유 있게 합격(과목 {rule.subjectMin + (coach.settings?.safetyMargin ?? 10) / 2}점·평균 {rule.avgMin + (coach.settings?.safetyMargin ?? 10) / 2}점 이상 예상)하려면 평소 하루{' '}
-            <b>{insight.need.safe != null ? fmtMinutes(insight.need.safe) : '8시간 넘게'}</b>
-            {insight.need.min != null && <>, 합격선에 딱 닿으려면 하루 {fmtMinutes(insight.need.min)}</>}. 날짜별로 정한 날도 같은 비율로 늘려 계산합니다.
-          </p>
-        )}
-        <button className="btn btn-block" onClick={props.onPlan}>
-          학습계획 설정 및 재설정 ›
-        </button>
       </div>
 
       <div className="card">
@@ -171,12 +164,9 @@ export function ForecastView(props: { coach: Coach; insight: Insight | null; onP
           <li>
             변형 문항 효과({VARIANT_TRANSFER})·전이({pct(TRANSFER)})는 연구와 측정에 기댄 <b>가정값</b>입니다. 쓰면서 쌓이는 내 기록으로 계속 다시 계산됩니다.
           </li>
-          <li>앞으로의 시험 출제 방식이 지금까지의 기출과 다르면 예상이 빗나갈 수 있습니다.</li>
-          <li>모의고사 성적은 실제 시험과 같은 방식의 점검용이라 예상 점수 계산에는 넣지 않습니다.</li>
+          <li>가상 학습자 시험에서 예상과 실제의 차이는 대개 ±4점 안이었고, 아주 빨리 잊는 학습자는 약 8점 높게 예상됐습니다.</li>
+          <li>앞으로의 시험 출제 방식이 지금까지의 기출과 다르면 예상이 빗나갈 수 있습니다. 모의고사 성적은 예상 점수 계산에 넣지 않습니다.</li>
         </ul>
-        <button className="link-btn" onClick={props.onPrinciples}>
-          학습 원리와 근거 자세히 ›
-        </button>
       </div>
     </section>
   );

@@ -14,7 +14,7 @@ export function fmtSec(sec: number): string {
  * v0.8.0(사용자 요청): 문항 수가 어떻게 정해졌는지, 복습·새 문항이 왜 그만큼인지, 어떤 원리인지를 화면에서 바로 확인
  * (자세한 설명은 접어 두어 화면이 복잡해지지 않게)
  */
-export function RecommendView(props: { coach: Coach; busy: boolean; onStart: () => void; onPrinciples: () => void }) {
+export function RecommendView(props: { coach: Coach; busy: boolean; onStart: () => void }) {
   const { today } = props.coach;
   const timed = today.timingObs >= MIN_TIMING_OBS;
   const rows: { label: string; n: number; hint: string; tag: string }[] = [
@@ -99,13 +99,13 @@ export function RecommendView(props: { coach: Coach; busy: boolean; onStart: () 
           <ul>
             <li>
               <b>복습은 최대 {Math.round(REVIEW_SHARE * 100)}%</b> — 틀린 문항이 쌓여도 새 문항을 계속 풀게 합니다. 복습할 문항이 적으면 그만큼 새 문항이 늘어납니다(매일 달라짐).
-              가상 학습자 시험에서 40%·80%보다 60%일 때 합격 가능성이 가장 높았습니다.
+              가상 학습자 시험에서 40%·80%보다 60%일 때 합격률이 가장 높았습니다.
             </li>
             <li>
               <b>복습 날짜</b>는 문항마다 FSRS(간격 반복 알고리즘)가 "기억률이 90% 아래로 떨어질 날"로 계산합니다. 틀린 문항은 곧, 맞힌 문항은 점점 길게.
             </li>
             <li>
-              <b>새 문항</b>은 과목마다 "합격 가능성에 보태는 정도"에 비례해 나눕니다 — 과락선에 가까운 과목이 가장 많이, 이미 안전한 과목은 조금. 한 과목에 하루 분량을
+              <b>새 문항</b>은 과목마다 "합격에 보태는 정도"에 비례해 나눕니다 — 과락선에 가까운 과목이 가장 많이, 이미 안전한 과목은 조금. 한 과목에 하루 분량을
               다 주면 다른 과목을 잊어 무너졌습니다(가상 학습자 시험). 처음에는 모든 과목을 {DIAG_OBS}문항씩 번갈아 풀어 실력을 진단합니다. 같은 과목 안에서는 여러 회차에 나온 문항
               → 최근 회차 순입니다.
             </li>
@@ -117,9 +117,6 @@ export function RecommendView(props: { coach: Coach; busy: boolean; onStart: () 
               <b>다 풀면</b> 이 묶음에서 틀리거나 모른 문항만 그 자리에서 한 번 더 풉니다(정답 확인 뒤 바로 다시 — 오답 교정).
             </li>
           </ul>
-          <button className="link-btn" onClick={props.onPrinciples} data-testid="rec-principles">
-            학습 원리와 근거 자세히 ›
-          </button>
         </details>
 
         <button className="btn btn-primary btn-block btn-big" disabled={props.busy || today.size === 0} onClick={props.onStart} data-testid="today-start">

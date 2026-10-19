@@ -1,8 +1,16 @@
 import { fmtMinutes, type Coach } from '../coach';
-import { pctText, type Insight } from '../insight';
+import type { Insight } from '../insight';
 
-/** 시험일 예상 점수가 이보다 낮으면 "계획 수정 필요" 배지(사용자 결정 — ADR 010) */
-export const PLAN_WARN_SCORE = 70;
+/**
+ * 시험일 예상 점수 색(v0.8.1 — 사용자 결정, "계획 수정 필요" 배지 대신): 60점 미만 빨강 · 75점 미만 주황 · 75점 이상 초록.
+ * 학습 계획 미리보기도 같은 색을 쓴다
+ */
+export const SCORE_RED = 60;
+export const SCORE_GREEN = 75;
+export function scoreTone(score: number | null): '' | 'bad' | 'warn' | 'ok' {
+  if (score == null) return '';
+  return score < SCORE_RED ? 'bad' : score < SCORE_GREEN ? 'warn' : 'ok';
+}
 
 /**
  * 홈(ADR 011 — 실기기 v0.5.0 의견):
@@ -11,7 +19,7 @@ export const PLAN_WARN_SCORE = 70;
  */
 export function CoachCard(props: {
   coach: Coach;
-  /** 합격 가능성·실제 학습량 점검(ADR 014). 계산이 무거워 홈을 먼저 그린 뒤 채운다 */
+  /** 학습 점검(실제 학습량 — ADR 014). 계산이 무거워 홈을 먼저 그린 뒤 채운다 */
   insight: Insight | null;
   onForecast: () => void;
   onPrinciples: () => void;
@@ -26,11 +34,9 @@ export function CoachCard(props: {
 }) {
   const { coach } = props;
   const { exam, settings, plan, today } = coach;
-  const rule = settings?.passRule ?? { subjectMin: 40, avgMin: 60 };
   const examDay = settings ? new Date(settings.examDate + 'T00:00').toLocaleDateString('ko-KR', { month: 'long', day: 'numeric', weekday: 'short' }) : null;
   const proj = exam.projectedAvg;
-  const projCls = proj == null || exam.status === 'unknown' ? '' : proj < rule.avgMin || exam.status === 'fail-subject' ? 'bad' : 'ok';
-  const warn = proj != null && proj < PLAN_WARN_SCORE;
+  const projCls = scoreTone(proj);
   const open = coach.openToday && coach.openToday.left > 0 ? coach.openToday : null;
   const pct = today.target ? Math.min(100, (coach.doneToday / today.target) * 100) : 0;
 
@@ -40,7 +46,7 @@ export function CoachCard(props: {
         <button className="exam-date" onClick={props.onPlan} data-testid="plan-open">
           <small>시험일{settings ? ` · ${settings.examDate.slice(0, 4)}년` : ''}</small>
           <b>{examDay ?? '아직 정하지 않음'}</b>
-          <small className="link">학습계획 설정 및 재설정 ›</small>
+          <span className="plan-link">학습계획 설정(재설정) ›</span>
         </button>
         <div className="exam-dday">
           <small>오늘 기준</small>
@@ -61,30 +67,17 @@ export function CoachCard(props: {
             <b data-testid="projected-avg">{proj ?? '—'}</b>
             {proj != null ? '점' : ''}
           </p>
-          {props.insight?.plan && exam.status !== 'unknown' && (
-            <small className="chance" data-testid="pass-chance">
-              합격 가능성 {pctText(props.insight.plan.chance)}
-            </small>
-          )}
-          {proj != null && (
+          {proj != null ? (
             <button className="link-btn small" onClick={props.onForecast} data-testid="forecast-open">
               계산 보기 ›
             </button>
-          )}
-          {warn && (
-            <button className="warn-badge" onClick={props.onPlan} data-testid="plan-warn">
-              계획 수정 필요({PLAN_WARN_SCORE}점 이상) ›
-            </button>
-          )}
-          {proj == null && (
-            <button className="link-btn small" onClick={props.onPlan}>
-              시험일을 정하면 표시 ›
-            </button>
+          ) : (
+            <small className="muted">시험일을 정하면 표시</small>
           )}
         </div>
       </section>
 
-      {props.insight && <InsightCard insight={props.insight} onPlan={props.onPlan} onForecast={props.onForecast} />}
+      {props.insight && <InsightCard insight={props.insight} />}
 
       <section className="card today-card" data-testid="today-card">
         <div className="today-head">
@@ -143,9 +136,10 @@ export function CoachCard(props: {
 
 /**
  * 학습 점검 카드(ADR 014 — 사용자 요청: 계획·남은 기간·지금까지 학습 패턴으로 볼 때 개선 없이는 합격이 어려우면 경고).
- * 위험(과락·평균 미달)·아슬아슬하거나, 최근 실제 학습량이 계획보다 적을 때만 보인다
+ * 위험(과락·평균 미달)·아슬아슬하거나, 최근 실제 학습량이 계획보다 적을 때만 보인다.
+ * 학습 계획 바꾸기는 홈 위 "학습계획 설정(재설정)" 한 곳에서(v0.8.1 — 접근 경로 일원화)
  */
-export function InsightCard(props: { insight: Insight; onPlan: () => void; onForecast: () => void }) {
+export function InsightCard(props: { insight: Insight }) {
   const { level, plan, pace, atPace, need, dailyMinutes } = props.insight;
   const behind = !!atPace;
   if (!(level === 'risk' || level === 'watch' || behind)) return null;
@@ -164,13 +158,13 @@ export function InsightCard(props: { insight: Insight; onPlan: () => void; onFor
         )}
         {atPace && (
           <li data-testid="insight-atpace">
-            이 속도면 시험일 <b>{atPace.avg}점</b> · 합격 가능성 <b>{pctText(atPace.chance)}</b>
+            이 속도면 시험일 예상 <b>{atPace.avg}점</b>
             {atPace.fail.length > 0 && <> · 과락 위험 {atPace.fail.join(', ')}</>}
           </li>
         )}
         {plan && (
           <li>
-            계획대로 하면 {plan.avg}점 · 합격 가능성 {pctText(plan.chance)}
+            계획대로 하면 {plan.avg}점
             {plan.fail.length > 0 && <> · 과락 위험 {plan.fail.join(', ')}</>}
           </li>
         )}
@@ -187,14 +181,7 @@ export function InsightCard(props: { insight: Insight; onPlan: () => void; onFor
         )}
         {!pace && <li className="muted">실제 학습량은 기록이 3일 이상 쌓이면 함께 반영합니다.</li>}
       </ul>
-      <div className="insight-actions">
-        <button className="btn" onClick={props.onPlan} data-testid="insight-plan">
-          학습계획 수정
-        </button>
-        <button className="btn" onClick={props.onForecast}>
-          계산 근거
-        </button>
-      </div>
+      <p className="hint">학습 계획은 위 "학습계획 설정(재설정)"에서 바꿉니다.</p>
     </section>
   );
 }
