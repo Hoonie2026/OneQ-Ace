@@ -4,7 +4,7 @@ import { scoreTone } from './CoachCard';
 import { BackButton, Icon } from './Icon';
 
 /**
- * 오늘 학습 마치기(ADR 009 — 실기기 v0.3.0 Q5): 오늘 푼 것, 현재 점수 ☞ 계획 이행 시 예상 점수.
+ * 오늘 학습 마치기(ADR 009 — 실기기 v0.3.0 Q5): 오늘 푼 것, 현재 점수 → 계획 이행 시 예상 점수.
  * 학습 계획 바꾸기는 홈의 "학습계획 설정(재설정)" 한 곳에서(v0.8.1 — 접근 경로 일원화).
  */
 export function DaySummary(props: { certCode: string; onHome: () => void }) {

@@ -20,7 +20,7 @@ import { examLabel } from '../study';
 import { PackPicker } from './PackPicker';
 import { askConfirm, showNotice } from './Dialog';
 import type { PackRow } from '../db';
-import { BackButton } from './Icon';
+import { BackButton, Icon } from './Icon';
 
 export function Settings(props: {
   version: number;
@@ -249,9 +249,7 @@ export function Settings(props: {
                 <small className="muted">
                   {p.manifest.cert.name} · {p.manifest.questionCount}문항
                 </small>
-                <span className="muted" aria-hidden="true">
-                  ›
-                </span>
+                <Icon name="forward" size={18} className="muted" />
               </button>
             </li>
           ))}

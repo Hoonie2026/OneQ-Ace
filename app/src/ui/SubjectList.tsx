@@ -1,7 +1,8 @@
 import { EXTRA_SIZE, type Coach } from '../coach';
+import { Icon } from './Icon';
 
 /**
- * 과목별 학습(ADR 011): 과목마다 학습 이력(현재 점수 ☞ 시험일 예상 점수, 풀이 횟수, 마지막 학습)과 [학습하기].
+ * 과목별 학습(ADR 011): 과목마다 학습 이력(현재 점수 → 시험일 예상 점수, 풀이 횟수, 마지막 학습)과 [학습하기].
  * 진도율(풀어 본 문항 비율)은 한 번씩 다 풀면 모두 100%가 되어 의미가 없으므로 쓰지 않고 **점수**로 보여 준다.
  * 학습하기 = 그 과목에서 시스템 추천과 같은 규칙(복습 최대 60% + 새 문항)으로 오늘 남은 목표 문항 수(v0.7.2)
  */
@@ -34,7 +35,7 @@ export function SubjectList(props: { coach: Coach; busy: boolean; onStudy: (subj
                   {s.current}
                   {proj != null && (
                     <>
-                      {' ☞ '}
+                      <Icon name="arrow" size={14} className="score-arrow" />
                       <b className={proj < rule.subjectMin ? 'bad' : ''}>{proj}</b>
                     </>
                   )}

@@ -11,7 +11,7 @@ import { ForecastView } from './ForecastView';
 import { Principles } from './Principles';
 import { computeInsight, type Insight } from '../insight';
 import { resetPageZoom } from '../util';
-import { BackButton, Icon } from './Icon';
+import { BackButton, BrandLogo, Icon } from './Icon';
 
 /** 홈 안의 보기: 홈 / 과목 골라서 / 모의고사(ADR 010 — 홈에는 오늘 학습만, 나머지는 한 번 더 들어가서) */
 type View = 'home' | 'recommend' | 'subjects' | 'mock' | 'forecast' | 'principles';
@@ -31,7 +31,7 @@ interface Cert {
 }
 
 /**
- * 홈(ADR 008·009): 종목 → [시험일 | D-day, 현재 ☞ 계획 이행 시, 오늘 학습] → [과목별 | 모의고사].
+ * 홈(ADR 008·009): 종목 → [시험일 | D-day, 현재 → 계획 이행 시, 오늘 학습] → [과목별 | 모의고사].
  * 회차별 풀이는 없앴고, 문제팩 관리는 설정 화면으로 옮겼다(처음 가져올 때만 여기서).
  */
 export function Home(props: {
@@ -125,43 +125,48 @@ export function Home(props: {
     }
   };
 
+  const inSub = view !== 'home' && !!coach && !!cert && !!packs && packs.length > 0;
+
   return (
     <div className="app">
-      <header className="header">
-        <div className="brand">
-          <span className="logo" aria-hidden="true">
-            1Q
-          </span>
-          <div>
-            <h1>원큐합격</h1>
-            <p className="sub">{certName ?? '기사·산업기사 필기 기출'}</p>
-          </div>
-        </div>
-        <button className="icon-btn" onClick={props.onSettings} aria-label="백업·설정">
-          <Icon name="settings" size={24} />
-        </button>
-      </header>
+      {/* v0.9.1(design-upgrade-guide 작업 2): 홈 안 보기(예상 점수 계산·추천·과목별·모의고사·학습 원리)에서는 [‹ 홈] 제목 머리 하나만 — 로고 머리와 2층으로 겹쳤다 */}
+      {!inSub && (
+        <>
+          <header className="header">
+            <div className="brand">
+              <BrandLogo size={44} />
+              <div>
+                <h1>원큐합격</h1>
+                <p className="sub">{certName ?? '기사·산업기사 필기 기출'}</p>
+              </div>
+            </div>
+            <button className="icon-btn" onClick={props.onSettings} aria-label="백업·설정">
+              <Icon name="settings" size={24} />
+            </button>
+          </header>
 
-      {certs.length > 1 && (
-        <label className="cert-select">
-          <span>자격종목</span>
-          <select value={cert ?? ''} onChange={(e) => pickCert(e.target.value)} aria-label="자격종목 선택" data-testid="cert-select">
-            {certs.map((c) => (
-              <option key={c.code} value={c.code}>
-                {c.name}
-              </option>
-            ))}
-          </select>
-        </label>
-      )}
+          {certs.length > 1 && (
+            <label className="cert-select">
+              <span>자격종목</span>
+              <select value={cert ?? ''} onChange={(e) => pickCert(e.target.value)} aria-label="자격종목 선택" data-testid="cert-select">
+                {certs.map((c) => (
+                  <option key={c.code} value={c.code}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
 
-      {!isStandalone() && (
-        <section className="card guide">
-          <h2>홈 화면에 설치해서 쓰세요</h2>
-          <p className="hint">
-            설치한 앱에서만 기록이 오래 보존됩니다. Android Chrome: ⋮ → <b>앱 설치</b> / iPhone Safari: 공유 → <b>홈 화면에 추가</b>
-          </p>
-        </section>
+          {!isStandalone() && (
+            <section className="card guide">
+              <h2>홈 화면에 설치해서 쓰세요</h2>
+              <p className="hint">
+                설치한 앱에서만 기록이 오래 보존됩니다. Android Chrome: ⋮ → <b>앱 설치</b> / iPhone Safari: 공유 → <b>홈 화면에 추가</b>
+              </p>
+            </section>
+          )}
+        </>
       )}
 
       {packs && packs.length === 0 && (

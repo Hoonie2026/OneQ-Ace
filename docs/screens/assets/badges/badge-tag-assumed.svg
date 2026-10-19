@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="76" height="26" viewBox="0 0 76 26" font-family="'Pretendard Variable', Pretendard, sans-serif">
+  <rect width="76" height="26" rx="13" fill="#fff3dc"/>
+  <circle cx="14" cy="13" r="7" fill="#b45309"/>
+  <path d="M14 9.5v4M14 16.2h.01" fill="none" stroke="#ffffff" stroke-width="1.8" stroke-linecap="round"/>
+  <text x="26" y="17.5" fill="#92400e" font-size="12" font-weight="800">가정값</text>
+</svg>

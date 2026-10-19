@@ -61,6 +61,7 @@ export function CoachCard(props: {
           <p>
             <b data-testid="current-avg">{exam.currentAvg}</b>점
           </p>
+          <small className="muted score-note">풀이 기록 기준</small>
         </div>
         <div className={`card score-box ${projCls}`}>
           <small>시험일 예상 점수</small>
@@ -70,7 +71,7 @@ export function CoachCard(props: {
           </p>
           {proj != null ? (
             <button className="link-btn small" onClick={props.onForecast} data-testid="forecast-open">
-              계산 보기 ›
+              계산 보기 <Icon name="forward" size={16} />
             </button>
           ) : (
             <small className="muted">시험일을 정하면 표시</small>
@@ -99,15 +100,15 @@ export function CoachCard(props: {
           </button>
         ) : (
           <button className="btn btn-primary btn-block btn-big" disabled={props.busy} onClick={props.onRecommend} data-testid="go-recommend">
-            시스템 추천 학습 ›
+            시스템 추천 학습
           </button>
         )}
         <button className="btn btn-block" onClick={props.onSubjects} data-testid="go-subjects">
-          과목별 학습 ›
+          과목별 학습
         </button>
         {coach.doneToday > 0 && (
           <button className="link-btn center-link" onClick={props.onFinish} data-testid="finish-day">
-            오늘 학습 마치기 ›
+            오늘 학습 마치기 <Icon name="forward" size={16} />
           </button>
         )}
       </section>
@@ -119,7 +120,7 @@ export function CoachCard(props: {
         </div>
         <p className="hint">지금 실력 확인용. 성적은 모의고사 이력에만 남고 현재 점수·학습 추천에는 넣지 않습니다.</p>
         <button className="btn btn-block" onClick={props.onMock} data-testid="tab-mock">
-          모의고사 ›
+          모의고사
         </button>
       </section>
 

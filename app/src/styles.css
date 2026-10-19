@@ -152,10 +152,11 @@ h3 {
 /* ── 카드 ── */
 .card {
   background: var(--surface);
-  border: 1px solid var(--line);
+  border: 1px solid var(--card-line, var(--line));
   border-radius: var(--radius);
   padding: 14px 16px;
   margin-bottom: 12px;
+  box-shadow: var(--card-shadow, none);
 }
 .meter {
   height: 10px;
@@ -2771,4 +2772,258 @@ h3 {
   border-color: transparent;
   background: transparent;
   color: var(--muted);
+}
+
+/* ════════════════════════════════════════════════════════════════════
+   v0.9.1 상용 앱 수준 다듬기(docs/screens/design-upgrade-guide.md 6장 작업 7 — 실기기 캡처 14장)
+   1) 한국어 조판: 낱말 가운데서 줄을 바꾸지 않음(추/가, 문/항, 기/준))
+   2) 면 계층(tonal surface): 카드·보조 단추의 겹친 테두리 대신 바탕 밝기 차이와 옅은 그림자
+   3) 수험표: 노란색은 D-day 한 곳, "학습계획 설정(재설정)"은 밑줄 없는 캡슐(글자 크기는 v0.8.2 X1대로 유지)
+   4) 풀이 화면: 문제 그림 시험지 여백, 숫자 보기 단추, 면 단추 모름·웹검색
+   안내서와 다르게 한 것: 배경색(--bg)은 홈 화면 상태바 색(index.html theme-color)과 맞물려 그대로,
+   모든 button에 줄바꿈 금지는 긴 글자 단추가 화면 밖으로 넘칠 수 있어 작은 칩·배지에만,
+   카드 테두리는 덮어쓰지 않고 토큰(--card-line)으로 — 학습 점검 카드 왼쪽 띠 등 다른 테두리가 지워지지 않게
+   ════════════════════════════════════════════════════════════════════ */
+:root {
+  --surface-2: #f1f4f8;
+  --card-line: rgb(15 29 46 / 0.07);
+  --card-shadow: 0 2px 12px rgb(15 29 46 / 0.05);
+  --chevron-down: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+  --chevron-right: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M9 18l6-6-6-6'/%3E%3C/svg%3E");
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --surface-2: #1e3048;
+    --card-line: transparent;
+    --card-shadow: 0 4px 16px rgb(0 0 0 / 0.22);
+  }
+}
+
+/* 1. 한국어 조판 */
+body {
+  word-break: keep-all;
+  overflow-wrap: break-word;
+}
+.tag,
+.lv,
+.back-btn,
+.score-btn,
+.chip-btn,
+.freq-badge,
+.memo-badge,
+.btn-small,
+.zoom-btn {
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.field input[type='date'],
+.field select {
+  width: 100%;
+}
+.day-add {
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+}
+.day-add .btn-small,
+.day-list .btn-small {
+  min-width: 64px;
+}
+/* 카드 머리(제목 + 보조 글): 좁으면 보조 글이 아래 줄로 — 제목은 한 줄 */
+.today-head {
+  flex-wrap: wrap;
+  row-gap: 2px;
+}
+.today-head h2,
+.today-head h3 {
+  white-space: nowrap;
+}
+.today-head.sub-title {
+  margin-bottom: 10px;
+}
+.today-head.sub-title h3 {
+  margin: 0;
+}
+.today-head .muted {
+  font-size: 14px;
+}
+
+/* 2. 면 계층 — 오늘 학습 목표의 굵은 파란 테두리 대신 주 단추(시스템 추천 학습) 하나만 파랗게 */
+.today-card {
+  border: 1px solid color-mix(in srgb, var(--primary) 22%, transparent);
+}
+.card .btn:where(:not(.btn-primary, .btn-danger, .btn-ghost, .btn-ok)),
+.dlg .btn:where(:not(.btn-primary, .btn-danger-solid)) {
+  border-color: transparent;
+  background: var(--surface-2);
+}
+.card .btn:where(:not(.btn-primary, .btn-danger, .btn-ghost, .btn-ok)):active,
+.dlg .btn:where(:not(.btn-primary, .btn-danger-solid)):active {
+  background: color-mix(in srgb, var(--ink) 9%, var(--surface-2));
+}
+.dlg-choices [data-testid='dialog-cancel'] {
+  background: transparent;
+}
+.icon-btn {
+  border-radius: 999px;
+}
+.header .icon-btn {
+  background: var(--surface-2);
+}
+
+/* 3. 수험표 */
+.card.exam-row {
+  position: relative;
+  padding: 8px;
+  box-shadow: 0 6px 18px rgb(15 29 46 / 0.14);
+}
+.exam-row .exam-date {
+  justify-items: start;
+  gap: 4px;
+}
+.exam-row .exam-date .plan-link {
+  display: inline-flex;
+  align-items: center;
+  margin-top: 6px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: rgb(255 255 255 / 0.13);
+  color: #f1f5f9;
+  font-weight: 700;
+  text-decoration: none;
+}
+.exam-row .exam-date:active .plan-link {
+  background: rgb(255 255 255 / 0.22);
+}
+/* 절취선 위아래 반원 홈 — 바탕색으로 */
+.exam-row .exam-dday {
+  position: relative;
+}
+.exam-row .exam-dday::before,
+.exam-row .exam-dday::after {
+  content: '';
+  position: absolute;
+  left: -8px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--bg);
+}
+.exam-row .exam-dday::before {
+  top: -15px;
+}
+.exam-row .exam-dday::after {
+  bottom: -15px;
+}
+
+/* 점수 상자: 왼쪽에도 아래 한 줄(풀이 기록 기준) — 오른쪽 "계산 보기"와 높이 맞춤 */
+.score-box small.muted {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--muted);
+}
+.score-box .score-note {
+  margin-top: 6px;
+}
+.link-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+/* 접기·펼치기·목록 행 화살표: 글자 ▾ › 대신 같은 굵기의 선 화살표 */
+details.why summary {
+  padding: 0 14px;
+  background: var(--surface-2);
+}
+details.why summary::after,
+details.why[open] summary::after {
+  content: '';
+  flex: none;
+  width: 20px;
+  height: 20px;
+  background: currentColor;
+  -webkit-mask: var(--chevron-down) center / contain no-repeat;
+  mask: var(--chevron-down) center / contain no-repeat;
+  transition: transform 0.15s;
+}
+details.why[open] summary::after {
+  transform: rotate(180deg);
+}
+.history tr.clickable td:last-child::after {
+  content: '';
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  margin-left: 2px;
+  vertical-align: -3px;
+  background: var(--muted);
+  -webkit-mask: var(--chevron-right) center / contain no-repeat;
+  mask: var(--chevron-right) center / contain no-repeat;
+}
+
+/* 과목별 학습: 현재 → 예상 */
+.subject-head .subject-score {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+.subject-score .score-arrow {
+  color: var(--muted);
+}
+
+/* 4. 풀이 화면 */
+.zoom-inner img,
+.zoom-placeholder {
+  box-sizing: content-box; /* 비율(aspect-ratio)을 그림 자체에 — 여백을 넣어도 그림이 줄거나 찌그러지지 않게 */
+  width: calc(100% - 28px);
+  padding: 12px 14px;
+  border-radius: 12px;
+  box-shadow: 0 1px 4px rgb(0 0 0 / 0.06);
+}
+/* 계산 상자도 카드보다 한 단계 밝은 면(다크 모드에서 움푹 꺼져 보였다) */
+.calc-box,
+.calc-example {
+  background: var(--surface-2);
+}
+.zoom-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+}
+.choice {
+  min-height: 54px;
+  border-width: 1.5px;
+  background: var(--surface-2);
+  font-size: 22px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+.btn-unknown {
+  border-color: transparent;
+  background: var(--surface-2);
+  color: var(--ink);
+}
+.btn-search {
+  border-color: transparent;
+  background: color-mix(in srgb, var(--primary) 14%, var(--surface));
+  color: var(--primary);
+}
+.freq-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* 오늘 학습 마침: 과목 행 사이 옅은 선, 현재 → 예상 가운데 */
+.day-subjects li {
+  padding: 6px 0;
+  border-bottom: 1px dashed color-mix(in srgb, var(--line) 70%, transparent);
+}
+.day-subjects li:last-child {
+  border-bottom: 0;
+}
+.score-pair {
+  justify-content: center;
+  padding: 6px 0;
 }

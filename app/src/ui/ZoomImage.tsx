@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { Icon } from './Icon';
 
 const MIN = 1;
 const MAX = 4;
@@ -127,14 +128,14 @@ export function ZoomImage(props: { src: string | null; width: number; height: nu
       <div className="zoom-tools" aria-label="확대">
         {scale > 1.01 && (
           <button className="zoom-btn zoom-pct" onClick={reset} aria-label="원래 크기로">
-            {Math.round(scale * 100)}% ↺
+            {Math.round(scale * 100)}% <Icon name="reset-zoom" size={15} />
           </button>
         )}
         <button className="zoom-btn" onClick={() => step(1 / 1.25)} disabled={scale <= MIN} aria-label="축소">
-          −
+          <Icon name="minus" size={18} />
         </button>
         <button className="zoom-btn" onClick={() => step(1.25)} disabled={scale >= MAX} aria-label="확대">
-          +
+          <Icon name="plus" size={18} />
         </button>
       </div>
     </div>

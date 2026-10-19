@@ -62,7 +62,10 @@ export function ForecastView(props: { coach: Coach }) {
       </div>
 
       <div className="card" data-testid="forecast-shares">
-        <h3>실제 시험은 어디서 나오나 (보유 기출 {exam.rounds}회차 기준)</h3>
+        <div className="today-head sub-title">
+          <h3>실제 시험은 어디서 나오나</h3>
+          <span className="muted">보유 기출 {exam.rounds}회차 기준</span>
+        </div>
         <div className="share-bar big" role="img" aria-label={seg.map((x) => `${x.name} ${pct(x.share)}`).join(', ')}>
           {seg.map((x) => (
             <span key={x.cls} className={x.cls} style={{ width: pct(x.share) }}>
@@ -89,7 +92,10 @@ export function ForecastView(props: { coach: Coach }) {
       </div>
 
       <div className="card">
-        <h3>과목별 예상점수 (계획대로, 100점 만점)</h3>
+        <div className="today-head sub-title">
+          <h3>과목별 예상점수</h3>
+          <span className="muted">계획대로 · 100점 만점</span>
+        </div>
         <table className="mini-table calc-table" data-testid="forecast-table">
           <thead>
             <tr>

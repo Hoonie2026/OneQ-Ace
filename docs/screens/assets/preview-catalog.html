@@ -1,0 +1,328 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <title>원큐합격 상용 디자인 에셋 키트 (아이콘 25종 + 로고·배지·컴포넌트 12종)</title>
+  <style>
+    :root { --bg: #f4f6f9; --card: #ffffff; --ink: #0f172a; --muted: #64748b; --line: #e2e8f0; --primary: #1f5fd1; }
+    body.dark { --bg: #0b1420; --card: #152234; --ink: #f1f5f9; --muted: #94a3b8; --line: #23354d; --primary: #5b93ff; }
+    * { box-sizing: border-box; }
+    body { margin: 0; padding: 32px 24px 64px; background: var(--bg); color: var(--ink); font-family: 'Pretendard Variable', Pretendard, -apple-system, 'Malgun Gothic', sans-serif; }
+    .wrap { max-width: 1080px; margin: 0 auto; }
+    .top { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin-bottom: 24px; }
+    h1 { margin: 0 0 6px; font-size: 24px; font-weight: 800; }
+    h2 { margin: 32px 0 14px; font-size: 19px; font-weight: 800; }
+    p.sub { margin: 0; color: var(--muted); font-size: 14px; }
+    .toggle { padding: 10px 18px; border-radius: 999px; border: 0; background: var(--primary); color: #fff; font-weight: 700; cursor: pointer; font-size: 14px; }
+    .grid-icons { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 12px; }
+    .icon-card { display: flex; align-items: center; gap: 14px; padding: 14px; border-radius: 14px; background: var(--card); box-shadow: 0 2px 8px rgba(0,0,0,0.04); }
+    .icon-preview { width: 44px; height: 44px; border-radius: 12px; background: color-mix(in srgb, var(--primary) 12%, var(--card)); color: var(--primary); display: grid; place-items: center; flex: none; }
+    .icon-meta b { display: block; font-size: 14px; margin-bottom: 2px; }
+    .icon-meta small { display: block; font-size: 12px; color: var(--muted); line-height: 1.35; }
+    .icon-meta code { display: inline-block; margin-top: 4px; font-size: 11px; color: var(--primary); background: color-mix(in srgb, var(--primary) 10%, transparent); padding: 1px 6px; border-radius: 4px; }
+    .grid-badges { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 16px; }
+    .badge-card { padding: 18px; border-radius: 16px; background: var(--card); display: grid; gap: 12px; align-items: center; justify-items: start; box-shadow: 0 2px 8px rgba(0,0,0,0.04); }
+    .badge-card small { color: var(--muted); font-size: 13px; }
+    .badge-card img { max-width: 100%; height: auto; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="top">
+      <div>
+        <h1>원큐합격 상용 디자인 에셋 패키지 (직접 제작 + Lucide ISC 정품)</h1>
+        <p class="sub">위치: docs/screens/assets/ · 모든 SVG 파일은 상업적/오프라인 제한 없이 앱에 즉시 탑재 가능합니다.</p>
+      </div>
+      <button class="toggle" onclick="document.body.classList.toggle('dark')">화이트 / 다크 모드 전환</button>
+    </div>
+
+    <h2>1. 신규 제작 브랜드 로고 · 배지 · UI 컴포넌트 (docs/screens/assets/badges/*.svg)</h2>
+    <div class="grid-badges">
+      <div class="badge-card"><img src="./badges/logo-1q-primary.svg" width="88" alt="1Q 앱 로고"/><div><b>앱 아이콘 로고 (logo-1q-primary.svg)</b><br/><small>네이비 그라데이션 스쿼클 + 골드 체크 Q 테일</small></div></div>
+      <div class="badge-card"><img src="./badges/logo-1q-header.svg" width="44" alt="헤더 로고"/><div><b>상단 헤더 로고 (logo-1q-header.svg)</b><br/><small>44×44px 홈 화면 좌측 상단용 벡터 로고</small></div></div>
+      <div class="badge-card"><img src="./badges/exam-ticket-card.svg" alt="수험표 카드"/><div><b>홈 수험표 카드 (exam-ticket-card.svg)</b><br/><small>양옆 반원 펀치 홈 + 캡슐 설정 버튼 + 골드 D-day</small></div></div>
+      <div class="badge-card"><img src="./badges/choice-buttons-set.svg" alt="보기 단추 세트"/><div><b>풀이 보기 단추 4상태 (choice-buttons-set.svg)</b><br/><small>유니코드 ①②③④ 대신 또렷한 숫자 + 우측 상단 ✓/✕ 배지</small></div></div>
+      <div class="badge-card"><div style="display:flex;gap:8px;flex-wrap:wrap"><img src="./badges/badge-freq-hot.svg" alt="3회 출제"/><img src="./badges/badge-memo-exists.svg" alt="메모 있음"/></div><div><b>풀이 화면 상단 배지 (badge-freq-hot / badge-memo-exists.svg)</b><br/><small>빈출 불꽃 배지 & 보라색 메모 배지</small></div></div>
+      <div class="badge-card"><div style="display:flex;gap:8px;flex-wrap:wrap"><img src="./badges/badge-tag-verified.svg" alt="실측"/><img src="./badges/badge-tag-assumed.svg" alt="가정값"/></div><div><b>계산 근거 신뢰도 배지 (badge-tag-verified / assumed.svg)</b><br/><small>체크/느낌표 아이콘이 내장된 캡슐형 배지</small></div></div>
+      <div class="badge-card"><img src="./badges/badge-principle-tags.svg" alt="원리 태그"/><div><b>학습 원리 태그 3종 (badge-principle-tags.svg)</b><br/><small>오답 교정(레드) · 간격 반복(블루) · 약한 과목 먼저(퍼플)</small></div></div>
+      <div class="badge-card"><img src="./badges/relearn-banner-card.svg" alt="다시 풀기 배너"/><div><b>다시 풀기 단계 배너 (relearn-banner-card.svg)</b><br/><small>아이콘 컨테이너 + 2줄 타이포그래피 위계</small></div></div>
+      <div class="badge-card"><div style="display:flex;gap:16px;align-items:center"><img src="./badges/goal-achievement-badge.svg" width="72" alt="목표 달성"/><img src="./badges/empty-pack-illustration.svg" width="84" alt="문제팩 가져오기"/></div><div><b>모달 트로피 & 빈 상태 일러스트</b><br/><small>goal-achievement-badge.svg / empty-pack-illustration.svg</small></div></div>
+    </div>
+
+    <h2>2. 상용 표준 아이콘 25종 (docs/screens/assets/icons/*.svg — Lucide ISC License)</h2>
+    <div class="grid-icons">
+      
+      <div class="icon-card">
+        <div class="icon-preview">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
+        </div>
+        <div class="icon-meta">
+          <b>백업·설정 (Lucide settings)</b>
+          <small>홈 우측 상단 설정 버튼 (기존 슬라이더/⚙ 문자 대체)</small>
+          <code>icons/settings.svg</code>
+        </div>
+      </div>
+      <div class="icon-card">
+        <div class="icon-preview">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="12" width="4" height="8" rx="1"/><rect x="10" y="4" width="4" height="16" rx="1"/><rect x="16" y="8" width="4" height="12" rx="1"/></svg>
+        </div>
+        <div class="icon-meta">
+          <b>성적·통계 (Lucide chart-no-axes-column)</b>
+          <small>풀이 화면 우측 상단 [성적] 단추 (기존 📊 이모지 및 삼지창 선 대체)</small>
+          <code>icons/chart.svg</code>
+        </div>
+      </div>
+      <div class="icon-card">
+        <div class="icon-preview">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m19.5 19.5-4.3-4.3"/><path d="M19 3v4"/><path d="M17 5h4"/></svg>
+        </div>
+        <div class="icon-meta">
+          <b>AI 웹검색 (Lucide search + sparkle)</b>
+          <small>풀이 화면 [웹검색] 단추 (구글 AI 모드 개념 설명 검색)</small>
+          <code>icons/search-ai.svg</code>
+        </div>
+      </div>
+      <div class="icon-card">
+        <div class="icon-preview">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+        </div>
+        <div class="icon-meta">
+          <b>일반 검색 (Lucide search)</b>
+          <small>일반 검색 아이콘 (기존 🔎 입체 이모지 대체)</small>
+          <code>icons/search.svg</code>
+        </div>
+      </div>
+      <div class="icon-card">
+        <div class="icon-preview">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.376 3.622a1 1 0 0 1 3.002 3.002L7.368 18.635a2 2 0 0 1-.855.506l-2.872.838a.5.5 0 0 1-.62-.62l.838-2.872a2 2 0 0 1 .506-.854z"/></svg>
+        </div>
+        <div class="icon-meta">
+          <b>메모 쓰기·수정 (Lucide pen-line)</b>
+          <small>정답 확인 후 [메모 쓰기 / 수정] 칩 단추 (기존 ✎ 대체)</small>
+          <code>icons/pencil.svg</code>
+        </div>
+      </div>
+      <div class="icon-card">
+        <div class="icon-preview">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/></svg>
+        </div>
+        <div class="icon-meta">
+          <b>메모 있음 (Lucide file-text)</b>
+          <small>풀이 화면 상단 [메모 있음] 보라색 배지 (기존 📝 이모지 대체)</small>
+          <code>icons/note.svg</code>
+        </div>
+      </div>
+      <div class="icon-card">
+        <div class="icon-preview">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
+        </div>
+        <div class="icon-meta">
+          <b>학습 원리 (Lucide book-open)</b>
+          <small>홈 하단 [학습 원리 · 예상 점수 계산 방법] 카드 (기존 📘 이모지 대체)</small>
+          <code>icons/book.svg</code>
+        </div>
+      </div>
+      <div class="icon-card">
+        <div class="icon-preview">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m17 2 4 4-4 4"/><path d="M3 11v-1a4 4 0 0 1 4-4h14"/><path d="m7 22-4-4 4-4"/><path d="M21 13v1a4 4 0 0 1-4 4H3"/></svg>
+        </div>
+        <div class="icon-meta">
+          <b>다시 풀기 (Lucide repeat)</b>
+          <small>오답/모름 다시 풀기 배너 및 원리 카드 (기존 🔁 이모지 대체)</small>
+          <code>icons/repeat.svg</code>
+        </div>
+      </div>
+      <div class="icon-card">
+        <div class="icon-preview">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>
+        </div>
+        <div class="icon-meta">
+          <b>위험 경고 (Lucide triangle-alert)</b>
+          <small>학습 점검 카드(위험) 및 한계 안내 (기존 ⚠ 및 뾰족한 삼각형 대체)</small>
+          <code>icons/alert-triangle.svg</code>
+        </div>
+      </div>
+      <div class="icon-card">
+        <div class="icon-preview">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="8" y2="12"/><line x1="12" x2="12.01" y1="16" y2="16"/></svg>
+        </div>
+        <div class="icon-meta">
+          <b>주의·아슬아슬 (Lucide circle-alert)</b>
+          <small>학습 점검 카드(주의/공부량 부족) 제목 아이콘</small>
+          <code>icons/alert-circle.svg</code>
+        </div>
+      </div>
+      <div class="icon-card">
+        <div class="icon-preview">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
+        </div>
+        <div class="icon-meta">
+          <b>점수 변화 화살표 (Lucide arrow-right)</b>
+          <small>현재 점수 → 시험일 예상 점수 연결 (기존 ☞ 손가락 기호 대체)</small>
+          <code>icons/arrow-right.svg</code>
+        </div>
+      </div>
+      <div class="icon-card">
+        <div class="icon-preview">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+        </div>
+        <div class="icon-meta">
+          <b>뒤로가기 (Lucide chevron-left)</b>
+          <small>상단 [‹ 홈] 알약 단추 및 이전 문항 이동</small>
+          <code>icons/back.svg</code>
+        </div>
+      </div>
+      <div class="icon-card">
+        <div class="icon-preview">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+        </div>
+        <div class="icon-meta">
+          <b>이동·상세 (Lucide chevron-right)</b>
+          <small>카드·리스트 우측 이동 표시 (기존 유니코드 › 대체)</small>
+          <code>icons/forward.svg</code>
+        </div>
+      </div>
+      <div class="icon-card">
+        <div class="icon-preview">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+        </div>
+        <div class="icon-meta">
+          <b>펼치기 (Lucide chevron-down)</b>
+          <small>[왜 이렇게 구성했나요?] 아코디언 및 드롭다운 (기존 ▾ 대체)</small>
+          <code>icons/chevron-down.svg</code>
+        </div>
+      </div>
+      <div class="icon-card">
+        <div class="icon-preview">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m18 15-6-6-6 6"/></svg>
+        </div>
+        <div class="icon-meta">
+          <b>접기 (Lucide chevron-up)</b>
+          <small>[왜 이렇게 구성했나요?] 열림 상태 표시 (기존 ▴ 대체)</small>
+          <code>icons/chevron-up.svg</code>
+        </div>
+      </div>
+      <div class="icon-card">
+        <div class="icon-preview">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+        </div>
+        <div class="icon-meta">
+          <b>닫기·멈추기 (Lucide x)</b>
+          <small>풀이 화면 좌측 상단 나가기 단추 (기존 ✕ 대체)</small>
+          <code>icons/close.svg</code>
+        </div>
+      </div>
+      <div class="icon-card">
+        <div class="icon-preview">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+        </div>
+        <div class="icon-meta">
+          <b>정답·완료 (Lucide check)</b>
+          <small>정답 판정, 합격선 통과, 백업 복원 완료 표시 (기존 ✓ 대체)</small>
+          <code>icons/check.svg</code>
+        </div>
+      </div>
+      <div class="icon-card">
+        <div class="icon-preview">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/></svg>
+        </div>
+        <div class="icon-meta">
+          <b>축소 (Lucide minus)</b>
+          <small>문제 그림 축소 단추 (기존 흐릿한 하이픈 - 문자 대체)</small>
+          <code>icons/minus.svg</code>
+        </div>
+      </div>
+      <div class="icon-card">
+        <div class="icon-preview">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
+        </div>
+        <div class="icon-meta">
+          <b>확대 (Lucide plus)</b>
+          <small>문제 그림 확대 단추 및 날짜별 시간 [+ 추가] 단추</small>
+          <code>icons/plus.svg</code>
+        </div>
+      </div>
+      <div class="icon-card">
+        <div class="icon-preview">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+        </div>
+        <div class="icon-meta">
+          <b>원래 크기로 (Lucide rotate-ccw)</b>
+          <small>문제 그림 배율 초기화 단추 (기존 ↺ 텍스트 대체)</small>
+          <code>icons/reset-zoom.svg</code>
+        </div>
+      </div>
+      <div class="icon-card">
+        <div class="icon-preview">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/></svg>
+        </div>
+        <div class="icon-meta">
+          <b>목표 달성 트로피 (Lucide trophy)</b>
+          <small>오늘 학습 목표 달성 모달 타이틀 (기존 🎉 이모지 대체)</small>
+          <code>icons/trophy.svg</code>
+        </div>
+      </div>
+      <div class="icon-card">
+        <div class="icon-preview">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v16a2 2 0 0 0 2 2h16"/><path d="M7 6c1.5 6 5 10 13 11"/></svg>
+        </div>
+        <div class="icon-meta">
+          <b>망각 곡선 (Lucide chart-spline)</b>
+          <small>학습 원리 [잊을 때쯤 다시 — 망각 곡선과 간격 반복]</small>
+          <code>icons/trend.svg</code>
+        </div>
+      </div>
+      <div class="icon-card">
+        <div class="icon-preview">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="16" height="16" x="4" y="4" rx="2"/><rect width="6" height="6" x="9" y="9" rx="1"/><path d="M15 2v2"/><path d="M15 20v2"/><path d="M2 15h2"/><path d="M2 9h2"/><path d="M20 15h2"/><path d="M20 9h2"/><path d="M9 2v2"/><path d="M9 20v2"/></svg>
+        </div>
+        <div class="icon-meta">
+          <b>FSRS 알고리즘 (Lucide cpu)</b>
+          <small>학습 원리 [FSRS 알고리즘] 전용 아이콘 (설정 아이콘과 중복 해소)</small>
+          <code>icons/cpu-fsrs.svg</code>
+        </div>
+      </div>
+      <div class="icon-card">
+        <div class="icon-preview">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m16 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z"/><path d="m2 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z"/><path d="M7 21h10"/><path d="M12 3v18"/><path d="M3 7h2c2 0 5-1 7-2 2 1 5 2 7 2h2"/></svg>
+        </div>
+        <div class="icon-meta">
+          <b>과락 방지 저울 (Lucide scale)</b>
+          <small>학습 원리 [약한 과목 먼저 — 과락 막기]</small>
+          <code>icons/scale.svg</code>
+        </div>
+      </div>
+      <div class="icon-card">
+        <div class="icon-preview">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 18h1.4c1.3 0 2.5-.6 3.3-1.7l6.1-8.6c.7-1.1 2-1.7 3.3-1.7H22"/><path d="m18 2 4 4-4 4"/><path d="M2 6h1.9c1.5 0 2.9.9 3.6 2.2"/><path d="M22 18h-5.9c-1.3 0-2.6-.7-3.3-1.8l-.5-.8"/><path d="m18 14 4 4-4 4"/></svg>
+        </div>
+        <div class="icon-meta">
+          <b>교차 학습 섞기 (Lucide shuffle)</b>
+          <small>학습 원리 [섞어 풀기는? — 솔직한 답]</small>
+          <code>icons/shuffle.svg</code>
+        </div>
+      </div>
+      <div class="icon-card">
+        <div class="icon-preview">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>
+        </div>
+        <div class="icon-meta">
+          <b>예상 점수 과녁 (Lucide target)</b>
+          <small>학습 원리 [시험일 예상 점수]</small>
+          <code>icons/target.svg</code>
+        </div>
+      </div>
+      <div class="icon-card">
+        <div class="icon-preview">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 2v7.527a2 2 0 0 1-.211.896L4.72 20.55a1 1 0 0 0 .9 1.45h12.76a1 1 0 0 0 .9-1.45l-5.069-10.127A2 2 0 0 1 14 9.527V2"/><path d="M8.5 2h7"/><path d="M7 16h10"/></svg>
+        </div>
+        <div class="icon-meta">
+          <b>검증 실험 플라스크 (Lucide flask-conical)</b>
+          <small>학습 원리 [이 방법은 어떻게 검증했나]</small>
+          <code>icons/flask.svg</code>
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

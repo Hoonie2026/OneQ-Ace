@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="420" height="72" viewBox="0 0 420 72" font-family="'Pretendard Variable', Pretendard, sans-serif">
+  <!-- 1: Default -->
+  <rect x="4" y="8" width="94" height="56" rx="14" fill="#f8fafc" stroke="#cbd5e1" stroke-width="1.5"/>
+  <text x="51" y="44" text-anchor="middle" fill="#0f172a" font-size="22" font-weight="800">1</text>
+
+  <!-- 2: Correct Answer (is-answer) -->
+  <rect x="110" y="8" width="94" height="56" rx="14" fill="#e5f5ec" stroke="#0e7440" stroke-width="2.5"/>
+  <text x="157" y="44" text-anchor="middle" fill="#0e7440" font-size="22" font-weight="800">2</text>
+  <circle cx="188" cy="22" r="9" fill="#0e7440"/>
+  <path d="M184 22l2.6 2.6 5-5.2" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <!-- 3: Wrong Chosen (is-chosen) -->
+  <rect x="216" y="8" width="94" height="56" rx="14" fill="#fdeaea" stroke="#c62f2f" stroke-width="2.5"/>
+  <text x="263" y="44" text-anchor="middle" fill="#c62f2f" font-size="22" font-weight="800">3</text>
+  <circle cx="294" cy="22" r="9" fill="#c62f2f"/>
+  <path d="M290.5 18.5l7 7M297.5 18.5l-7 7" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round"/>
+
+  <!-- 4: Dimmed (is-dim) -->
+  <rect x="322" y="8" width="94" height="56" rx="14" fill="#f8fafc" stroke="#e2e8f0" stroke-width="1.5" opacity="0.45"/>
+  <text x="369" y="44" text-anchor="middle" fill="#64748b" font-size="22" font-weight="800" opacity="0.55">4</text>
+</svg>

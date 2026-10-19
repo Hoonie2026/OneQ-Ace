@@ -353,6 +353,7 @@ export function Solve(props: { target: Target; onExit: () => void; onResult: (pe
         <div className="freq-row">
           {(history.get(q.qid)?.length ?? 0) > 1 && (
             <button className="freq-badge" onClick={() => setShowRounds((v) => !v)} aria-expanded={showRounds} data-testid="freq-badge">
+              <Icon name="flame" size={14} />
               {history.get(q.qid)!.length}회 출제
             </button>
           )}
@@ -391,7 +392,7 @@ export function Solve(props: { target: Target; onExit: () => void; onResult: (pe
               <Icon name="pencil" size={17} /> {note ? '메모 수정' : '메모 쓰기'}
             </button>
             <button className="chip-btn" onClick={webSearch} data-testid="search-after">
-              <Icon name="search" size={17} /> 웹검색
+              <Icon name="search-ai" size={17} /> 웹검색
             </button>
           </div>
           {noteOpen && (
@@ -413,7 +414,7 @@ export function Solve(props: { target: Target; onExit: () => void; onResult: (pe
         <div className="modal-back" role="dialog" aria-modal="true" aria-labelledby="goal-title" data-testid="goal-box">
           <section className="modal">
             <h2 id="goal-title">
-              <Icon name="flag" size={24} /> 오늘 학습 목표 달성
+              <Icon name="trophy" size={24} /> 오늘 학습 목표 달성
             </h2>
             <p className="muted">
               오늘 목표 {today.target}문항을 다 풀었습니다.
@@ -469,7 +470,7 @@ export function Solve(props: { target: Target; onExit: () => void; onResult: (pe
                   : ' is-dim';
             return (
               <button key={n} className={`choice${state}`} disabled={!!attempt || saving || !q} onClick={() => answer(n)} aria-label={`${n}번`}>
-                {CIRCLED[n]}
+                {n}
               </button>
             );
           })}
@@ -488,7 +489,7 @@ export function Solve(props: { target: Target; onExit: () => void; onResult: (pe
               모름
             </button>
             <button className="btn btn-next btn-search" disabled={!q} onClick={webSearch} data-testid="web-search">
-              <Icon name="search" size={20} /> 웹검색
+              <Icon name="search-ai" size={20} /> 웹검색
             </button>
           </div>
         )}

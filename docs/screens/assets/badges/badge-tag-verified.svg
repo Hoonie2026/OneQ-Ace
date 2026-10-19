@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="114" height="26" viewBox="0 0 114 26" font-family="'Pretendard Variable', Pretendard, sans-serif">
+  <rect width="114" height="26" rx="13" fill="#e5f5ec"/>
+  <circle cx="14" cy="13" r="7" fill="#0e7440"/>
+  <path d="M11 13.2l2 2 4-4.2" fill="none" stroke="#ffffff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="26" y="17.5" fill="#0e7440" font-size="12" font-weight="800">실측 · 검증 모형</text>
+</svg>

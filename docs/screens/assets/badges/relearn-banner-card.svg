@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="440" height="68" viewBox="0 0 440 68" font-family="'Pretendard Variable', Pretendard, sans-serif">
+  <rect x="2" y="2" width="436" height="64" rx="14" fill="#fffbeb" stroke="#f59e0b" stroke-width="1.5"/>
+  <rect x="16" y="14" width="40" height="40" rx="12" fill="#fef3c7"/>
+  <g transform="translate(24, 22)" fill="none" stroke="#b45309" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="m17 2 4 4-4 4"/><path d="M3 11v-1a4 4 0 0 1 4-4h14"/><path d="m7 22-4-4 4-4"/><path d="M21 13v1a4 4 0 0 1-4 4H3"/>
+  </g>
+  <text x="68" y="30" fill="#92400e" font-size="16" font-weight="800">다시 풀기 · 1 / 12</text>
+  <text x="68" y="50" fill="#78350f" font-size="13.5" font-weight="500">방금 푼 묶음에서 틀리거나 모른 문항을 한 번 더 풉니다</text>
+</svg>
