@@ -41,6 +41,14 @@ export default defineConfig({
         globPatterns: ['**/*.{js,css,html,svg,png,webmanifest}'],
         navigateFallback: `${BASE}index.html`,
         cleanupOutdatedCaches: true,
+        // 글꼴(Pretendard, v0.9.0)은 미리 다 받지 않고 쓰는 글자 묶음만 받아 두고 이후 오프라인으로
+        runtimeCaching: [
+          {
+            urlPattern: ({ url }) => url.pathname.endsWith('.woff2'),
+            handler: 'CacheFirst',
+            options: { cacheName: 'oneq-fonts', expiration: { maxEntries: 120 } },
+          },
+        ],
       },
     }),
   ],

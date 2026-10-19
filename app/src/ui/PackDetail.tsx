@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { db, type PackRow } from '../db';
 import { examLabel, packSummary, type PackSummary } from '../study';
 import { formatBytes } from '../util';
+import { BackButton } from './Icon';
 
 const SOURCE: Record<string, string> = { 'public-pbt': '공개 기출(PBT)', recalled: '응시자 복원 문제', other: '기타' };
 
@@ -25,9 +26,7 @@ export function PackDetail(props: { packId: string; onBack: () => void; onBackup
   return (
     <div className="app">
       <header className="page-head">
-        <button className="icon-btn" onClick={props.onBack} aria-label="뒤로">
-          ‹
-        </button>
+        <BackButton label="설정" onClick={props.onBack} />
         <h1>
           {m.cert.name} {examLabel(m)}
         </h1>

@@ -144,6 +144,9 @@ test('5단계: 학습 계획 → 오늘 학습(계획량 한 묶음·틀린 문�
   // ✕로 나가면 남은 시간이 멈춘다(Q6): 3초 기다렸다 이어서 열어도 거의 그대로
   const left1 = (await page.getByTestId('mock-timer').textContent())!;
   await page.getByRole('button', { name: '풀이 멈추고 홈으로' }).click();
+  await expect(page.getByTestId('dialog')).toContainText('모의고사를 멈출까요?'); // v0.9.0
+  await page.screenshot({ path: `test-results/stage5-mock-exit-${info.project.name}.png` });
+  await page.getByTestId('dialog-choice-pause').click();
   await page.waitForTimeout(3000);
   await page.getByTestId('tab-mock').click();
   await page.getByTestId('mock-resume').click();

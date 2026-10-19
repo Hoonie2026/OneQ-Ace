@@ -5,6 +5,7 @@ import { ZoomImage } from './ZoomImage';
 import { questionMeta, startRelearn, startSubject, startToday, todayStatus, type TodayStatus } from '../coach';
 import { aiModeUrl, searchQuery } from '../search';
 import { askChoice, askConfirm } from './Dialog';
+import { Icon } from './Icon';
 
 const CIRCLED = ['', '①', '②', '③', '④', '⑤'];
 const MAX_ELAPSED = 30 * 60 * 1000;
@@ -241,7 +242,21 @@ export function Solve(props: { target: Target; onExit: () => void; onResult: (pe
    */
   const exit = async () => {
     await flushNote();
-    if (isMock && s && !s.run.finishedAt) await pauseRun(s.run.sessionId);
+    // 모의고사(v0.9.0 — 실기기 의견: ✕를 누르면 아무 안내 없이 홈으로 갔다): 멈출지·제출할지 묻는다
+    if (isMock && s && !s.run.finishedAt) {
+      const left = s.qids.filter((x) => !s.answers.has(x)).length;
+      const pick = await askChoice(`${s.qids.length}문항 중 ${left}문항이 남았습니다.\n멈추면 남은 시간도 멈추고, 모의고사 화면에서 이어서 풀 수 있습니다.`, [
+        { value: 'pause', text: '멈추고 나중에 이어서 풀기', primary: true },
+        { value: 'submit', text: '지금 제출하고 채점' },
+      ], { title: '모의고사를 멈출까요?', cancelText: '계속 풀기' });
+      if (pick === 'submit') {
+        await finishRun(s.run.sessionId);
+        return props.onResult();
+      }
+      if (pick !== 'pause') return;
+      await pauseRun(s.run.sessionId);
+      return props.onExit();
+    }
     if (s && s.run.mode === 'today' && !s.run.finishedAt) {
       const left = s.qids.filter((x) => !s.answers.has(x)).length;
       const pick = await askChoice(`이 묶음에 ${left}문항이 남았습니다. 푼 기록은 그대로 남습니다.`, [
@@ -282,10 +297,10 @@ export function Solve(props: { target: Target; onExit: () => void; onResult: (pe
     <div className={`solve${s.run.relearn ? ' is-relearn' : ''}`}>
       <header className="solve-top">
         <button className="icon-btn" onClick={exit} aria-label="풀이 멈추고 홈으로">
-          ✕
+          <Icon name="close" size={24} />
         </button>
         <button className="icon-btn" onClick={prev} disabled={index === 0} aria-label="이전 문항">
-          ‹
+          <Icon name="back" size={24} />
         </button>
         <div className="solve-meta">
           <strong data-testid="progress">
@@ -308,7 +323,7 @@ export function Solve(props: { target: Target; onExit: () => void; onResult: (pe
             }}
             aria-label="지금 성적 보기"
           >
-            📊 성적
+            <Icon name="chart" size={18} /> 성적
           </button>
         )}
       </header>
@@ -319,7 +334,7 @@ export function Solve(props: { target: Target; onExit: () => void; onResult: (pe
         // v0.7.2(실기기 의견): 새 문항이 아니라 오늘 틀린·모름 문항을 다시 푸는 단계임을 한눈에
         <div className="relearn-banner" role="status" data-testid="relearn-banner">
           <span className="relearn-icon" aria-hidden="true">
-            🔁
+            <Icon name="repeat" size={26} />
           </span>
           <div>
             <b>
@@ -343,7 +358,7 @@ export function Solve(props: { target: Target; onExit: () => void; onResult: (pe
           )}
           {!isMock && (note || otherNote) && (
             <span className="memo-badge" data-testid="memo-badge">
-              📝 메모 있음
+              <Icon name="note" size={15} /> 메모 있음
             </span>
           )}
           {showRounds && <span className="freq-list">{history.get(q.qid)!.join(' · ')}</span>}
@@ -373,10 +388,10 @@ export function Solve(props: { target: Target; onExit: () => void; onResult: (pe
               if (!note && otherNote) setNote(otherNote);
               setNoteOpen((v) => !v);
             }} aria-expanded={noteOpen} data-testid="memo-btn">
-              ✎ {note ? '메모 수정' : '메모 쓰기'}
+              <Icon name="pencil" size={17} /> {note ? '메모 수정' : '메모 쓰기'}
             </button>
             <button className="chip-btn" onClick={webSearch} data-testid="search-after">
-              🔎 웹검색
+              <Icon name="search" size={17} /> 웹검색
             </button>
           </div>
           {noteOpen && (
@@ -397,7 +412,9 @@ export function Solve(props: { target: Target; onExit: () => void; onResult: (pe
       {goalOpen && today && (
         <div className="modal-back" role="dialog" aria-modal="true" aria-labelledby="goal-title" data-testid="goal-box">
           <section className="modal">
-            <h2 id="goal-title">🎉 오늘 학습 목표 달성</h2>
+            <h2 id="goal-title">
+              <Icon name="flag" size={24} /> 오늘 학습 목표 달성
+            </h2>
             <p className="muted">
               오늘 목표 {today.target}문항을 다 풀었습니다.
             </p>
@@ -471,7 +488,7 @@ export function Solve(props: { target: Target; onExit: () => void; onResult: (pe
               모름
             </button>
             <button className="btn btn-next btn-search" disabled={!q} onClick={webSearch} data-testid="web-search">
-              🔎 웹검색
+              <Icon name="search" size={20} /> 웹검색
             </button>
           </div>
         )}

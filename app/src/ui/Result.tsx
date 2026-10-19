@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { startSubject, startToday } from '../coach';
 import { ensureWrongRun, loadSession, passHistory, restartPass, sessionResult, type PassRecord, type Result as R, type Target } from '../study';
 import { askConfirm } from './Dialog';
+import { BackButton } from './Icon';
 
 const VERDICT: Record<NonNullable<R['verdict']>, { icon: string; text: string; cls: string }> = {
   pass: { icon: '✓', text: '합격선 통과', cls: 'ok' },
@@ -61,9 +62,7 @@ export function Result(props: { target: Target; onHome: () => void; /** 위 ‹ 
   return (
     <div className="app">
       <header className="page-head">
-        <button className="icon-btn" onClick={props.onBack ?? props.onHome} aria-label="뒤로" data-testid="result-back">
-          ‹
-        </button>
+        <BackButton label={props.onBack ? '이전' : '홈'} onClick={props.onBack ?? props.onHome} testId="result-back" />
         <h1>{isMock ? '모의고사 결과' : res.complete ? '풀이 결과' : '지금까지 성적'}</h1>
       </header>
       <section className="card result-hero" data-testid="result">

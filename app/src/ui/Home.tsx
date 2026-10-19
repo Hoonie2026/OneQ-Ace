@@ -11,6 +11,7 @@ import { ForecastView } from './ForecastView';
 import { Principles } from './Principles';
 import { computeInsight, type Insight } from '../insight';
 import { resetPageZoom } from '../util';
+import { BackButton, Icon } from './Icon';
 
 /** 홈 안의 보기: 홈 / 과목 골라서 / 모의고사(ADR 010 — 홈에는 오늘 학습만, 나머지는 한 번 더 들어가서) */
 type View = 'home' | 'recommend' | 'subjects' | 'mock' | 'forecast' | 'principles';
@@ -137,7 +138,7 @@ export function Home(props: {
           </div>
         </div>
         <button className="icon-btn" onClick={props.onSettings} aria-label="백업·설정">
-          ⚙
+          <Icon name="settings" size={24} />
         </button>
       </header>
 
@@ -193,9 +194,7 @@ export function Home(props: {
           )}
           {view !== 'home' && (
             <header className="page-head sub-head">
-              <button className="back-btn" onClick={() => setView('home')} aria-label="홈으로" data-testid="back-home">
-                <span aria-hidden="true">←</span> 홈
-              </button>
+              <BackButton label="홈" aria="홈으로" onClick={() => setView('home')} testId="back-home" />
               <h1>{TITLES[view]}</h1>
             </header>
           )}

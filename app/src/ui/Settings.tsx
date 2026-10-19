@@ -20,6 +20,7 @@ import { examLabel } from '../study';
 import { PackPicker } from './PackPicker';
 import { askConfirm, showNotice } from './Dialog';
 import type { PackRow } from '../db';
+import { BackButton } from './Icon';
 
 export function Settings(props: {
   version: number;
@@ -139,9 +140,7 @@ export function Settings(props: {
   return (
     <div className="app">
       <header className="page-head">
-        <button className="icon-btn" onClick={props.onBack} aria-label="뒤로">
-          ‹
-        </button>
+        <BackButton label="홈" onClick={props.onBack} />
         <h1>백업·설정</h1>
       </header>
 

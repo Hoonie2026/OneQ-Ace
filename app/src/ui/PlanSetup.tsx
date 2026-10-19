@@ -3,6 +3,7 @@ import { examViews, fmtMinutes } from '../coach';
 import { addDays, formatDate, parseDate, startOfDay } from '../engine/days';
 import { DEFAULT_PLAN_SETTINGS, engineForecast, engineOutlook, loadEngine, loadPlanSettings, savePlanSettings, type EngineContext } from '../engine';
 import { scoreTone } from './CoachCard';
+import { BackButton } from './Icon';
 
 const DAILY = [30, 45, 60, 90, 120, 150, 180, 240];
 
@@ -79,9 +80,7 @@ export function PlanSetup(props: { certCode: string; certName: string; onBack: (
   return (
     <div className="app">
       <header className="page-head">
-        <button className="icon-btn" onClick={props.onBack} aria-label="뒤로">
-          ‹
-        </button>
+        <BackButton label="홈" onClick={props.onBack} />
         <h1>학습 계획</h1>
       </header>
 

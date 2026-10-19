@@ -2495,3 +2495,280 @@ details.why[open] summary::after {
     font-size: 11.5px;
   }
 }
+
+/* ════════════════════════════════════════════════════════════════════
+   v0.9.0 디자인 정리 — 한 가지 글꼴·글자 크기 단계·단추·머리·아이콘을 통일
+   (실기기 의견: 글씨 크기·경고창이 화면마다 달라 "가내수공업" 느낌)
+   글자 단계: 13 보조 · 15 설명 · 16 본문 · 18 강조 · 20 카드 제목 · 22~24 화면 제목 · 34 점수
+   기억에 남는 한 곳: 홈의 시험일 칸을 "수험표"처럼(남색 바탕·노란 D-day·절취선), 나머지는 조용하게
+   ════════════════════════════════════════════════════════════════════ */
+:root {
+  --font: 'Pretendard Variable', Pretendard, -apple-system, BlinkMacSystemFont, system-ui, 'Apple SD Gothic Neo', 'Noto Sans KR', 'Malgun Gothic', sans-serif;
+  --bg: #f2f4f7;
+  --ticket: #0f1d2e;
+  --ticket-ink: #ffffff;
+  --ticket-sub: rgb(255 255 255 / 0.72);
+  --radius: 16px;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0b1420;
+    --ticket: #16273d;
+  }
+}
+html,
+body,
+button,
+input,
+select,
+textarea {
+  font-family: var(--font);
+}
+body {
+  font-size: 16px;
+  line-height: 1.55;
+  letter-spacing: -0.005em;
+}
+.ico {
+  flex: none;
+  display: block;
+}
+h1 {
+  font-size: 23px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+h2 {
+  font-size: 19px;
+  font-weight: 700;
+  letter-spacing: -0.015em;
+}
+h3 {
+  font-size: 17px;
+  font-weight: 700;
+}
+.hint {
+  font-size: 14px;
+  line-height: 1.55;
+}
+.sub {
+  font-size: 14px;
+}
+.card {
+  border-radius: var(--radius);
+  padding: 16px 18px;
+}
+
+/* 단추: 큰(56) · 기본(48) · 작은(40) 세 가지, 아이콘과 글자 간격 6 */
+.btn {
+  gap: 6px;
+  min-height: 48px;
+  border-radius: 12px;
+  font-size: 16px;
+  font-weight: 600;
+}
+.btn-big {
+  min-height: 56px;
+  border-radius: 14px;
+  font-size: 17px;
+  font-weight: 700;
+}
+.btn-small {
+  min-height: 40px;
+  font-size: 15px;
+}
+.link-btn {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+/* 화면 머리: [‹ 홈] 제목 — 모든 화면 같은 모양 */
+.page-head {
+  gap: 12px;
+  margin: 2px 0 16px;
+  min-height: 48px;
+}
+.page-head h1 {
+  font-size: 22px;
+  font-weight: 800;
+}
+.sub-head {
+  margin-top: 0;
+}
+.back-btn {
+  gap: 2px;
+  min-height: 42px;
+  padding: 0 14px 0 8px;
+  border: 0;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--primary) 11%, var(--surface));
+  color: var(--primary);
+  font-size: 16px;
+  font-weight: 700;
+}
+.back-btn span {
+  font-size: inherit;
+}
+.back-btn:active {
+  background: color-mix(in srgb, var(--primary) 20%, var(--surface));
+}
+.back-btn:focus-visible,
+.icon-btn:focus-visible,
+.score-btn:focus-visible {
+  outline: 3px solid var(--primary);
+  outline-offset: 2px;
+}
+.icon-btn {
+  color: var(--ink);
+}
+.score-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 42px;
+  padding: 0 14px 0 12px;
+  border-radius: 999px;
+}
+
+/* 홈 머리 */
+.header h1 {
+  font-size: 22px;
+}
+
+/* 수험표: 시험일 | D-day */
+.card.exam-row {
+  padding: 6px;
+  border: 0;
+  border-radius: 18px;
+  background: var(--ticket);
+  color: var(--ticket-ink);
+}
+.exam-row .exam-date,
+.exam-row .exam-dday {
+  background: transparent;
+  color: var(--ticket-ink);
+}
+.exam-row .exam-date small,
+.exam-row .exam-dday small {
+  color: var(--ticket-sub);
+}
+.exam-row .exam-date .plan-link {
+  color: var(--accent);
+  text-decoration-color: color-mix(in srgb, var(--accent) 60%, transparent);
+}
+.exam-row .exam-date:active {
+  background: rgb(255 255 255 / 0.08);
+}
+.exam-row .exam-dday {
+  border-left: 2px dashed rgb(255 255 255 / 0.28);
+  border-radius: 0;
+}
+.exam-row .exam-dday b {
+  color: var(--accent);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+/* 점수 상자·카드 제목 */
+.score-box b {
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+.today-head h2,
+.card > h2:first-child {
+  font-size: 19px;
+}
+
+/* 학습 원리 단추·원리 카드 아이콘 */
+.principles-btn .principles-ico,
+.p-ico {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--primary) 11%, var(--surface));
+  color: var(--primary);
+}
+.principles-btn > .ico:last-child {
+  color: var(--muted);
+}
+.principles h3,
+.forecast h3 {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 18px;
+}
+.p-ico {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+}
+
+/* 확인 창: 제목 21 · 내용 18 · 단추 54 — 앱의 다른 글자 단계와 맞춤 */
+.dlg {
+  padding: 24px 20px 18px;
+  border-radius: 20px;
+}
+.dlg h2 {
+  margin: 0 0 10px;
+  font-size: 21px;
+  font-weight: 800;
+}
+.dlg-msg {
+  margin: 0 0 20px;
+  font-size: 18px;
+  line-height: 1.6;
+  color: var(--ink);
+}
+.dlg-btn {
+  min-height: 54px;
+  font-size: 17px;
+  font-weight: 700;
+}
+.modal {
+  border-radius: 20px;
+}
+.modal h2 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 21px;
+  font-weight: 800;
+}
+.modal h2 .ico {
+  color: var(--accent);
+}
+
+/* 학습 점검 카드·다시 풀기 띠·메모 표시 */
+.insight-card h2 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.relearn-icon .ico {
+  color: var(--check);
+}
+.memo-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.chip-btn,
+.btn-search {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.score-pair .arrow {
+  display: inline-grid;
+  color: var(--muted);
+}
+/* 여러 갈래 창: [주 단추] [보조 단추] 계속(글자 단추) — 세 단계가 한눈에 */
+.dlg-choices [data-testid='dialog-cancel'] {
+  border-color: transparent;
+  background: transparent;
+  color: var(--muted);
+}

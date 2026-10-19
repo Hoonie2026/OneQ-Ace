@@ -1,5 +1,6 @@
 import { fmtMinutes, type Coach } from '../coach';
 import type { Insight } from '../insight';
+import { Icon } from './Icon';
 
 /**
  * 시험일 예상 점수 색(v0.8.1 — 사용자 결정, "계획 수정 필요" 배지 대신): 60점 미만 빨강 · 75점 미만 주황 · 75점 이상 초록.
@@ -123,12 +124,14 @@ export function CoachCard(props: {
       </section>
 
       <button className="card principles-btn" onClick={props.onPrinciples} data-testid="principles-open">
-        <span aria-hidden="true">📘</span>
+        <span className="principles-ico" aria-hidden="true">
+          <Icon name="book" size={24} />
+        </span>
         <span>
           <b>학습 원리 · 예상 점수 계산 방법</b>
           <small>이 앱이 문항을 고르고 점수를 예상하는 방법과 그 근거(연구)</small>
         </span>
-        <span aria-hidden="true">›</span>
+        <Icon name="forward" size={20} />
       </button>
     </>
   );
@@ -148,7 +151,7 @@ export function InsightCard(props: { insight: Insight }) {
   return (
     <section className={`card insight-card ${level === 'risk' ? 'bad' : 'warn'}`} data-testid="insight-card" role="status">
       <h2>
-        <span aria-hidden="true">{level === 'risk' ? '⚠' : '!'}</span> {title}
+        <Icon name="alert" size={20} /> {title}
       </h2>
       <ul>
         {pace && (

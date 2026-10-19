@@ -1,5 +1,6 @@
 import { DIAG_OBS, REVIEW_SHARE } from '../engine/session';
 import { TARGET_RETENTION } from '../engine/memory';
+import { Icon, type IconName } from './Icon';
 
 /** 가상 학습자 시험(npm run gate) 결과 요약 — ADR 014·docs/engine-gate.md. 게이트를 다시 돌리면 함께 고친다 */
 export const GATE_SUMMARY = {
@@ -13,7 +14,7 @@ export const GATE_SUMMARY = {
 };
 
 interface Card {
-  icon: string;
+  icon: IconName;
   title: string;
   what: string;
   evidence: React.ReactNode;
@@ -24,7 +25,7 @@ const pct = (x: number) => `${Math.round(x * 100)}%`;
 
 const CARDS: Card[] = [
   {
-    icon: '✍',
+    icon: 'pencil',
     title: '읽지 말고 풀어라 — 인출 연습(시험 효과)',
     what: '머릿속에서 답을 꺼내 보는 연습이 다시 읽기보다 훨씬 오래 남습니다.',
     evidence: (
@@ -36,14 +37,14 @@ const CARDS: Card[] = [
     app: '모든 학습이 기출 풀이입니다. 보기를 스스로 고른 뒤 정답을 확인합니다. 모르면 찍지 말고 "모름" — 찍어서 맞힌 것을 아는 것으로 착각하지 않게 합니다.',
   },
   {
-    icon: '↻',
+    icon: 'repeat',
     title: '틀리면 바로 확인하고 한 번 더 — 피드백',
     what: '객관식 시험은 오답 보기를 정답으로 잘못 기억하게 만들 수 있는데, 정답을 바로 확인하면 이 부작용이 줄고 시험 효과는 커집니다[3].',
     evidence: <>객관식 시험 뒤 정답 피드백을 준 집단이 더 많이 기억했고, 오답 보기를 답으로 적는 실수가 줄었습니다[3].</>,
     app: '풀 때마다 바로 정답을 보여 주고, 한 묶음이 끝나면 그 묶음에서 틀리거나 모른 문항만 그 자리에서 다시 풉니다.',
   },
   {
-    icon: '📉',
+    icon: 'trend',
     title: '잊을 때쯤 다시 — 망각 곡선과 간격 반복',
     what: '사람은 배운 것을 처음에 빠르게, 그다음엔 천천히 잊습니다. 몰아서 하는 것보다 간격을 두고 나눠 복습할 때 훨씬 오래 기억합니다.',
     evidence: (
@@ -55,7 +56,7 @@ const CARDS: Card[] = [
     app: `문항마다 "기억률이 ${pct(TARGET_RETENTION)} 아래로 떨어질 날"을 계산해 그날 복습으로 냅니다. 틀린 문항은 곧, 맞힌 문항은 점점 길게.`,
   },
   {
-    icon: '⚙',
+    icon: 'calendar',
     title: 'FSRS — 문항마다 복습 날짜를 계산하는 알고리즘',
     what: '간격 반복 앱 Anki가 2023년 버전(23.10)부터 기본 탑재한 공개 알고리즘입니다. 기존 방식(SM-2)보다 언제 잊을지를 더 정확히 예측합니다.',
     evidence: (
@@ -72,14 +73,14 @@ const CARDS: Card[] = [
     ),
   },
   {
-    icon: '⚖',
+    icon: 'scale',
     title: '약한 과목 먼저 — 과락 막기',
     what: '과목 하나라도 40점 미만이면 평균이 높아도 불합격입니다. 같은 시간이면 가장 낮은 과목을 올리는 것이 합격에 가장 크게 보탭니다.',
     evidence: <>합격 확률을 과목별 점수로 계산해 보면, 과락선에 가까운 과목의 1점이 이미 안전한 과목의 1점보다 몇 배 값집니다(이 앱의 계산 — 아래 검증 참고).</>,
     app: `새 문항을 과목마다 합격에 보태는 정도에 비례해 나눕니다 — 과락선에 가까운 과목이 가장 많이, 안전한 과목도 잊지 않을 만큼 조금씩. 처음에는 과목마다 ${DIAG_OBS}문항씩 번갈아 풀어 실력을 진단합니다(진단이 끝나야 예상 점수가 나옵니다).`,
   },
   {
-    icon: '📚',
+    icon: 'book',
     title: '기출 중심 — 시험은 기출에서 많이 나온다',
     what: '같은 문항이 몇 년 뒤 다시 나오고, 숫자·표현만 바꾼 변형도 많습니다.',
     evidence: (
@@ -91,7 +92,7 @@ const CARDS: Card[] = [
     app: '여러 회차에 나온 문항부터 냅니다. 같은 문항은 하나로 묶어 한 번 익히면 모든 회차에 반영합니다. 기출을 익히면 처음 보는 문항도 더 맞힌다는 연구(전이)[8]도 예상 점수에 넣었습니다.',
   },
   {
-    icon: '🔀',
+    icon: 'shuffle',
     title: '섞어 풀기는? — 솔직한 답',
     what: '여러 유형을 섞어 푸는 교차 학습은 평균적으로 효과가 있지만, 공부하는 내용에 따라 다릅니다.',
     evidence: (
@@ -138,7 +139,8 @@ export function Principles() {
       {CARDS.map((c) => (
         <article className="card principle" key={c.title}>
           <h3>
-            <span aria-hidden="true">{c.icon}</span> {c.title}
+            <span className="p-ico" aria-hidden="true"><Icon name={c.icon} size={20} /></span>
+            {c.title}
           </h3>
           <p>{c.what}</p>
           <p className="ev">
@@ -152,7 +154,8 @@ export function Principles() {
 
       <article className="card principle" data-testid="principle-forecast">
         <h3>
-          <span aria-hidden="true">🎯</span> 시험일 예상 점수
+          <span className="p-ico" aria-hidden="true"><Icon name="target" size={20} /></span>
+          시험일 예상 점수
         </h3>
         <p>
           ① 실제 시험 문항을 "보유 기출과 같은 문항 / 변형 / 처음 보는 문항"으로 나누고 ② 문항마다 시험일 아침의 기억률(FSRS)로 맞힐 확률을 계산한 뒤 ③ 남은 학습시간으로 더 익힐
@@ -166,7 +169,8 @@ export function Principles() {
 
       <article className="card principle" data-testid="principle-gate">
         <h3>
-          <span aria-hidden="true">🧪</span> 이 방법은 어떻게 검증했나
+          <span className="p-ico" aria-hidden="true"><Icon name="flask" size={20} /></span>
+          이 방법은 어떻게 검증했나
         </h3>
         <p>
           실력과 망각 속도가 다른 가상 학습자 3명(고른 실력 / 한 과목만 약함 / 빨리 잊음)을 시험 60·30·14일 전에서 출발시켜, 이 앱의 추천대로 공부했을 때와 <b>같은 시간 동안 회차 순서대로
@@ -187,7 +191,8 @@ export function Principles() {
 
       <article className="card principle">
         <h3>
-          <span aria-hidden="true">⚠</span> 한계
+          <span className="p-ico" aria-hidden="true"><Icon name="alert" size={20} /></span>
+          한계
         </h3>
         <ul className="plain">
           <li>연구 결과는 많은 사람의 평균 효과입니다. 사람마다 차이가 있어, 앱은 내 풀이 기록으로 계속 다시 계산합니다.</li>

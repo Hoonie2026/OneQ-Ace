@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { daySummary, finishToday, type DaySummary as S } from '../coach';
 import { scoreTone } from './CoachCard';
+import { BackButton, Icon } from './Icon';
 
 /**
  * 오늘 학습 마치기(ADR 009 — 실기기 v0.3.0 Q5): 오늘 푼 것, 현재 점수 ☞ 계획 이행 시 예상 점수.
@@ -19,9 +20,7 @@ export function DaySummary(props: { certCode: string; onHome: () => void }) {
   return (
     <div className="app">
       <header className="page-head">
-        <button className="icon-btn" onClick={props.onHome} aria-label="뒤로">
-          ‹
-        </button>
+        <BackButton label="홈" onClick={props.onHome} />
         <h1>오늘 학습 마침</h1>
       </header>
 
@@ -49,7 +48,7 @@ export function DaySummary(props: { certCode: string; onHome: () => void }) {
             <small>점</small>
           </div>
           <span className="arrow" aria-hidden="true">
-            ☞
+            <Icon name="arrow" size={26} />
           </span>
           <div className={scoreTone(s.projectedAvg)}>
             <small>계획 이행 시</small>
