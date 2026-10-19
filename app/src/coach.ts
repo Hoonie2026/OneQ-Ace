@@ -9,11 +9,11 @@ import {
   buildDailySession,
   minutesToday,
   buildSubjectSession,
-  examScore,
+  examScoreMix,
+  needRateMix,
   newItemRates,
   projectedRate,
   recordedScores,
-  repeatShare,
   engineForecast,
   engineOutlook,
   enginePlan,
@@ -28,7 +28,9 @@ import {
   type WeeklyPlan,
   DEFAULT_PLAN_SETTINGS,
 } from './engine';
-import { NEW_COST_BASE, NEW_COST_WRONG, OUTLOOK_MIN_OBS } from './engine/outlook';
+import { LEARNED_R, OUTLOOK_MIN_OBS } from './engine/outlook';
+import { TRANSFER_REF_ITEMS } from './engine/exam';
+import { trivialConcepts, type ExamShares } from './engine/similar';
 import { createSetRun, loadSession, sessionResult, setRuns, type Result, type Target } from './study';
 
 /** 과목 카드 하나(과목별 학습 화면) */
@@ -59,7 +61,10 @@ export interface SubjectView {
 export type ExamStatus = 'unknown' | 'pass' | 'tight' | 'avg-short' | 'fail-subject' | 'no-plan';
 
 export interface ExamView {
+  /** 기출(같은 문항 + 변형) 비율 — 시험 문항 중 보유 기출로 대비되는 몫 */
   rho: number;
+  /** 시험 구성: 같은 기출 / 변형 / 처음 보는 문항(ADR 013) */
+  shares: ExamShares;
   rounds: number;
   /** 현재 평균(기록 그대로) / 실제 시험 기준 예상 평균(계획대로, 계획 없으면 null) */
   currentAvg: number;
@@ -157,7 +162,7 @@ export async function loadCoach(certCode: string, now = Date.now(), d: OneQDB = 
 /** 과목 카드와 실제 시험 기준 예상(ADR 008) */
 export function examViews(ctx: EngineContext, forecast: Forecast | null, outlook: PassOutlook | null, now: number): { subjects: SubjectView[]; exam: ExamView; order: string[] } {
   const { bank, mem, attempts } = ctx;
-  const rs = repeatShare(bank);
+  const shares = bank.shares ?? trivialConcepts(bank).shares;
   const rates = newItemRates(bank, attempts);
   const rec = recordedScores(bank, attempts);
   const avail = availableCounts(bank, mem, now, attempts);
@@ -165,12 +170,8 @@ export function examViews(ctx: EngineContext, forecast: Forecast | null, outlook
   const current = bank.subjects.filter((s) => s.current);
   const bankNow = new Map((forecast?.subjects ?? []).map((s) => [s.key, s.score]));
   const bankProj = new Map((outlook?.subjects ?? []).map((s) => [s.key, s.projected]));
-  // 시험일까지 새로 익힐 기출 비율(ADR 011): 남은 풀이 횟수에서 이미 푼 문항 복습 1회씩을 빼고, 새 문항 하나에 약 3회
   const itemsOf = new Map(current.map((s) => [s.key, bank.items.filter((it) => it.subjectKey === s.key)]));
   const seenOf = new Map(current.map((s) => [s.key, itemsOf.get(s.key)!.filter((it) => mem.items.has(it.key)).length]));
-  const unseenTotal = current.reduce((t, s) => t + itemsOf.get(s.key)!.length - seenOf.get(s.key)!, 0);
-  const cap = outlook ? (outlook.plannedMinutes * 60) / mem.secPerQuestion : 0;
-  const newBudget = Math.max(0, cap - [...seenOf.values()].reduce((a, b) => a + b, 0)) / (NEW_COST_BASE + NEW_COST_WRONG * 0.5);
   const solvesOf = new Map<string, { n: number; last: number }>();
   for (const a of attempts) {
     const sk = bank.itemOf.get(a.qid)?.subjectKey;
@@ -184,17 +185,20 @@ export function examViews(ctx: EngineContext, forecast: Forecast | null, outlook
     const its = itemsOf.get(s.key)!;
     const rate = rates.get(s.key)!;
     const bp = bankProj.get(s.key);
-    const unseen = its.length - seenOf.get(s.key)!;
-    const gain = unseenTotal ? Math.min(unseen, (newBudget * unseen) / unseenTotal) / Math.max(1, its.length) : 0;
+    const bn = bankNow.get(s.key) ?? 100 * rate.exam;
+    // 시험일까지 새로 익힐 기출 몫(ADR 011·013): 투영에서 오른 기출 점수 ÷ 다 익혔을 때 오를 수 있는 폭
+    const prior = mem.prior.get(s.key) ?? 0.25;
+    const room = 100 * (LEARNED_R + (1 - LEARNED_R) * prior - prior);
+    const gain = (bp == null || room <= 0 ? 0 : Math.max(0, Math.min(1, (bp - bn) / room))) * Math.min(1, its.length / TRANSFER_REF_ITEMS);
     const rateT = projectedRate(rate, gain);
     return {
       key: s.key,
       name: s.name,
       current: rec.get(s.key) ?? 0,
-      examNow: examScore(bankNow.get(s.key) ?? 100 * rate.exam, rate, rs.rho),
-      examProjected: bp == null ? null : examScore(bp, rateT, rs.rho),
+      examNow: examScoreMix(bn, rate, shares),
+      examProjected: bp == null ? null : examScoreMix(bp, rateT, shares),
       newRate: rate,
-      needNewRate: bp == null ? null : Math.max(0, Math.min(1, (rule.subjectMin - rs.rho * bp) / (1 - rs.rho) / 100)),
+      needNewRate: bp == null ? null : needRateMix(rule.subjectMin, bp, shares),
       avail: avail.get(s.key) ?? { relearn: 0, due: 0, fresh: 0 },
       seen: seenOf.get(s.key)!,
       solves: solvesOf.get(s.key)?.n ?? 0,
@@ -224,7 +228,7 @@ export function examViews(ctx: EngineContext, forecast: Forecast | null, outlook
   return {
     subjects: views,
     order: ordered.map((v) => v.key),
-    exam: { rho: rs.rho, rounds: new Set(bank.examDateOf.values()).size, currentAvg: avg(views.map((v) => v.current)), projectedAvg: projected, status, failSubjects: fail },
+    exam: { rho: shares.same + shares.variant, shares, rounds: new Set(bank.examDateOf.values()).size, currentAvg: avg(views.map((v) => v.current)), projectedAvg: projected, status, failSubjects: fail },
   };
 }
 
@@ -241,9 +245,15 @@ export async function startSubject(certCode: string, subjectKey: string, now = D
 
 /** 문항의 출제 이력: 같은 내용이 나온 회차들(최근 순). 1회면 빈 배열 대신 그 회차 하나 */
 export async function questionHistory(certCode: string, d: OneQDB = defaultDb): Promise<Map<string, string[]>> {
+  return (await questionMeta(certCode, d)).history;
+}
+
+/** 출제 이력 + 같은 내용 문항들(다른 회차에 쓴 메모를 보여 주는 데 — v0.7) */
+export async function questionMeta(certCode: string, d: OneQDB = defaultDb): Promise<{ history: Map<string, string[]>; siblings: Map<string, string[]> }> {
   const ctx = await loadEngine(certCode, d);
   const out = new Map<string, string[]>();
-  if (!ctx) return out;
+  const siblings = new Map<string, string[]>();
+  if (!ctx) return { history: out, siblings };
   const label = (qid: string) => {
     const y = (ctx.bank.examDateOf.get(qid) ?? '').split('-')[0];
     const round = qid.split('-').slice(-2, -1)[0];
@@ -251,9 +261,12 @@ export async function questionHistory(certCode: string, d: OneQDB = defaultDb): 
   };
   for (const it of ctx.bank.items) {
     const rounds = [...new Set(it.qids.map(label))];
-    for (const q of it.qids) out.set(q, rounds);
+    for (const q of it.qids) {
+      out.set(q, rounds);
+      siblings.set(q, it.qids.filter((x) => x !== q));
+    }
   }
-  return out;
+  return { history: out, siblings };
 }
 
 export const md = (ts: number) => new Date(ts).toLocaleDateString('ko-KR', { month: 'numeric', day: 'numeric' });

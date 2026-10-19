@@ -1,0 +1,18 @@
+{
+  "code": "SURVEY",
+  "name": "측량및지형공간정보기사",
+  "grade": "기사",
+  "version": "2012",
+  "note": "2012년부터 현행 5과목 구성. 2011년 3회차는 머리말만 현행 이름이고 내용은 구기준(ADR 005 추가 절) → 문항별 재배정",
+  "passRule": { "subjectMin": 40, "avgMin": 60 },
+  "subjects": [
+    { "name": "측지학 및 위성측위시스템", "count": 20 },
+    { "name": "응용측량", "count": 20 },
+    { "name": "사진측량 및 원격탐사", "count": 20 },
+    { "name": "지리정보시스템", "count": 20 },
+    { "name": "측량학", "count": 20 }
+  ],
+  "aliases": {},
+  "excluded": [],
+  "legacy": { "before": "2012-01-01", "action": "reassign" }
+}

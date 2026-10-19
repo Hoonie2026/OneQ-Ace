@@ -27,6 +27,8 @@ export interface PackManifest {
   createdAt: string;
   generator: string;
   answerMasking: { method: string[]; masked: number; leakCheck: 'passed' | 'failed' };
+  excluded?: { subject: string; nos: number[]; reason: 'abolished-subject' | 'unreadable' | 'other'; note?: string }[];
+  standard?: { profile: string; version: string; renamed?: string[]; reassigned?: number };
   files: { path: string; sha256: string; bytes: number }[];
 }
 
@@ -119,7 +121,15 @@ export async function validateFiles(files: Record<string, Uint8Array>): Promise<
     }
     if (!listed.has(q.img)) add('MISSING_FILE', `${q.qid}: 이미지 ${q.img}가 manifest.files에 없음`);
   }
-  if (!questions.every((q, i) => q.no === i + 1)) add('NUMBERING', '문항번호가 1부터 연속하지 않음');
+  const gaps = (manifest.excluded ?? []).flatMap((e) => e.nos);
+  const gapSet = new Set(gaps);
+  const want: number[] = [];
+  for (let n = 1; n <= questions.length + gapSet.size; n++) if (!gapSet.has(n)) want.push(n);
+  if (gapSet.size !== gaps.length || questions.some((q) => gapSet.has(q.no))) {
+    add('NUMBERING', '제외 번호(excluded)가 겹치거나 팩 문항과 겹침');
+  } else if (questions.length !== want.length || !questions.every((q, i) => q.no === want[i])) {
+    add('NUMBERING', '문항번호가 1부터 연속하지 않음(excluded 제외)');
+  }
 
   const subj = new Map(manifest.subjects.map((s) => [s.no, s]));
   const counts = new Map<number, number[]>();

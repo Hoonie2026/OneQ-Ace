@@ -15,6 +15,8 @@
   --check: #a15c00;
   --check-bg: #fff3dc;
   --idle: #8a97a8;
+  --memo: #6a42c2;
+  --memo-bg: #f0eafb;
   --paper: #ffffff;
   --radius: 14px;
   --tap: 48px;
@@ -37,6 +39,8 @@
     --check: #ffbe5c;
     --check-bg: #3a2a0d;
     --idle: #6d7d92;
+    --memo: #b99cff;
+    --memo-bg: #2a1f45;
   }
 }
 
@@ -785,6 +789,48 @@ h3 {
   border-color: var(--check);
   background: transparent;
 }
+/* 모름 | 웹검색 (v0.7) */
+.unknown-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.btn-search {
+  color: var(--primary);
+  border-color: var(--primary);
+  background: transparent;
+}
+/* 메모 — 정답(초록)·오답(빨강)·출제 횟수(주황)와 구분되는 보라 */
+.memo-badge {
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: var(--memo-bg);
+  color: var(--memo);
+  font-size: 13px;
+  font-weight: 700;
+}
+.memo-box {
+  margin: 0 0 8px;
+  padding: 8px 10px;
+  border-left: 4px solid var(--memo);
+  border-radius: 8px;
+  background: var(--memo-bg);
+}
+.memo-box p {
+  margin: 2px 0 0;
+  color: var(--ink);
+  white-space: pre-wrap;
+  font-size: 15px;
+}
+.memo-label {
+  color: var(--memo);
+  font-size: 12px;
+  font-weight: 700;
+}
+.chip-btn.memo-btn.on {
+  border-color: var(--memo);
+  color: var(--memo);
+}
 
 /* 가로 화면: 문항은 왼쪽, 보기·다음은 오른쪽 */
 @media (orientation: landscape) and (max-height: 560px) {
@@ -827,42 +873,30 @@ h3 {
 }
 
 /* ── 자격종목 선택 ── */
-.cert-tabs {
+.cert-select {
   display: flex;
-  gap: 8px;
-  overflow-x: auto;
-  margin: -4px -16px 14px;
-  padding: 2px 16px 4px;
-  scrollbar-width: none;
+  align-items: center;
+  gap: 10px;
+  margin: -4px 0 14px;
 }
-.cert-tab {
+.cert-select span {
   flex: none;
-  display: grid;
-  justify-items: start;
-  min-height: var(--tap);
-  padding: 6px 14px;
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  background: var(--surface);
-  color: var(--ink);
-  font: inherit;
-  font-weight: 700;
-  line-height: 1.2;
-  text-align: left;
-}
-.cert-tab small {
-  font-weight: 500;
-  font-size: 12px;
+  font-size: 14px;
   color: var(--muted);
 }
-.cert-tab.on {
-  border-color: var(--primary);
-  background: var(--primary);
-  color: var(--primary-ink);
-}
-.cert-tab.on small {
-  color: inherit;
-  opacity: 0.85;
+.cert-select select {
+  flex: 1;
+  min-width: 0;
+  min-height: var(--tap);
+  padding: 0 36px 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' fill='none' stroke='%23888' stroke-width='2'/%3E%3C/svg%3E") no-repeat right 14px center;
+  color: var(--ink);
+  font: inherit;
+  font-size: 16px;
+  font-weight: 700;
+  appearance: none;
 }
 .score-btn {
   flex: none;
@@ -1552,4 +1586,64 @@ h3 {
 }
 .plan-preview.bad b {
   color: var(--fail);
+}
+
+/* ── 이 기기 데이터 지우기(v0.7) ── */
+.seg {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 10px;
+}
+.seg-btn {
+  min-height: var(--tap);
+  padding: 0 10px;
+  border: 1px solid var(--fail);
+  border-radius: 12px;
+  background: transparent;
+  color: var(--fail);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+.seg-btn.on {
+  background: var(--fail);
+  color: #fff;
+}
+.wipe-panel {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+.check-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 320px;
+  overflow-y: auto;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+.check-list li + li {
+  border-top: 1px solid var(--line);
+}
+.check-line {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: var(--tap);
+  padding: 0 12px;
+  cursor: pointer;
+}
+.check-line input {
+  width: 20px;
+  height: 20px;
+  accent-color: var(--fail);
+}
+.check-line.all {
+  padding: 0 4px;
+  font-weight: 700;
+}
+.pack-hint {
+  margin: 0 16px;
 }

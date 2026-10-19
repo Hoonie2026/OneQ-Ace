@@ -14,7 +14,7 @@ import {
   type RestoreReport,
 } from '../backup';
 import { db, describeError, getSetting, isStandalone, SETTING, STAGE0_DB_NAME } from '../db';
-import { deleteCert, wipeAll, wipeRecords } from '../wipe';
+import { deletePacks, wipeAll, wipeCertRecords, wipeRecords } from '../wipe';
 import { deviceSummary, formatBytes, readStorageInfo, type StorageInfo } from '../util';
 import { examLabel } from '../study';
 import { PackPicker } from './PackPicker';
@@ -40,6 +40,10 @@ export function Settings(props: {
   const [report, setReport] = useState<RestoreReport | null>(null);
   const [stage0, setStage0] = useState(false);
   const [certs, setCerts] = useState<{ code: string; name: string; packs: number; attempts: number }[]>([]);
+  /** 이 기기 데이터 지우기(v0.7): 무엇을(기록 / 문제팩) · 어느 종목('*' = 모든 종목) · 어떤 팩 */
+  const [wipeMode, setWipeMode] = useState<'records' | 'packs' | null>(null);
+  const [wipeCert, setWipeCert] = useState<string>('');
+  const [picked, setPicked] = useState<Set<string>>(new Set());
   const appUrl = new URL(import.meta.env.BASE_URL, window.location.origin).href;
 
   const load = async () => {
@@ -236,7 +240,7 @@ export function Settings(props: {
           <h2>문제팩 {packs.length}회차</h2>
           <PackPicker busy={props.busy} onFiles={props.onImport} small />
         </div>
-        <p className="hint">처음 공부를 시작할 때 한 번 가져오고, 합격한 뒤 지우거나 동료에게 나눌 때 씁니다.</p>
+        <p className="hint">가져온 문제팩 현황입니다. 회차를 누르면 정보를 봅니다. 지우기는 아래 <b>이 기기 데이터 지우기 → 문제팩 지우기</b>에서 합니다.</p>
         <ul className="pack-lines">
           {packs.map((p) => (
             <li key={p.packId}>
@@ -270,13 +274,12 @@ export function Settings(props: {
                 </span>
                 <button
                   className="btn btn-small btn-danger"
-                  onClick={async () => {
-                    if (!window.confirm(`${c.name}을(를) 삭제합니다.\n문제팩 ${c.packs}회차와 이 종목의 학습 기록 ${c.attempts}건이 지워집니다(다른 종목은 그대로).\n합격 등으로 더 공부하지 않을 때 쓰세요. 계속할까요?`)) return;
-                    if (!window.confirm('기록을 남기려면 먼저 백업하세요. 지금 삭제할까요?')) return;
-                    const r = await deleteCert(c.code);
-                    props.toast(`${c.name} 삭제: 문제팩 ${r.packs}회차, 풀이 기록 ${r.attempts}건`);
-                    props.onChanged();
-                    await load();
+                  onClick={() => {
+                    // 종목 삭제 = 그 종목 문제팩 전체 + 학습 기록 + 학습 계획. 삭제는 아래 한 곳에서(전체 선택된 상태로 연다)
+                    setWipeMode('packs');
+                    setWipeCert(c.code);
+                    setPicked(new Set(packs.filter((p) => p.manifest.cert.code === c.code).map((p) => p.packId)));
+                    window.setTimeout(() => document.getElementById('wipe')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50);
                   }}
                 >
                   종목 삭제
@@ -285,44 +288,165 @@ export function Settings(props: {
             ))}
           </ul>
         )}
+        <p className="hint">종목 삭제는 그 종목의 문제팩·학습 기록·학습 계획을 모두 지웁니다(다른 종목은 그대로).</p>
       </section>
 
-      <section className="card">
+      <section className="card" id="wipe" data-testid="wipe-section">
         <h2>이 기기 데이터 지우기</h2>
         <p className="hint">
-          Android에서 앱 아이콘을 삭제해도 데이터는 Chrome에 남습니다(다시 설치하면 그대로 보임). 다시 시작하거나 휴대폰을 넘길 때는 여기서 지웁니다. 되돌릴
-          수 없으니 먼저 백업하세요.
+          Android에서 앱 아이콘을 삭제해도 데이터는 Chrome에 남습니다(다시 설치하면 그대로 보임). 다시 시작하거나 휴대폰을 넘길 때, 합격한 종목을 정리할 때 여기서
+          지웁니다. 되돌릴 수 없으니 먼저 백업하세요.
         </p>
-        <div className="stack">
+        <div className="seg" role="tablist">
           <button
-            className="btn btn-danger btn-block"
+            role="tab"
+            aria-selected={wipeMode === 'records'}
+            className={`seg-btn${wipeMode === 'records' ? ' on' : ''}`}
             data-testid="wipe-records"
-            onClick={async () => {
-              if (!window.confirm(`학습 기록(${fp ? formatFingerprint(fp) : ''})만 지우고 문제팩은 남깁니다. 백업 파일을 저장했나요?`)) return;
-              await wipeRecords();
-              props.toast('학습 기록을 지웠습니다. 문제팩은 그대로입니다');
-              props.onChanged();
-              props.onBack();
+            onClick={() => {
+              setWipeMode(wipeMode === 'records' ? null : 'records');
+              setWipeCert(wipeCert || certs[0]?.code || '*');
             }}
           >
-            학습 기록만 지우기(문제팩 유지)
+            학습 기록만 지우기
           </button>
           <button
-            className="btn btn-danger btn-block"
+            role="tab"
+            aria-selected={wipeMode === 'packs'}
+            className={`seg-btn${wipeMode === 'packs' ? ' on' : ''}`}
             data-testid="wipe"
-            onClick={async () => {
-              if (!window.confirm(`문제팩과 학습 기록(${fp ? formatFingerprint(fp) : ''})을 모두 지웁니다. 백업 파일을 저장했나요?`)) return;
-              if (!window.confirm('정말 모두 지울까요? 되돌릴 수 없습니다.')) return;
-              await wipeAll();
-              await Dexie.delete(STAGE0_DB_NAME).catch(() => undefined);
-              props.toast('모두 지웠습니다. 문제팩을 다시 가져오세요');
-              props.onChanged();
-              props.onBack();
+            onClick={() => {
+              setWipeMode(wipeMode === 'packs' ? null : 'packs');
+              setWipeCert(wipeCert || certs[0]?.code || '*');
+              setPicked(new Set());
             }}
           >
-            문제팩까지 모두 지우기
+            문제팩 지우기
           </button>
         </div>
+        {wipeMode && (
+          <div className="stack wipe-panel">
+            <label className="field">
+              <span>자격종목</span>
+              <select
+                value={wipeCert}
+                onChange={(e) => {
+                  setWipeCert(e.target.value);
+                  setPicked(new Set());
+                }}
+                data-testid="wipe-cert"
+              >
+                {certs.map((c) => (
+                  <option key={c.code} value={c.code}>
+                    {c.name}
+                  </option>
+                ))}
+                <option value="*">모든 종목(이 기기 전체)</option>
+              </select>
+            </label>
+            {wipeMode === 'records' && (() => {
+              const c = certs.find((x) => x.code === wipeCert);
+              return (
+                <>
+                  <p className="hint">
+                    {wipeCert === '*' ? `모든 종목의 학습 기록(${fp ? formatFingerprint(fp) : ''})` : `${c?.name}의 학습 기록(풀이 ${c?.attempts ?? 0}건·메모·학습 묶음)`}을 지웁니다. 문제팩과 학습 계획은 그대로입니다.
+                  </p>
+                  <button
+                    className="btn btn-danger btn-block"
+                    data-testid="wipe-records-go"
+                    onClick={async () => {
+                      const what = wipeCert === '*' ? '모든 종목' : c?.name;
+                      if (!window.confirm(`${what}의 학습 기록을 지웁니다. 백업 파일을 저장했나요?`)) return;
+                      if (wipeCert === '*') await wipeRecords();
+                      else await wipeCertRecords(wipeCert);
+                      props.toast(`${what}의 학습 기록을 지웠습니다. 문제팩은 그대로입니다`);
+                      setWipeMode(null);
+                      props.onChanged();
+                      await load();
+                    }}
+                  >
+                    {wipeCert === '*' ? '모든 종목 학습 기록 지우기' : `${c?.name ?? ''} 학습 기록 지우기`}
+                  </button>
+                </>
+              );
+            })()}
+            {wipeMode === 'packs' && wipeCert === '*' && (
+              <>
+                <p className="hint">모든 종목의 문제팩·학습 기록·설정을 지웁니다(휴대폰을 넘길 때).</p>
+                <button
+                  className="btn btn-danger btn-block"
+                  data-testid="wipe-all-go"
+                  onClick={async () => {
+                    if (!window.confirm(`문제팩과 학습 기록(${fp ? formatFingerprint(fp) : ''})을 모두 지웁니다. 백업 파일을 저장했나요?`)) return;
+                    if (!window.confirm('정말 모두 지울까요? 되돌릴 수 없습니다.')) return;
+                    await wipeAll();
+                    await Dexie.delete(STAGE0_DB_NAME).catch(() => undefined);
+                    props.toast('모두 지웠습니다. 문제팩을 다시 가져오세요');
+                    props.onChanged();
+                    props.onBack();
+                  }}
+                >
+                  모두 지우기
+                </button>
+              </>
+            )}
+            {wipeMode === 'packs' && wipeCert !== '*' && (() => {
+              const list = packs.filter((p) => p.manifest.cert.code === wipeCert);
+              const allOn = list.length > 0 && list.every((p) => picked.has(p.packId));
+              const name = certs.find((x) => x.code === wipeCert)?.name ?? '';
+              const toggle = (id: string) =>
+                setPicked((cur) => {
+                  const n = new Set(cur);
+                  if (n.has(id)) n.delete(id);
+                  else n.add(id);
+                  return n;
+                });
+              return (
+                <>
+                  <label className="check-line all">
+                    <input type="checkbox" checked={allOn} onChange={() => setPicked(allOn ? new Set() : new Set(list.map((p) => p.packId)))} data-testid="wipe-pick-all" />
+                    <span>
+                      전체 선택 <small className="muted">({list.length}회차)</small>
+                    </span>
+                  </label>
+                  <ul className="check-list">
+                    {list.map((p) => (
+                      <li key={p.packId}>
+                        <label className="check-line">
+                          <input type="checkbox" checked={picked.has(p.packId)} onChange={() => toggle(p.packId)} data-testid={`wipe-pick-${p.packId}`} />
+                          <span>
+                            {examLabel(p.manifest)} <small className="muted">{p.manifest.questionCount}문항</small>
+                          </span>
+                        </label>
+                      </li>
+                    ))}
+                  </ul>
+                  <p className="hint">
+                    고른 문제팩과 <b>그 문제팩 문항의 학습 기록(풀이·메모)</b>을 함께 지웁니다.
+                    {allOn ? ` 전체를 고르면 ${name} 종목이 없어지고 학습 계획도 지워집니다.` : ''}
+                  </p>
+                  <button
+                    className="btn btn-danger btn-block"
+                    disabled={!picked.size}
+                    data-testid="wipe-packs-go"
+                    onClick={async () => {
+                      const ids = list.filter((p) => picked.has(p.packId)).map((p) => p.packId);
+                      if (!window.confirm(`${name} 문제팩 ${ids.length}개와 그 학습 기록을 지웁니다${allOn ? `(종목 삭제)` : ''}. 백업 파일을 저장했나요?`)) return;
+                      const r = await deletePacks(ids);
+                      props.toast(`${name} 문제팩 ${r.packs}개 삭제 · 풀이 기록 ${r.attempts}건 삭제${r.certsGone.length ? ' · 종목 삭제' : ''}`);
+                      setPicked(new Set());
+                      if (r.certsGone.length) setWipeCert('');
+                      props.onChanged();
+                      await load();
+                    }}
+                  >
+                    {picked.size ? `선택한 문제팩 ${picked.size}개 삭제(학습 기록 포함)` : '지울 문제팩을 고르세요'}
+                  </button>
+                </>
+              );
+            })()}
+          </div>
+        )}
       </section>
 
       <section className="card">

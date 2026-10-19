@@ -71,7 +71,8 @@ describe('홈 대시보드·오늘 학습(5단계)', () => {
     const r = await sessionResult(s, d);
     expect(r.complete).toBe(true);
     expect(r.verdict).toBeNull(); // 오늘 학습은 합격 판정 없음
-    expect(r.subjects.map((x) => x.name)).toEqual(['과목1']); // 추천 과목부터(회차가 달라도 과목명으로 묶음)
+    // 추천 과목부터(회차가 달라도 과목명으로 묶음). 두 과목 조건이 같으면 어느 쪽이든 추천된 과목 하나만
+    expect(r.subjects.map((x) => x.name)).toEqual([pre.subjects.find((x) => x.key === pre.order[0])!.name]);
     expect(r.wrongQids).toHaveLength(5);
     // 회독 진도는 그대로 0
     const sum = await packSummary((await d.packs.get('TEST-2022-1'))!, d);
@@ -195,9 +196,11 @@ describe('과목별 학습·실제 시험 기준 예상(ADR 008)', () => {
     expect(s1.avail.relearn).toBe(15); // 오늘 모름 15 → 다시
     expect(s1.newRate.raw).toBeLessThan(0.05);
     expect(s1.newRate.exam).toBeGreaterThan(0.2); // 시험에선 찍어서 25%
-    expect(c.exam.rho).toBeGreaterThan(0.09);
-    expect(c.exam.rho).toBeLessThan(0.12); // 회차가 적어 기본값(10%) 쪽
-    expect(s1.examProjected!).toBeLessThan(40); // 1회차 문항을 다 외워도 처음 보는 문항이 대부분 → 과락
+    // 기출(같은 문항 + 변형) 비율: 2회차뿐이라 실측 곡선(1~2회차 보유 시 2~3%) 쪽으로 — 실측 1문항 반복은 거의 반영 안 됨(ADR 013)
+    expect(c.exam.rho).toBeGreaterThan(0.01);
+    expect(c.exam.rho).toBeLessThan(0.12);
+    expect(c.exam.shares.same + c.exam.shares.variant + c.exam.shares.fresh).toBeCloseTo(1);
+    expect(s1.examProjected!).toBeLessThan(40); // 모름만 누른 과목: 기출 2회차 분량으로는 과락
     expect(c.exam.status === 'unknown' || c.exam.status === 'fail-subject').toBe(true);
     // 오늘 학습 순서: 진단이 덜 된 과목2 먼저
     expect(c.order[0]).not.toBe(k1);

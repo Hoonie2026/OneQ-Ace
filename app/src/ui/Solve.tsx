@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { db, type AttemptRow, type QuestionRow } from '../db';
-import { deadlineOf, examLabel, finishRun, firstUnanswered, loadSession, pauseRun, recordAnswer, resumeRun, saveNote, setUnsure, type Session, type Target } from '../study';
+import { deadlineOf, examLabel, finishRun, firstUnanswered, loadSession, pauseRun, recordAnswer, resumeRun, saveNote, type Session, type Target } from '../study';
 import { ZoomImage } from './ZoomImage';
-import { questionHistory, startRelearn } from '../coach';
+import { questionMeta, startRelearn } from '../coach';
+import { googleUrl, searchQuery } from '../search';
 
 const CIRCLED = ['', '①', '②', '③', '④', '⑤'];
 const MAX_ELAPSED = 30 * 60 * 1000;
@@ -13,6 +14,10 @@ const MAX_ELAPSED = 30 * 60 * 1000;
  *
  * 모의고사(5단계): 정답을 보여 주지 않고 고르면 다음 문항으로. 남은 시간이 위에 보이고, 제출하거나 시간이 끝나면 채점(성적 화면).
  * ✕로 나가면 남은 시간이 멈추고, 이어서 열면 그때부터 다시 흐른다(앱을 강제로 닫으면 계속 흐름).
+ *
+ * v0.7(실기기 v0.6.0 의견): 교재 없이 앱만으로 공부하므로 "모름" 옆에 **웹검색**(문항 핵심 낱말로 구글 검색).
+ * 답하기 전에 검색했으면 그 풀이는 "자신 없이 맞힘"(unsure)으로 기록한다. "헷갈림" 단추는 없애고,
+ * "한 줄 설명"은 **메모**로 — 메모가 있는 문항은 다시 풀 때 "메모 있음"이 보인다(다른 회차의 같은 문항 메모 포함).
  */
 export function Solve(props: { target: Target; onExit: () => void; onResult: () => void; onSolve?: (t: Target) => void }) {
   const [s, setS] = useState<Session | null>(null);
@@ -24,6 +29,11 @@ export function Solve(props: { target: Target; onExit: () => void; onResult: () 
   const [saving, setSaving] = useState(false);
   const [nowMs, setNowMs] = useState(Date.now());
   const [history, setHistory] = useState<Map<string, string[]>>(new Map());
+  const [siblings, setSiblings] = useState<Map<string, string[]>>(new Map());
+  /** 다른 회차의 같은 문항에 쓴 메모(이 문항 메모가 없을 때) */
+  const [otherNote, setOtherNote] = useState('');
+  /** 답하기 전에 웹검색한 문항 */
+  const searched = useRef(new Set<string>());
   const [showRounds, setShowRounds] = useState(false);
   const shownAt = useRef(performance.now());
   const hiddenFor = useRef(0);
@@ -53,7 +63,12 @@ export function Solve(props: { target: Target; onExit: () => void; onResult: () 
       setS(ss);
       setIndex(start);
       // 출제 이력(같은 내용이 나온 회차) — 문항 오른쪽 위 "n회 출제"(ADR 008)
-      questionHistory(ss.run.certCode ?? ss.pack.manifest.cert.code).then(setHistory).catch(() => undefined);
+      questionMeta(ss.run.certCode ?? ss.pack.manifest.cert.code)
+        .then((m) => {
+          setHistory(m.history);
+          setSiblings(m.siblings);
+        })
+        .catch(() => undefined);
     })();
   }, [JSON.stringify(props.target)]);
 
@@ -99,6 +114,22 @@ export function Solve(props: { target: Target; onExit: () => void; onResult: () 
     };
   }, [qid]);
 
+  // 이 문항 메모가 없으면 다른 회차의 같은 문항 메모를 찾는다
+  useEffect(() => {
+    let alive = true;
+    const sib = qid ? siblings.get(qid) ?? [] : [];
+    if (!qid || note || !sib.length) {
+      setOtherNote('');
+      return;
+    }
+    db.notes.bulkGet(sib).then((rows) => {
+      if (alive) setOtherNote(rows.find((x) => x?.text)?.text ?? '');
+    });
+    return () => {
+      alive = false;
+    };
+  }, [qid, siblings, note === '']);
+
   // 다음 문항을 읽는 동안에는 이전 문항을 쓰지 않는다(빠른 연속 탭이 이전 문항에 기록되던 경합 방지)
   const q = loaded && loaded.qid === qid ? loaded : null;
   const attempt: AttemptRow | undefined = q ? s?.answers.get(q.qid) : undefined;
@@ -108,7 +139,7 @@ export function Solve(props: { target: Target; onExit: () => void; onResult: () 
     setSaving(true);
     try {
       const elapsed = Math.min(MAX_ELAPSED, performance.now() - shownAt.current - hiddenFor.current);
-      const res = await recordAnswer(s, q, chosen, elapsed);
+      const res = await recordAnswer(s, q, chosen, elapsed, { unsure: searched.current.has(q.qid) });
       setS(res.session);
       if (isMock) {
         // 모의고사: 정답을 알리지 않고 다음 안 푼 문항으로(다 풀었으면 채점)
@@ -162,10 +193,12 @@ export function Solve(props: { target: Target; onExit: () => void; onResult: () 
     props.onExit();
   };
 
-  const toggleUnsure = async () => {
-    if (!s || !attempt) return;
-    await setUnsure(attempt.uid, !attempt.unsure);
-    setS({ ...s, answers: new Map(s.answers).set(attempt.qid, { ...attempt, unsure: !attempt.unsure }) });
+  /** 문항 핵심 낱말로 구글 검색(새 탭). 답하기 전이면 이 풀이를 "자신 없이 맞힘"으로 */
+  const webSearch = () => {
+    if (!q) return;
+    if (!attempt) searched.current.add(q.qid);
+    const subjName = (s && (s.packs.get(q.packId) ?? s.pack).manifest.subjects.find((x) => x.no === q.subjectNo)?.name) ?? '';
+    window.open(googleUrl(searchQuery(q.text ?? '', subjName)), '_blank', 'noopener');
   };
 
   const submit = async () => {
@@ -226,11 +259,18 @@ export function Solve(props: { target: Target; onExit: () => void; onResult: () 
           남은 시간 <b>{fmtLeft(deadline ? deadline - nowMs : 0)}</b>
         </p>
       )}
-      {q && (history.get(q.qid)?.length ?? 0) > 1 && (
+      {q && ((history.get(q.qid)?.length ?? 0) > 1 || (!isMock && (note || otherNote))) && (
         <div className="freq-row">
-          <button className="freq-badge" onClick={() => setShowRounds((v) => !v)} aria-expanded={showRounds} data-testid="freq-badge">
-            {history.get(q.qid)!.length}회 출제
-          </button>
+          {(history.get(q.qid)?.length ?? 0) > 1 && (
+            <button className="freq-badge" onClick={() => setShowRounds((v) => !v)} aria-expanded={showRounds} data-testid="freq-badge">
+              {history.get(q.qid)!.length}회 출제
+            </button>
+          )}
+          {!isMock && (note || otherNote) && (
+            <span className="memo-badge" data-testid="memo-badge">
+              📝 메모 있음
+            </span>
+          )}
           {showRounds && <span className="freq-list">{history.get(q.qid)!.join(' · ')}</span>}
         </div>
       )}
@@ -247,21 +287,31 @@ export function Solve(props: { target: Target; onExit: () => void; onResult: () 
               {attempt.chosen !== 0 && !chosenOk && ` · 내 답 ${CIRCLED[attempt.chosen]}`}
             </span>
           </p>
+          {!noteOpen && (note || otherNote) && (
+            <div className="memo-box" data-testid="memo-box">
+              <span className="memo-label">{note ? '내 메모' : '다른 회차 같은 문항 메모'}</span>
+              <p>{note || otherNote}</p>
+            </div>
+          )}
           <div className="feedback-tools">
-            <button className={`chip-btn${attempt.unsure ? ' on' : ''}`} onClick={toggleUnsure} aria-pressed={attempt.unsure}>
-              {attempt.unsure ? '☑' : '☐'} 헷갈림
+            <button className={`chip-btn memo-btn${note ? ' on' : ''}`} onClick={() => {
+              if (!note && otherNote) setNote(otherNote);
+              setNoteOpen((v) => !v);
+            }} aria-expanded={noteOpen} data-testid="memo-btn">
+              ✎ {note ? '메모 수정' : '메모 쓰기'}
             </button>
-            <button className={`chip-btn${note ? ' on' : ''}`} onClick={() => setNoteOpen((v) => !v)} aria-expanded={noteOpen}>
-              ✎ {note ? '내 설명' : '한 줄 설명'}
+            <button className="chip-btn" onClick={webSearch} data-testid="search-after">
+              🔎 개념 검색
             </button>
           </div>
           {noteOpen && (
             <textarea
               className="note"
-              rows={2}
-              maxLength={300}
+              rows={3}
+              maxLength={500}
               value={note}
-              placeholder="이 문제를 내 말로 한 줄 설명해 보세요"
+              autoFocus
+              placeholder="이 문제의 개념·풀이 요령을 메모해 두세요. 다시 풀 때 '메모 있음'으로 보입니다"
               onChange={(e) => setNote(e.target.value)}
               onBlur={() => saveNote(q, note)}
             />
@@ -294,10 +344,19 @@ export function Solve(props: { target: Target; onExit: () => void; onResult: () 
           <button className="btn btn-primary btn-block btn-next" onClick={next}>
             {remaining === 0 ? (isMock ? '채점하기' : '성적 보기') : '다음 →'}
           </button>
-        ) : (
+        ) : isMock ? (
           <button className="btn btn-block btn-next btn-unknown" disabled={saving || !q} onClick={() => answer(0)}>
             모름
           </button>
+        ) : (
+          <div className="unknown-row">
+            <button className="btn btn-next btn-unknown" disabled={saving || !q} onClick={() => answer(0)}>
+              모름
+            </button>
+            <button className="btn btn-next btn-search" disabled={!q} onClick={webSearch} data-testid="web-search">
+              🔎 웹검색
+            </button>
+          </div>
         )}
       </footer>
     </div>

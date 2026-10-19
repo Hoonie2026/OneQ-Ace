@@ -125,7 +125,8 @@ export function replay(bank: Bank, attempts: EngineAttempt[]): MemoryState {
     if (!m) {
       const f = firstCorrect.get(item.subjectKey) ?? { n: 0, c: 0 };
       f.n++;
-      if (a.correct) f.c++;
+      // 자신 없이 맞힌 것(검색 후·헷갈림)은 찍은 것과 같게 센다 — 처음 보는 문항 실력을 부풀리지 않게
+      if (a.correct) f.c += a.unsure ? GUESS : 1;
       firstCorrect.set(item.subjectKey, f);
       m = { card: createEmptyCard(new Date(a.ts)), firstTs: day, lastTs: a.ts, lastCorrect: a.correct, everWrong: false, attempts: 0 };
       items.set(item.key, m);

@@ -15,7 +15,8 @@ import { addDays, daysBetween, parseDate, startOfDay } from './days';
 import type { Bank } from './items';
 import { recallAt, type MemoryState } from './memory';
 import { studyTime } from './minutes';
-import { examTime, forecast } from './predict';
+import type { Item } from './items';
+import { examTime, forecast, itemExamP } from './predict';
 import type { PlanSettings } from './types';
 
 /** 간격 복습을 마친 학습 단위의 시험일 기억률(시뮬레이션으로 정함 — ADR 007) */
@@ -68,7 +69,16 @@ interface Action {
   subjectKey: string;
   gain: number; // 과목 점수 상승(점)
   cost: number; // 풀이 횟수
+  /** 이 행동을 하면 시험일 정답 확률이 target이 되는 학습 단위들(시험 직전 복습 대상) */
+  items: { key: string; w: number }[];
 }
+
+/** 같은 개념의 변형 문항을 익히는 비용(풀이 횟수): 이미 아는 개념이라 처음 보는 문항(약 3.6회)보다 적다(ADR 013) */
+export const VARIANT_COST = 1.7;
+/** 시험 직전 며칠(달력)의 학습시간은 이미 익힌 문항의 마지막 복습에 먼저 쓴다(ADR 013) */
+export const LATE_DAYS = 3;
+/** 시험 직전에 다시 본 문항의 시험일 기억률 */
+export const LATE_R = 0.95;
 
 const r1 = (x: number) => Math.round(x * 10) / 10;
 
@@ -82,71 +92,118 @@ export function passOutlook(bank: Bank, mem: MemoryState, settings: PlanSettings
   const T = examTime(settings.examDate);
   const daysLeft = Math.max(0, daysBetween(today, examDay));
   const time = daysLeft > 0 ? studyTime(settings, today, addDays(examDay, -1)) : { minutes: 0, days: 0 };
+  const lateFrom = Math.max(today, addDays(examDay, -LATE_DAYS));
+  const late = daysLeft > 0 ? studyTime(settings, lateFrom, addDays(examDay, -1)) : { minutes: 0, days: 0 };
   const sec = mem.secPerQuestion;
   const capacity = (time.minutes * 60) / sec;
+  const lateCapacity = (late.minutes * 60) / sec;
 
   const fc = forecast(bank, mem, settings.examDate, rule, m);
   const current = new Set(fc.subjects.map((s) => s.key));
   const nS = bank.questionCount;
+  const conc = bank.concepts;
+  const priorOf = (sk: string) => mem.prior.get(sk) ?? 0.25;
+  const targetOf = (sk: string) => LEARNED_R + (1 - LEARNED_R) * priorOf(sk);
+  const wOf = (it: Item) => (it.qids.length * 100) / (nS.get(it.subjectKey) ?? 1);
+  /** 지금 기록으로 본 시험일 정답 확률(투영의 출발점) */
+  const p0 = new Map<string, number>();
+  for (const it of bank.items) if (current.has(it.subjectKey)) p0.set(it.key, itemExamP(it, mem, T, false, conc));
 
-  // 과목별 행동 목록(효율 높은 순)
+  // 과목별 행동 목록(효율 높은 순). 개념 군집 단위: 아무것도 안 익힌 군집은 "대표 문항 + 변형들"을 한 행동으로
   const acts = new Map<string, Action[]>(fc.subjects.map((s) => [s.key, []]));
-  for (const it of bank.items) {
-    if (!current.has(it.subjectKey)) continue;
-    const prior = mem.prior.get(it.subjectKey) ?? 0.25;
-    const target = LEARNED_R + (1 - LEARNED_R) * prior;
-    const w = (it.qids.length * 100) / (nS.get(it.subjectKey) ?? 1);
-    const im = mem.items.get(it.key);
-    if (!im) {
-      acts.get(it.subjectKey)!.push({ subjectKey: it.subjectKey, gain: w * (target - prior), cost: NEW_COST_BASE + NEW_COST_WRONG * (1 - prior) });
-    } else {
-      const r = recallAt(im.card, T, mem.curve);
-      const p = r + (1 - r) * prior;
+  const groups = conc ? [...conc.members.values()] : bank.items.map((it) => [it]);
+  for (const g of groups) {
+    const its = g.filter((it) => current.has(it.subjectKey));
+    if (!its.length) continue;
+    const sk = its[0].subjectKey;
+    const prior = priorOf(sk);
+    const target = targetOf(sk);
+    const learned = its.filter((it) => mem.items.has(it.key));
+    const fresh = its.filter((it) => !mem.items.has(it.key));
+    for (const it of learned) {
+      const p = p0.get(it.key)!;
       if (target > p) {
+        const im = mem.items.get(it.key)!;
         const rNow = recallAt(im.card, now, mem.curve);
-        acts.get(it.subjectKey)!.push({ subjectKey: it.subjectKey, gain: w * (target - p), cost: 1 + (1 - (rNow + (1 - rNow) * prior)) });
+        acts.get(sk)!.push({ subjectKey: sk, gain: wOf(it) * (target - p), cost: 1 + (1 - (rNow + (1 - rNow) * prior)), items: [{ key: it.key, w: wOf(it) }] });
       }
+    }
+    if (!fresh.length) continue;
+    if (learned.length) {
+      for (const it of fresh) {
+        acts.get(sk)!.push({ subjectKey: sk, gain: wOf(it) * Math.max(0, target - p0.get(it.key)!), cost: VARIANT_COST, items: [{ key: it.key, w: wOf(it) }] });
+      }
+    } else {
+      acts.get(sk)!.push({
+        subjectKey: sk,
+        gain: fresh.reduce((t, it) => t + wOf(it) * (target - prior), 0),
+        cost: NEW_COST_BASE + NEW_COST_WRONG * (1 - prior) + VARIANT_COST * (fresh.length - 1),
+        items: fresh.map((it) => ({ key: it.key, w: wOf(it) })),
+      });
     }
   }
   for (const l of acts.values()) l.sort((a, b) => b.gain / b.cost - a.gain / a.cost);
 
-  /** 가용량 cap으로 투영: ① 과목 목표 미달 과목(깊은 순) ② 평균 목표 ③ 남는 시간은 효율 순 */
-  const project = (cap: number, subjTarget: number, avgTarget: number) => {
-    const score = new Map(fc.subjects.map((s) => [s.key, s.score]));
-    const pos = new Map(fc.subjects.map((s) => [s.key, 0]));
+  /**
+   * 가용량 cap으로 투영. 과목 배분은 "가장 낮은 과목부터"(물 채우기) — 과락이 있는 시험이라 한 과목만 올리는 것보다
+   * 고르게 올리는 쪽이 합격 확률이 높다(plan.ts의 합격 확률 기여도와 같은 방향). 실기기 v0.6.0: 효율이 같으면 앞 과목만
+   * 88.8점까지 채우고 나머지 셋은 45점에 두는 비현실적 배분이 나왔다
+   */
+  const start = () => ({ score: new Map(fc.subjects.map((s) => [s.key, s.score])), pos: new Map(fc.subjects.map((s) => [s.key, 0])), used: 0, learned: new Set<string>() });
+  type St = ReturnType<typeof start>;
+  const take = (st: St, sk: string, cap: number): boolean => {
+    const l = acts.get(sk)!;
+    const i = st.pos.get(sk)!;
+    if (i >= l.length || st.used + l[i].cost > cap + 1e-9) return false;
+    st.used += l[i].cost;
+    st.score.set(sk, st.score.get(sk)! + l[i].gain);
+    st.pos.set(sk, i + 1);
+    for (const x of l[i].items) st.learned.add(x.key);
+    return true;
+  };
+  const avgOf = (st: St) => [...st.score.values()].reduce((a, b) => a + b, 0) / Math.max(1, st.score.size);
+  const run = (st: St, cap: number, subjT: number, avgT: number) => {
+    for (;;) {
+      const scores = [...st.score];
+      // 무한 가용량(필요 시간 계산): 모든 과목 ≥ 과목 목표, 평균 ≥ 평균 목표에 닿으면 멈춘다
+      if (cap === Infinity && scores.every(([, v]) => v >= subjT - 1e-9) && avgOf(st) >= avgT - 1e-9) break;
+      // 남은 행동이 있는 과목을 낮은 순으로 — 가장 낮은 과목부터 한 행동씩
+      const open = scores.filter(([k]) => st.pos.get(k)! < acts.get(k)!.length).sort((a, b) => a[1] - b[1]);
+      if (!open.some(([k]) => take(st, k, cap))) break;
+    }
+    return st;
+  };
+  /** 시험 직전 복습: 이미 익힌(또는 투영에서 익힌) 문항의 시험일 정답 확률을 LATE_R까지 — 효과 큰 문항부터 1회씩 */
+  const finalReview = (st: St, budget: number) => {
+    const cand: { sk: string; gain: number }[] = [];
+    for (const it of bank.items) {
+      if (!current.has(it.subjectKey)) continue;
+      const known = mem.items.has(it.key) || st.learned.has(it.key);
+      if (!known) continue;
+      const prior = priorOf(it.subjectKey);
+      const pNow = st.learned.has(it.key) ? targetOf(it.subjectKey) : p0.get(it.key)!;
+      const g = wOf(it) * (LATE_R + (1 - LATE_R) * prior - pNow);
+      if (g > 0) cand.push({ sk: it.subjectKey, gain: g });
+    }
+    cand.sort((a, b) => b.gain - a.gain);
     let used = 0;
-    const take = (sk: string): boolean => {
-      const l = acts.get(sk)!;
-      const i = pos.get(sk)!;
-      if (i >= l.length || used + l[i].cost > cap + 1e-9) return false;
-      used += l[i].cost;
-      score.set(sk, score.get(sk)! + l[i].gain);
-      pos.set(sk, i + 1);
-      return true;
-    };
-    // ① 가장 낮은 과목부터 한 문항씩(깊은 과목에 먼저, 여러 과목이 미달이면 번갈아)
-    for (;;) {
-      const below = [...score].filter(([k, v]) => v < subjTarget && pos.get(k)! < acts.get(k)!.length).sort((a, b) => a[1] - b[1]);
-      if (!below.length || !take(below[0][0])) break;
+    for (const c of cand) {
+      if (used + 1 > budget) break;
+      used++;
+      st.score.set(c.sk, st.score.get(c.sk)! + c.gain);
     }
-    // ② 평균 목표까지, 그다음은 ③ 시간이 남는 만큼 — 둘 다 전 과목 효율 순
-    const avg = () => [...score.values()].reduce((a, b) => a + b, 0) / Math.max(1, score.size);
-    for (;;) {
-      let best: string | null = null;
-      let eff = -1;
-      for (const [k, l] of acts) {
-        const a = l[pos.get(k)!];
-        if (a && a.gain / a.cost > eff) {
-          eff = a.gain / a.cost;
-          best = k;
-        }
-      }
-      if (!best || (cap === Infinity && avg() >= avgTarget) || !take(best)) break;
-    }
-    return { score, used, avg: avg() };
+    return used;
+  };
+  const project = (cap: number, subjT: number, avgT: number) => {
+    const st = run(start(), cap, subjT, avgT);
+    return { score: st.score, used: st.used, avg: avgOf(st) };
   };
 
-  const planned = project(capacity, subjTarget, avgTarget);
+  // 계획한 시간: 시험 직전 LATE_DAYS일 전까지는 익히기 → 직전 며칠은 마지막 복습 먼저, 남으면 더 익히기
+  const early = run(start(), Math.max(0, capacity - lateCapacity), subjTarget, avgTarget);
+  const reviewUsed = finalReview(early, lateCapacity);
+  const plannedSt = run(early, early.used + (lateCapacity - reviewUsed), subjTarget, avgTarget);
+  const planned = { score: plannedSt.score, used: plannedSt.used, avg: avgOf(plannedSt) };
   // 목표에 드는 풀이 횟수: 무한 가용량으로 ①·② 단계까지만. "하루 몇 분"은 남은 날(달력) 모두 공부한다고 보고 나눈다
   const perDay = (q: number) => (daysLeft > 0 ? Math.ceil((q * sec) / 60 / daysLeft) : null);
   const reach = (subjT: number, avgT: number) => {

@@ -9,6 +9,7 @@
  * - **학습 단위(item)** = 동일 문항 묶음. 기억은 문항이 아니라 내용에 쌓이므로 한 회차에서 푼 기록이
  *   다른 회차의 같은 문항에도 적용된다. 묶음 크기 = 출제빈도.
  */
+import type { Concepts, ExamShares } from './similar';
 import type { EngineQuestion } from './types';
 
 /** 과목명 정규화: 공백·가운뎃점·괄호 표기 차이를 지운다(ADR 004) */
@@ -57,6 +58,9 @@ export interface Bank {
   questionCount: Map<string, number>;
   /** 문항의 시행일(qid → YYYY-MM-DD). 출제 이력 표시·반복 출제 비율에 쓴다 */
   examDateOf: Map<string, string>;
+  /** 유사 문항(같은 개념) 군집과 시험 구성 비율(ADR 013). load.ts가 채운다 — 없으면 학습 단위 하나 = 군집 하나 */
+  concepts?: Concepts;
+  shares?: ExamShares;
 }
 
 /**

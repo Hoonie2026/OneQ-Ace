@@ -9,6 +9,7 @@
 import { parseDate } from './days';
 import type { Bank, Item } from './items';
 import { recallAt, type MemoryState } from './memory';
+import { VARIANT_TRANSFER, type Concepts } from './similar';
 import type { PassRule } from './types';
 
 export type Risk = 'fail-subject' | 'avg-short' | 'safe';
@@ -40,13 +41,29 @@ export function examTime(examDate: string): number {
   return parseDate(examDate) + 9 * 3_600_000;
 }
 
-/** 문항 하나(학습 단위)의 시험일 정답 확률 */
-export function itemExamP(item: Item, mem: MemoryState, T: number, conservative = false): number {
+/**
+ * 문항 하나(학습 단위)의 시험일 정답 확률.
+ * 아직 안 푼 문항이라도 같은 개념 군집의 문항을 익혔으면 그만큼 더 맞힌다(변형 문항 — ADR 013):
+ * p = prior + VARIANT_TRANSFER × (익힌 군집 문항의 p − prior)
+ */
+export function itemExamP(item: Item, mem: MemoryState, T: number, conservative = false, concepts?: Concepts): number {
   const prior = (conservative ? mem.priorLow : mem.prior).get(item.subjectKey) ?? 0.25;
-  const m = mem.items.get(item.key);
-  if (!m) return prior;
-  const r = recallAt(m.card, T, mem.curve);
-  return r + (1 - r) * prior;
+  const own = (it: Item) => {
+    const m = mem.items.get(it.key);
+    if (!m) return null;
+    const r = recallAt(m.card, T, mem.curve);
+    return r + (1 - r) * prior;
+  };
+  const p = own(item);
+  if (p != null) return p;
+  if (!concepts) return prior;
+  let best = prior;
+  for (const o of concepts.members.get(concepts.clusterOf.get(item.key) ?? '') ?? []) {
+    if (o === item) continue;
+    const q = own(o);
+    if (q != null && q > best) best = q;
+  }
+  return prior + VARIANT_TRANSFER * (best - prior);
 }
 
 /**
@@ -58,7 +75,7 @@ export function forecast(bank: Bank, mem: MemoryState, examDate: string, rule: P
   for (const it of bank.items) {
     const a = acc.get(it.subjectKey) ?? { sum: 0, n: 0, studied: 0, mastered: 0 };
     const k = it.qids.length;
-    a.sum += k * itemExamP(it, mem, T, conservative);
+    a.sum += k * itemExamP(it, mem, T, conservative, bank.concepts);
     a.n += k;
     const m = mem.items.get(it.key);
     if (m) {

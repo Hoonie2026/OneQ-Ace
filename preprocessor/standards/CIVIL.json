@@ -1,0 +1,18 @@
+{
+  "code": "CIVIL",
+  "name": "토목기사",
+  "grade": "기사",
+  "version": "2022",
+  "note": "2022년 출제기준(6과목 × 20문항). 과목명은 한솔 경향문제 제목줄 기준 — 공단 출제기준 표기와 다르면 aliases로 통일",
+  "passRule": { "subjectMin": 40, "avgMin": 60 },
+  "subjects": [
+    { "name": "응용역학", "count": 20 },
+    { "name": "측량학", "count": 20 },
+    { "name": "수리학 및 수문학", "count": 20 },
+    { "name": "철근콘크리트 및 강구조", "count": 20 },
+    { "name": "토질 및 기초", "count": 20 },
+    { "name": "상하수도공학", "count": 20 }
+  ],
+  "aliases": {},
+  "excluded": []
+}

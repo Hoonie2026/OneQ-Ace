@@ -258,7 +258,7 @@ export async function recordAnswer(
   q: QuestionRow,
   chosen: number,
   elapsedMs: number,
-  opts: { now?: number } = {},
+  opts: { now?: number; unsure?: boolean } = {},
   d: OneQDB = defaultDb,
 ): Promise<{ session: Session; attempt: AttemptRow }> {
   const now = opts.now ?? Date.now();
@@ -270,7 +270,8 @@ export async function recordAnswer(
     ts: now,
     chosen,
     correct: isCorrect(q, chosen),
-    unsure: false,
+    // 자신 없이 맞힘: 답하기 전에 웹검색을 했으면(실기기 v0.6.0 — "헷갈림" 단추 대신). FSRS Hard, 첫 풀이 정답률에선 찍은 것으로
+    unsure: !!opts.unsure && isCorrect(q, chosen),
     elapsedMs: Math.max(0, Math.round(elapsedMs)),
     mode,
     sessionId: s.run.sessionId,

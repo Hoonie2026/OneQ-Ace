@@ -1,12 +1,12 @@
 import { useEffect, useState } from 'react';
 import { db, type PackRow } from '../db';
-import { deletePack } from '../pack/import';
 import { examLabel, packSummary, type PackSummary } from '../study';
 import { formatBytes } from '../util';
 
 const SOURCE: Record<string, string> = { 'public-pbt': '공개 기출(PBT)', recalled: '응시자 복원 문제', other: '기타' };
 
-export function PackDetail(props: { packId: string; onBack: () => void; onBackup: () => void; toast: (m: string) => void }) {
+/** 문제팩 정보(조회만 — v0.7: 삭제는 설정 > 이 기기 데이터 지우기 > 문제팩 지우기 한 곳에서) */
+export function PackDetail(props: { packId: string; onBack: () => void; onBackup?: () => void; toast?: (m: string) => void }) {
   const [pack, setPack] = useState<PackRow | null>(null);
   const [prog, setProg] = useState<PackSummary | null>(null);
 
@@ -21,14 +21,6 @@ export function PackDetail(props: { packId: string; onBack: () => void; onBackup
 
   if (!pack) return <div className="app" />;
   const m = pack.manifest;
-
-  const remove = async () => {
-    if (!window.confirm(`${examLabel(m)} 문제팩을 삭제할까요?\n풀이 기록은 지우지 않고 '매핑 대기'로 보관했다가, 같은 팩을 다시 가져오면 이어집니다.`)) return;
-    if (!window.confirm('삭제하기 전에 백업해 두는 것을 권합니다. 그래도 지금 삭제할까요?')) return;
-    const { parked } = await deletePack(pack.packId);
-    props.toast(`삭제했습니다${parked ? ` · 기록 ${parked}건 보관` : ''}`);
-    props.onBack();
-  };
 
   return (
     <div className="app">
@@ -79,14 +71,7 @@ export function PackDetail(props: { packId: string; onBack: () => void; onBackup
           </div>
         </dl>
       </section>
-      <section className="actions">
-        <button className="btn btn-block" onClick={props.onBackup}>
-          먼저 백업하기
-        </button>
-        <button className="btn btn-danger btn-block" onClick={remove}>
-          이 문제팩 삭제
-        </button>
-      </section>
+      <p className="hint pack-hint">이 문제팩을 지우려면 설정 → 이 기기 데이터 지우기 → 문제팩 지우기에서 고르세요.</p>
     </div>
   );
 }

@@ -4,6 +4,7 @@
  */
 import { db as defaultDb, getSetting, setSetting, type OneQDB } from '../db';
 import { buildBank, type Bank } from './items';
+import { buildConcepts, type Concepts, type ExamShares } from './similar';
 import { replay, type MemoryState } from './memory';
 import { forecast, type Forecast } from './predict';
 import { planWeek, type WeeklyPlan } from './plan';
@@ -50,6 +51,8 @@ export async function loadEngine(certCode: string, d: OneQDB = defaultDb): Promi
     clusterId: q.clusterId ?? null,
   }));
   const bank = buildBank(questions, latest.manifest.subjects.map((s) => ({ name: s.name, count: s.count })));
+  const sig = packs.map((p) => `${p.packId}:${p.manifest.packVersion}`).sort().join('|') + `#${bank.items.length}`;
+  Object.assign(bank, await conceptsFor(certCode, sig, bank, questions, d));
   // 모의고사 풀이는 학습 엔진(기억·점수·추천)에 넣지 않는다 — 모의고사는 모의고사 이력에서만(실기기 v0.5.0, ADR 011)
   const attempts: EngineAttempt[] = (await d.attempts.where('qid').anyOf(rows.map((q) => q.qid)).toArray()).filter((a) => a.mode !== 'mock').map((a) => ({
     qid: a.qid,
@@ -63,6 +66,37 @@ export async function loadEngine(certCode: string, d: OneQDB = defaultDb): Promi
   const settings = await loadPlanSettings(certCode, d);
   if (settings) settings.passRule = { ...latest.manifest.passRule, ...settings.passRule };
   return { certCode, bank, mem: replay(bank, attempts), attempts, settings };
+}
+
+/**
+ * 유사 문항 군집(ADR 013)은 팩 구성이 바뀔 때만 다시 계산한다(3천 문항 Node 약 0.4초 — 휴대폰은 더 걸림).
+ * 메모리(이번 실행) → DB 설정(`concepts:<종목>`, 학습 단위 순서의 군집 번호) 순으로 찾는다.
+ */
+const conceptCache = new Map<string, { idx: number[]; shares: ExamShares }>();
+
+async function conceptsFor(certCode: string, sig: string, bank: Bank, questions: EngineQuestion[], d: OneQDB): Promise<{ concepts: Concepts; shares: ExamShares }> {
+  const key = `concepts:${certCode}`;
+  let hit = conceptCache.get(`${key}@${sig}`);
+  if (!hit) {
+    const saved = await getSetting<{ sig: string; idx: number[]; shares: ExamShares } | null>(key, null, d);
+    if (saved?.sig === sig && saved.idx.length === bank.items.length) hit = { idx: saved.idx, shares: saved.shares };
+  }
+  if (!hit) {
+    const text = new Map(questions.map((q) => [q.qid, q.text]));
+    const { concepts, shares } = buildConcepts(bank, (q) => text.get(q) ?? '');
+    const pos = new Map(bank.items.map((it, i) => [it.key, i]));
+    hit = { idx: bank.items.map((it) => pos.get(concepts.clusterOf.get(it.key)!)!), shares };
+    await setSetting(key, { sig, ...hit }, d);
+  }
+  conceptCache.set(`${key}@${sig}`, hit);
+  const clusterOf = new Map<string, string>();
+  const members = new Map<string, Bank['items']>();
+  bank.items.forEach((it, i) => {
+    const id = bank.items[hit!.idx[i]].key;
+    clusterOf.set(it.key, id);
+    (members.get(id) ?? members.set(id, []).get(id)!).push(it);
+  });
+  return { concepts: { clusterOf, members }, shares: hit.shares };
 }
 
 export function engineForecast(ctx: EngineContext): Forecast | null {

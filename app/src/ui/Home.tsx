@@ -109,14 +109,16 @@ export function Home(props: {
       </header>
 
       {certs.length > 1 && (
-        <nav className="cert-tabs" aria-label="자격종목 선택">
-          {certs.map((c) => (
-            <button key={c.code} className={`cert-tab${c.code === cert ? ' on' : ''}`} aria-pressed={c.code === cert} onClick={() => pickCert(c.code)}>
-              {c.name}
-              <small>{c.packs}회차</small>
-            </button>
-          ))}
-        </nav>
+        <label className="cert-select">
+          <span>자격종목</span>
+          <select value={cert ?? ''} onChange={(e) => pickCert(e.target.value)} aria-label="자격종목 선택" data-testid="cert-select">
+            {certs.map((c) => (
+              <option key={c.code} value={c.code}>
+                {c.name} · {c.packs}회차
+              </option>
+            ))}
+          </select>
+        </label>
       )}
 
       {!isStandalone() && (

@@ -92,19 +92,20 @@ test('3단계 게이트(5단계 개편 후): 오프라인 과목별 학습·이�
     return false;
   };
   const doneToday = async () => Number((await page.getByTestId('week-goal').textContent())!.match(/오늘 (\d+) \//)![1]);
-  /** 과목 학습 한 세션(15문항 + 틀린 문항 한 번 더)을 끝까지. 첫 문항에서 확대·헷갈림·메모를 한 번 해 본다 */
+  /** 과목 학습 한 세션(15문항 + 틀린 문항 한 번 더)을 끝까지. 첫 문항에서 확대·메모를 한 번 해 본다(v0.7: 헷갈림 없앰, 한 줄 설명 → 메모) */
   const studySession = async (nth: number, extras = false) => {
     await page.getByTestId('go-subjects').click();
     await page.getByTestId('subject-study').nth(nth).click();
+    if (extras) await expect(page.getByTestId('web-search')).toBeVisible(); // 모름 | 웹검색(v0.7)
     for (let k = 0; k < 40; k++) {
       await answerOne();
       if (extras && k === 0) {
         await page.getByTestId('zoom-box').dblclick(); // 더블탭 확대 → 원래대로
         await expect(page.getByRole('button', { name: '원래 크기로' })).toBeVisible();
         await page.getByRole('button', { name: '원래 크기로' }).click();
-        await page.getByRole('button', { name: /헷갈림/ }).click();
-        await page.getByRole('button', { name: /한 줄 설명/ }).click();
-        await page.getByPlaceholder(/한 줄 설명/).fill('시험용 메모');
+        await expect(page.getByRole('button', { name: /헷갈림/ })).toHaveCount(0);
+        await page.getByTestId('memo-btn').click();
+        await page.getByPlaceholder(/메모해 두세요/).fill('시험용 메모');
       }
       if (await goNext()) break;
     }
@@ -180,12 +181,16 @@ test('3단계 게이트(5단계 개편 후): 오프라인 과목별 학습·이�
   await p2.getByTestId('pack-section').getByTestId('pack-input').setInputFiles(other);
   await expect(p2.getByTestId('pack-section')).toContainText('문제팩 2회차');
   await p2.getByRole('button', { name: '뒤로' }).click();
-  await expect(p2.getByRole('button', { name: /시험용 종목/ })).toHaveAttribute('aria-pressed', 'true');
-  await p2.getByRole('button', { name: /측량|시험용 종목/ }).first().click();
+  // 종목 선택은 드롭다운(v0.7)
+  await expect(p2.getByTestId('cert-select')).toHaveValue('TEST');
+  await expect(p2.getByTestId('cert-select').locator('option')).toHaveCount(2);
 
   // 학습 기록만 지우기 → 백업 복원 → 문제팩을 다시 가져오지 않아도 바로 이어짐(실기기 2차 요청)
   await p2.getByRole('button', { name: '백업·설정' }).click();
   await p2.getByTestId('wipe-records').click();
+  await p2.getByTestId('wipe-cert').selectOption('*');
+  await p2.getByTestId('wipe-records-go').click();
+  await p2.getByRole('button', { name: '뒤로' }).click();
   await expect(p2.getByTestId('week-goal')).toContainText('오늘 0 /');
   await p2.getByRole('button', { name: '백업·설정' }).click();
   await p2.getByTestId('restore-input').setInputFiles(backupPath);
@@ -194,9 +199,15 @@ test('3단계 게이트(5단계 개편 후): 오프라인 과목별 학습·이�
   expect(await p2.getByTestId('fingerprint').textContent()).toBe(before);
   await p2.getByRole('button', { name: '뒤로' }).click();
 
-  // 문제팩까지 모두 지우기 → 빈 홈(가져오기 화면)
+  // 문제팩 지우기: 종목 하나의 문제팩 전체 = 종목 삭제(다른 종목은 그대로) → 모든 종목 지우기 → 빈 홈(가져오기 화면)
   await p2.getByRole('button', { name: '백업·설정' }).click();
   await p2.getByTestId('wipe').click();
+  await p2.getByTestId('wipe-cert').selectOption('TEST');
+  await p2.getByTestId('wipe-pick-all').check();
+  await p2.getByTestId('wipe-packs-go').click();
+  await expect(p2.getByTestId('pack-section')).toContainText('문제팩 1회차');
+  await p2.getByTestId('wipe-cert').selectOption('*');
+  await p2.getByTestId('wipe-all-go').click();
   await expect(p2.getByText('문제팩을 가져오세요')).toBeVisible();
   await ctx2.close();
 });

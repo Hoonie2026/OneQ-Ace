@@ -99,8 +99,13 @@ def validate_files(files: dict[str, bytes], schema: dict | None = None, deep: bo
             issues.append(Issue("MISSING_FILE", f"{q['qid']}: 이미지 {q['img']}가 manifest.files에 없음"))
 
     nos = [q["no"] for q in questions]
-    if nos != list(range(1, len(questions) + 1)):
-        issues.append(Issue("NUMBERING", "문항번호가 1부터 연속하지 않음"))
+    gaps = [n for e in manifest.get("excluded", []) for n in e["nos"]]
+    gap_set = set(gaps)
+    want = [n for n in range(1, len(questions) + len(gap_set) + 1) if n not in gap_set]
+    if len(gap_set) != len(gaps) or gap_set & set(nos):
+        issues.append(Issue("NUMBERING", "제외 번호(excluded)가 겹치거나 팩 문항과 겹침"))
+    elif nos != want:
+        issues.append(Issue("NUMBERING", "문항번호가 1부터 연속하지 않음(excluded 제외)"))
 
     subj = {s["no"]: s for s in manifest["subjects"]}
     counts: dict[int, list[int]] = {}

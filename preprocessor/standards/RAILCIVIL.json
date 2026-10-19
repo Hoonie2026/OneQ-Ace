@@ -1,0 +1,12 @@
+{
+  "code": "RAILCIVIL",
+  "name": "철도토목기사",
+  "grade": "기사",
+  "version": "확인 필요",
+  "draft": true,
+  "note": "초안. 현행 과목명·순서·문항 수와 개편 연도를 출제기준(큐넷)으로 확인해 subjects를 채우고 draft를 지울 것. 건설재료는 현행에서 빠진 과목(사용자 확인)",
+  "passRule": { "subjectMin": 40, "avgMin": 60 },
+  "subjects": [],
+  "aliases": {},
+  "excluded": ["건설재료"]
+}

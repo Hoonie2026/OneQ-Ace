@@ -41,13 +41,19 @@ export function PlanSetup(props: { certCode: string; certName: string; onBack: (
   const specialList = Object.entries(special).filter(([k]) => !examDate || k < examDate).sort(([a], [b]) => (a < b ? -1 : 1));
 
   // 이 계획이면 시험일 예상 점수(저장 전 미리보기 — 실기기 v0.5.0: 계획을 바꿔도 예상 점수 변화가 안 보였다)
-  let preview: { avg: number | null; rounds: number } | null = null;
+  // 날짜별 학습시간이 있으면 "없을 때"와 비교해 그 효과를 따로 보여 준다(실기기 v0.6.0: 시험 직전 집중 학습이 반영되는지 보이지 않았다)
+  let preview: { avg: number | null; rounds: number; hours: number; rho: number; base: { avg: number | null; hours: number } | null } | null = null;
   if (ctx && valid) {
-    const settings = { ...DEFAULT_PLAN_SETTINGS, ...(ctx.settings ?? {}), examDate, dailyMinutes: daily, studyDaysPerWeek: days, dayMinutes: Object.fromEntries(specialList) };
-    const c2 = { ...ctx, settings };
     const now = Date.now();
-    const v = examViews(c2, engineForecast(c2), engineOutlook(c2, now), now);
-    preview = { avg: v.exam.projectedAvg, rounds: v.exam.rounds };
+    const at = (dayMinutes: Record<string, number>) => {
+      const settings = { ...DEFAULT_PLAN_SETTINGS, ...(ctx.settings ?? {}), examDate, dailyMinutes: daily, studyDaysPerWeek: days, dayMinutes };
+      const c2 = { ...ctx, settings };
+      const o = engineOutlook(c2, now);
+      const v = examViews(c2, engineForecast(c2), o, now);
+      return { avg: v.exam.projectedAvg, rounds: v.exam.rounds, hours: Math.round((o?.plannedMinutes ?? 0) / 6) / 10, rho: v.exam.rho };
+    };
+    const cur = at(Object.fromEntries(specialList));
+    preview = { ...cur, base: specialList.length ? at({}) : null };
   }
 
   const save = async () => {
@@ -153,6 +159,19 @@ export function PlanSetup(props: { certCode: string; certName: string; onBack: (
           <p>
             이 계획이면 <b>시험일 예상 점수 {preview.avg}점</b>
           </p>
+          <p className="hint">시험일까지 학습시간 합계 {preview.hours}시간</p>
+          {preview.base?.avg != null && (
+            <p className="hint" data-testid="plan-preview-special">
+              날짜별 학습시간 반영: {preview.hours - preview.base.hours >= 0 ? '+' : ''}
+              {Math.round((preview.hours - preview.base.hours) * 10) / 10}시간 → {preview.avg - preview.base.avg >= 0 ? '+' : ''}
+              {Math.round((preview.avg - preview.base.avg) * 10) / 10}점 (없으면 {preview.base.avg}점)
+            </p>
+          )}
+          {preview.rounds >= 5 && (
+            <p className="hint">
+              보유 기출 {preview.rounds}회차 기준: 실제 시험의 약 {Math.round(preview.rho * 100)}%가 이 기출(같은 문항·숫자만 바꾼 변형)에서 나온다고 보고 계산합니다.
+            </p>
+          )}
           {preview.rounds < 5 && (
             <p className="hint">
               보유 기출이 {preview.rounds}회차뿐이라 학습시간을 늘려도 예상 점수가 거의 오르지 않습니다(더 익힐 새 문항이 없음). 문제팩을 10회차 이상 넣으면 시간에 따라 달라집니다.

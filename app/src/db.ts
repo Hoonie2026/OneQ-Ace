@@ -54,7 +54,7 @@ export interface AttemptRow {
   ts: number;
   chosen: number;
   correct: boolean;
-  unsure: boolean; // "헷갈림" 체크(정답이어도 FSRS Hard로 보낼 근거, 4단계)
+  unsure: boolean; // 자신 없이 맞힘 — 답하기 전 웹검색(v0.7) 또는 예전 "헷갈림" 체크. 정답이어도 FSRS Hard, 첫 풀이 정답률에선 찍은 것으로
   elapsedMs: number;
   mode: AttemptMode;
   sessionId: string;

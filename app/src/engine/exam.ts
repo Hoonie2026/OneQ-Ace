@@ -11,6 +11,7 @@
  */
 import { GUESS } from './memory';
 import type { Bank } from './items';
+import { VARIANT_TRANSFER, type ExamShares } from './similar';
 import type { EngineAttempt } from './types';
 
 /** 반복 출제 비율 기본값(측량및지형공간정보기사 2011~2022 34회차 실측: 3,400문항 중 311문항이 앞 회차와 같은 문항) */
@@ -68,7 +69,8 @@ export function newItemRates(bank: Bank, attempts: EngineAttempt[]): Map<string,
   const all = [...firsts.values()].flatMap((l) => l.slice(-RECENT_FIRST));
   const pool = (f: (a: EngineAttempt) => number, base: number) => (all.reduce((t, a) => t + f(a), 0) + NEW_PSEUDO * base) / (all.length + NEW_PSEUDO);
   const rawOf = (a: EngineAttempt) => (a.correct ? 1 : 0);
-  const examOf = (a: EngineAttempt) => (a.correct ? 1 : a.chosen === 0 ? GUESS : 0);
+  // 자신 없이 맞힘(답하기 전 웹검색·헷갈림)은 시험에선 찍은 것으로
+  const examOf = (a: EngineAttempt) => (a.correct ? (a.unsure ? GUESS : 1) : a.chosen === 0 ? GUESS : 0);
   const poolRaw = pool(rawOf, GUESS);
   const poolExam = pool(examOf, GUESS);
   const out = new Map<string, NewRate>();
@@ -105,9 +107,27 @@ export function recordedScores(bank: Bank, attempts: EngineAttempt[]): Map<strin
   return new Map([...acc].map(([k, a]) => [k, Math.round((1000 * a.sum) / Math.max(1, a.n)) / 10]));
 }
 
-/** 실제 시험 기준 점수: ρ × 보유 기출 기준 + (1 − ρ) × 처음 보는 문항 정답률(시험 기준) */
+/** 실제 시험 기준 점수(ADR 008 원식 — 동일 문항만 반복 출제로 본 식. 시험·비교용으로 남김) */
 export function examScore(bankScore: number, rate: NewRate, rho: number): number {
   return Math.round((rho * bankScore + (1 - rho) * 100 * rate.exam) * 10) / 10;
+}
+
+/**
+ * 실제 시험 기준 점수(ADR 013): 시험 문항 = 같은 기출(same) + 변형 기출(variant) + 처음 보는 문항(fresh).
+ * - 같은 기출: 보유 기출 기준 점수 그대로
+ * - 변형: 처음 보는 문항 정답률 r에서, 원 기출을 익힌 만큼 VARIANT_TRANSFER 몫이 올라간다 → r + V × (기출 점수 − r)
+ * - 처음 보는 문항: r(공부량에 따른 전이 포함 — projectedRate)
+ */
+export function examScoreMix(bankScore: number, rate: NewRate, shares: ExamShares): number {
+  const r = 100 * rate.exam;
+  const v = r + VARIANT_TRANSFER * (bankScore - r);
+  return Math.round((shares.same * bankScore + shares.variant * v + shares.fresh * r) * 10) / 10;
+}
+
+/** 과목 점수가 subjectMin이 되는 데 필요한 처음 보는 문항 정답률(0~1) */
+export function needRateMix(subjectMin: number, bankScore: number, shares: ExamShares): number {
+  const k = shares.variant * (1 - VARIANT_TRANSFER) + shares.fresh;
+  return Math.max(0, Math.min(1, (subjectMin - (shares.same + shares.variant * VARIANT_TRANSFER) * bankScore) / Math.max(1e-9, 100 * k)));
 }
 
 /**
@@ -120,6 +140,11 @@ export function examScore(bankScore: number, rate: NewRate, rho: number): number
  * TRANSFER는 가정값 — 실사용 기록(첫 풀이 정답률이 학습량에 따라 오르는 정도)으로 다시 맞출 것(백로그)
  */
 export const TRANSFER = 0.3;
+/**
+ * 전이는 "익힌 기출의 양"에 달렸다(ADR 013): 보유 기출이 2회차(과목당 10문항)뿐이면 다 외워도 처음 보는 문항이
+ * 거의 늘지 않는다. 과목당 학습 단위가 이 수(측량 31회차 ≈ 과목당 560)에 못 미치면 비례해서 줄인다
+ */
+export const TRANSFER_REF_ITEMS = 500;
 
 export function projectedRate(rate: NewRate, coverageGain: number): NewRate {
   const g = Math.max(0, Math.min(1, coverageGain));

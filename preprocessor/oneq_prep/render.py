@@ -4,7 +4,8 @@
   A. 채운 원문자(❶~❹)  — 텍스트층에서 위치를 알 수 있으므로, 그 자리를 흰색으로 지우고
      같은 페이지(없으면 다른 페이지)의 같은 번호 일반 원문자(①~④) 픽셀을 그대로 옮겨 붙인다.
      원본과 같은 글꼴·크기의 글자가 들어가므로 흔적이 남지 않는다.
-  B. 형광펜 표시 — 채도 높은 픽셀만 흰색으로 바꾼다(검은 글자는 유지). `remove_highlight()`
+  B. 형광펜 표시(벡터) — PDF 객체 단계에서 노란 채움 사각형만 지우고 렌더링한다(`render_pages(..., strip_yellow=True)`).
+     스캔본의 래스터 형광은 보기 번호 상자 주변의 채도 높은 픽셀만 흰색으로 `remove_highlight()`
   C. 보기에 표시가 없는 PDF — 마스킹 없이 정답표에서 정답만 읽는다.
 마스킹 뒤에는 `mark_leaks()`로 보기 번호 자리에 채운 원문자 흔적이 남았는지 픽셀로 다시 검사한다.
 """
@@ -12,8 +13,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+import ctypes
+
 import numpy as np
 import pypdfium2 as pdfium
+import pypdfium2.raw as pdfium_c
 from PIL import Image
 
 from .extract import Label, Layout, Question
@@ -35,10 +39,41 @@ class Region:
     bottom: float
 
 
-def render_pages(path, scale: float = SCALE) -> list[Image.Image]:
+def _strip_yellow(page) -> int:
+    """노란 채움(255,255,0) 작은 사각형 경로 객체를 지운다. 지운 개수를 돌려준다."""
+    gone = []
+    for o in page.get_objects(max_depth=1):
+        if o.type != pdfium_c.FPDF_PAGEOBJ_PATH:
+            continue
+        r, g, b, a = (ctypes.c_uint() for _ in range(4))
+        if not pdfium_c.FPDFPageObj_GetFillColor(o.raw, r, g, b, a):
+            continue
+        if r.value >= 225 and g.value >= 225 and b.value <= 30:
+            x0, y0, x1, y1 = o.get_bounds()
+            if (x1 - x0) < 40 and (y1 - y0) < 60:      # 보기 번호 크기의 표시만(그림 속 노란 면 보호)
+                gone.append(o)
+    for o in gone:
+        page.remove_obj(o)
+    if gone:
+        page.gen_content()
+    for o in gone:
+        o.close()          # 페이지에서 떼어 낸 객체는 호출자가 닫는다(pypdfium2)
+    return len(gone)
+
+
+def render_pages(path, scale: float = SCALE, strip_yellow: bool = False) -> list[Image.Image] | tuple[list[Image.Image], int]:
+    """페이지를 렌더링한다. strip_yellow=True이면 (이미지들, 지운 형광 표시 수)를 돌려준다."""
     pdf = pdfium.PdfDocument(str(path))
     try:
-        return [pdf[i].render(scale=scale, grayscale=False).to_pil().convert("RGB") for i in range(len(pdf))]
+        out, removed = [], 0
+        for i in range(len(pdf)):
+            page = pdf[i]
+            # pdfplumber 좌표는 mediabox 기준 → cropbox가 다른 PDF(한솔 경향문제)도 같은 좌표로 그리도록 맞춘다
+            page.set_cropbox(*page.get_mediabox())
+            if strip_yellow:
+                removed += _strip_yellow(page)
+            out.append(page.render(scale=scale, grayscale=False).to_pil().convert("RGB"))
+        return (out, removed) if strip_yellow else out
     finally:
         pdf.close()
 
@@ -93,9 +128,64 @@ def remove_highlight(img: Image.Image, sat_min: float = 0.25, val_min: float = 0
     return Image.fromarray(a), int(m.sum())
 
 
+def _label_font(px: int):
+    from PIL import ImageFont
+    for name in ("malgun.ttf", "C:/Windows/Fonts/malgun.ttf", "NotoSansCJK-Regular.ttc",
+                 "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc", "DejaVuSans.ttf"):
+        try:
+            return ImageFont.truetype(name, px)
+        except OSError:
+            continue
+    return ImageFont.load_default()
+
+
+def mask_ocr_filled(pages: list[Image.Image], layout: Layout, scale: float = SCALE) -> int:
+    """스캔본: 진하게 칠한 보기 번호(잉크 비율 > FILLED_RATIO)를 찾아 정답으로 기록하고,
+    그 자리를 지운 뒤 글꼴로 일반 원문자를 다시 그린다. 지운 개수."""
+    from PIL import ImageDraw
+    n = 0
+    for q in layout.questions:
+        filled = [lab for lab in q.labels if ink_ratio(pages[lab.page], lab.bbox, scale) > FILLED_RATIO]
+        for lab in filled:
+            lab.filled = True
+        if len(filled) == 1 and q.inline_answer is None:
+            q.inline_answer = filled[0].digit
+        for lab in filled:
+            img = pages[lab.page]
+            x0, t, x1, b = _px(lab.bbox, scale)
+            img.paste((255, 255, 255), (x0 - 2, t - 2, x1 + 2, b + 2))
+            h = b - t
+            ImageDraw.Draw(img).text(((x0 + x1) / 2, (t + b) / 2), "①②③④⑤"[lab.digit - 1],
+                                     fill=(0, 0, 0), font=_label_font(int(h * 0.95)), anchor="mm")
+            n += 1
+    return n
+
+
+def remove_highlight_near_labels(pages: list[Image.Image], layout: Layout, scale: float = SCALE) -> int:
+    """스캔본: 보기 번호 주변(번호 상자 ± 여백)에서만 채도 높은 픽셀을 지운다. 지운 상자 수."""
+    n = 0
+    for q in layout.questions:
+        for lab in q.labels:
+            x0, t, x1, b = lab.bbox
+            box = _px((x0 - 3, t - 3, x1 + 3, b + 3), scale)
+            img = pages[lab.page]
+            patch, k = remove_highlight(img.crop(box))
+            if k:
+                img.paste(patch, box[:2])
+                n += 1
+    return n
+
+
+def yellow_ratio(img: Image.Image, bbox_pt, scale=SCALE) -> float:
+    x0, t, x1, b = _px((bbox_pt[0] - 2, bbox_pt[1] - 2, bbox_pt[2] + 2, bbox_pt[3] + 2), scale)
+    hsv = np.asarray(img.crop((x0, t, x1, b)).convert("HSV")).astype(np.float32) / 255.0
+    if not hsv.size:
+        return 0.0
+    return float(((hsv[..., 1] >= 0.25) & (hsv[..., 2] >= 0.55)).mean())
+
+
 def regions_for(layout: Layout) -> dict[int, list[Region]]:
     """문항별 크롭 구간. 문항 시작 줄부터 다음 문항(또는 과목 머리말·단 끝) 직전까지."""
-    top_body, bot_body = layout.body
     # 단마다 '경계' 목록: 문항 시작 위치와 과목 머리말 위치
     starts: dict[tuple[int, int], list[float]] = {}
     for q in layout.questions:
@@ -117,6 +207,7 @@ def regions_for(layout: Layout) -> dict[int, list[Region]]:
     for q in layout.questions:
         regs = []
         for i, s in enumerate(q.segments):
+            top_body, bot_body = layout.body_of(s.page)
             top = s.top - 3 if i == 0 else top_body
             if i < len(q.segments) - 1:
                 nb = next_start(s.page, s.col, s.top)
@@ -166,5 +257,7 @@ def crop_question(pages: list[Image.Image], layout: Layout, regs: list[Region], 
 
 
 def mark_leaks(pages: list[Image.Image], q: Question, scale: float = SCALE) -> list[int]:
-    """마스킹 후 보기 번호 자리에 아직 채운 원문자처럼 보이는 것이 있는지 픽셀로 검사."""
-    return [lab.digit for lab in q.labels if ink_ratio(pages[lab.page], lab.bbox, scale) > FILLED_RATIO]
+    """마스킹 후 보기 번호 자리에 아직 정답 표시(채운 원문자·형광 색)가 보이는지 픽셀로 검사."""
+    return [lab.digit for lab in q.labels
+            if ink_ratio(pages[lab.page], lab.bbox, scale) > FILLED_RATIO
+            or yellow_ratio(pages[lab.page], lab.bbox, scale) > 0.05]
