@@ -3027,3 +3027,23 @@ details.why[open] summary::after {
   justify-content: center;
   padding: 6px 0;
 }
+
+/* v0.9.1 실기기 의견(홈 수험표)
+   - D-day가 절취선에 붙어 답답 → 절취선 오른쪽 여백을 넓힘(좁은 폰에서는 왼쪽 "학습계획 설정" 칸을 위해 조금 덜)
+   - 다크 모드: 수험표(#16273d)가 다른 카드(#142235)와 거의 같은 색이라 첫 화면이 밋밋 → 브랜드 파랑 그라데이션으로 띄움
+     (라이트 모드는 남색 수험표가 밝은 바탕과 이미 대비됨) */
+.exam-row .exam-dday {
+  padding-left: clamp(16px, 5.5vw, 26px);
+  padding-right: 10px;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --ticket: linear-gradient(135deg, #2a56a0 0%, #1b3a70 100%);
+  }
+  .card.exam-row {
+    box-shadow: 0 8px 24px rgb(0 0 0 / 0.38), inset 0 1px 0 rgb(255 255 255 / 0.1);
+  }
+  .exam-row .exam-dday {
+    border-left-color: rgb(255 255 255 / 0.35);
+  }
+}
