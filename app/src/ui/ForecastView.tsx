@@ -10,7 +10,7 @@ const mean = (xs: number[]) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.l
 
 /**
  * 시험일 예상 점수 계산 보기(ADR 014 — v0.8.2 두괄식·개조식, v0.8.3 의견: 출제 유형 그림 복원, 표의 단위를 모두 "점(100점 만점)"으로 통일, 실제 산식).
- * ① 핵심 ② 실제 시험 출제 유형(보유 팩 기준, 막대 그림) ③ 과목별 예상(기출 문항 점수·신규 문항 점수·시험 예상 점수 + 평균) ④ 산식(평균 값 대입) ⑤ 자주 묻는 질문 ⑥ 한계
+ * ① 핵심 ② 실제 시험 출제 유형(보유 팩 기준, 막대 그림) ③ 과목별 예상(기출문항·신규문항·시험예상 점수 + 평균) ④ 산식(평균 대입) + 계산 근거(항목별 근거 수준·가정값 오차 범위, v0.8.4) ⑤ 자주 묻는 질문
  */
 export function ForecastView(props: { coach: Coach }) {
   const { coach } = props;
@@ -33,8 +33,13 @@ export function ForecastView(props: { coach: Coach }) {
   const aB = rows.length ? mean(rows.map((s) => s.bankProjected!)) : 0;
   const aN = rows.length ? 100 * mean(rows.map((s) => s.rateProjected!)) : 0;
   const per100 = (x: number) => Math.round(x * 100);
+  // 가정값 오차(점): ⑤ 계수 ±0.2 → 변형 몫 × (기출 − 신규) × 0.2, ④ 전이 ±15%p(= 지금 가정 30%의 절반) → 신규문항 점수 상승분의 절반이 시험 점수에 미치는 영향
+  const aNow = rows.length ? 100 * mean(rows.map((s) => s.newRate.exam)) : 0;
+  const errVar = sh.variant * Math.abs(aB - aN) * 0.2;
+  const errTr = (sh.fresh + sh.variant * (1 - VARIANT_TRANSFER)) * Math.max(0, aN - aNow) * 0.5;
+  const errAssume = Math.max(0.5, Math.round((errVar + errTr) * 2) / 2).toFixed(1);
   const seg = [
-    { cls: 's-same', name: '기출과 같은 문항', share: sh.same, note: '기출 문항 점수만큼 맞힘' },
+    { cls: 's-same', name: '기출과 같은 문항', share: sh.same, note: '기출문항 점수만큼 맞힘' },
     { cls: 's-var', name: '변형 문항', share: sh.variant, note: '숫자·표현만 바꾼 같은 개념' },
     { cls: 's-fresh', name: '신규 문항', share: sh.fresh, note: '보유 기출에 없는 문제' },
   ];
@@ -47,13 +52,13 @@ export function ForecastView(props: { coach: Coach }) {
         </h2>
         <ul className="headline">
           <li>학습계획대로 공부했을 때 {subjects.length}과목 예상 점수의 평균입니다.</li>
-          <li>기출 몫은 공부할수록 오르고, 신규 문항 몫은 내가 처음 보는 문제를 맞히는 실력(지금 {Math.round(100 * nowRate)}점)에 달려 있습니다.</li>
+          <li>기출 몫은 공부할수록 오르고, 신규문항 몫은 내가 처음 보는 문제를 맞히는 실력(지금 {Math.round(100 * nowRate)}점)에 달려 있습니다.</li>
           <li data-testid="forecast-ceiling">
-            기출을 모두 익혀 시험날까지 기억해도 지금 실력으로는 <b>약 {ceiling}점</b>이 최고입니다. 신규 문항을 더 맞히게 되면 이 선도 함께 오릅니다.
+            기출을 모두 익혀 시험날까지 기억해도 지금 실력으로는 <b>약 {ceiling}점</b>이 최고입니다. 신규문항을 더 맞히게 되면 이 선도 함께 오릅니다.
           </li>
         </ul>
         {exam.status === 'unknown' && <p className="hint">과목마다 처음 푼 문항이 10개가 안 돼 진단 중 — 숫자가 크게 바뀔 수 있습니다.</p>}
-        {!measured && <p className="hint">아직 풀이 기록이 없어 신규 문항 점수를 찍기(25점)로 계산했습니다.</p>}
+        {!measured && <p className="hint">아직 풀이 기록이 없어 신규문항 점수를 찍기(25점)로 계산했습니다.</p>}
       </div>
 
       <div className="card" data-testid="forecast-shares">
@@ -84,14 +89,14 @@ export function ForecastView(props: { coach: Coach }) {
       </div>
 
       <div className="card">
-        <h3>과목별 예상 (계획대로, 100점 만점)</h3>
+        <h3>과목별 예상점수 (계획대로, 100점 만점)</h3>
         <table className="mini-table calc-table" data-testid="forecast-table">
           <thead>
             <tr>
               <th>과목</th>
-              <th>기출 문항 점수</th>
-              <th>신규 문항 점수</th>
-              <th>시험 예상 점수</th>
+              <th className="nowrap">기출문항 점수</th>
+              <th className="nowrap">신규문항 점수</th>
+              <th className="nowrap">시험예상 점수</th>
             </tr>
           </thead>
           <tbody>
@@ -115,34 +120,73 @@ export function ForecastView(props: { coach: Coach }) {
             )}
           </tbody>
         </table>
-        <ul className="plain">
-          <li>
-            <b>기출 문항 점수</b>: 보유 기출을 시험일에 다시 풀면 받을 점수 — 문항마다 시험일 기억률로 계산
-          </li>
-          <li>
-            <b>신규 문항 점수</b>: 처음 보는 문제를 풀면 받을 점수 — 최근 첫 풀이 정답률 + 학습 효과
-          </li>
-          <li>
-            <b>시험 예상 점수</b>: 아래 산식 · {rule.subjectMin}점 미만 빨강(과락 위험)
-          </li>
-        </ul>
       </div>
 
       {rows.length > 0 && (
         <div className="card" data-testid="forecast-formula">
-          <h3>시험 예상 점수 산식</h3>
+          <h3>시험예상 점수 산식</h3>
           <p className="formula">
-            시험 예상 = 기출 문항 점수 × {pct(sh.same)}
-            <br />+ (신규 + {VARIANT_TRANSFER} × (기출 − 신규)) × {pct(sh.variant)}
-            <br />+ 신규 문항 점수 × {pct(sh.fresh)}
+            시험예상 점수 = 기출문항 점수 × {pct(sh.same)}
+            <br />+ (신규문항 점수 + {VARIANT_TRANSFER} × (기출문항 점수 − 신규문항 점수)) × {pct(sh.variant)}
+            <br />+ 신규문항 점수 × {pct(sh.fresh)}
           </p>
           <p className="calc-example">
-            평균으로 넣으면: {f1(aB)} × {pct(sh.same)} + ({f1(aN)} + {VARIANT_TRANSFER} × ({f1(aB)} − {f1(aN)})) × {pct(sh.variant)} + {f1(aN)} × {pct(sh.fresh)} ≈{' '}
+            평균 대입: {f1(aB)} × {pct(sh.same)} + ({f1(aN)} + {VARIANT_TRANSFER} × ({f1(aB)} − {f1(aN)})) × {pct(sh.variant)} + {f1(aN)} × {pct(sh.fresh)} ≈{' '}
             <b>{f1(sh.same * aB + sh.variant * (aN + VARIANT_TRANSFER * (aB - aN)) + sh.fresh * aN)}점</b>
           </p>
-          <p className="hint">
-            변형 문항은 신규 문항보다 쉽고(같은 개념) 기출보다는 어렵다고 보고, 둘 사이에서 기출 쪽으로 {Math.round(VARIANT_TRANSFER * 100)}% 다가간 점수로 계산합니다.
-          </p>
+
+          <div className="basis" data-testid="forecast-basis">
+            <h4>계산 근거</h4>
+            <dl>
+              <dt>
+                ① 산식 구조 <span className="lv ok">확률 계산</span>
+              </dt>
+              <dd>시험 문항을 출처별(같은·변형·신규)로 나눠, 비율 × 맞힐 확률을 더함(전확률 공식)</dd>
+
+              <dt>
+                ② 출제 비율 {pct(sh.same)} · {pct(sh.variant)} · {pct(sh.fresh)} <span className="lv ok">실측</span>
+              </dt>
+              <dd>측량 기출 34회차를 서로 대조해 측정 + 보유 팩끼리 대조 결과 반영</dd>
+
+              <dt>
+                ③ 기출문항 점수 <span className="lv ok">검증된 모형 + 내 기록</span>
+              </dt>
+              <dd>
+                문항마다 맞힐 확률 = 시험일 기억률 + (1 − 기억률) × 신규문항 점수
+                <br />
+                기억률: FSRS 기억 모형(대규모 실제 학습 기록으로 검증, Anki 내장) · 복습 30건부터 내 망각 속도로 보정
+                <br />
+                100점이 아님 — 계획대로 익힌 문항은 시험일 기억률 85%, 직전 3일 복습한 문항은 95%로 계산
+              </dd>
+
+              <dt>
+                ④ 신규문항 점수 <span className="lv ok">내 실측</span>
+                <span className="lv warn">+ 가정값</span>
+              </dt>
+              <dd>
+                지금: 최근 처음 푼 문항 30개의 정답률(모름·검색 후 정답 = 찍기 25%, 기록 없으면 25점)
+                <br />
+                시험일: 기출을 익힐수록 남은 여지의 최대 {pct(TRANSFER)} 상승(전이 — 메타분석 Pan & Rickard 2018 근거, 크기는 가정값)
+              </dd>
+
+              <dt>
+                ⑤ 변형 문항 계수 {VARIANT_TRANSFER} <span className="lv warn">가정값</span>
+              </dt>
+              <dd>변형은 신규보다 쉽고 기출보다 어렵다고 보고 둘 사이(기출 쪽 {Math.round(VARIANT_TRANSFER * 100)}%)로 계산</dd>
+            </dl>
+            <div className="err" data-testid="forecast-error">
+              <b>오차 범위</b>
+              <ul>
+                <li>
+                  가정값(④ 전이 {pct(TRANSFER)}±15%p, ⑤ 계수 {VARIANT_TRANSFER}±0.2)으로 인한 오차: <b>±{errAssume}점</b>
+                </li>
+                <li>
+                  모형 전체 검증(가상 학습자 27회): 대개 <b>±4점</b>, 아주 빨리 잊는 학습자는 약 8점 높게 예상
+                </li>
+                <li>합격을 보장하는 숫자가 아니라 계획대로 공부할 때의 어림값입니다</li>
+              </ul>
+            </div>
+          </div>
         </div>
       )}
 
@@ -152,28 +196,14 @@ export function ForecastView(props: { coach: Coach }) {
           <li>
             <b>몇 회독을 해야 점수에 반영되나요?</b>
             <br />
-            회독 수가 아니라 문항마다 <b>맞혔는지·언제 풀었는지</b>로 계산합니다(FSRS 기억 모형). 3회독이라도 틀린 문항은 낮게, 간격을 두고 거듭 맞힌 문항은 높게 잡힙니다.
+            회독 수가 아니라 문항마다 맞혔는지·언제 풀었는지로 계산(③). 틀린 문항은 낮게, 간격을 두고 거듭 맞힌 문항은 높게
           </li>
           <li>
-            <b>신규 문항 점수는 찍기 확률인가요?</b>
+            <b>시간을 늘려도 점수가 더 안 오르는 이유는?</b>
             <br />
-            아니요. ① 내가 최근 처음 푼 문항 30개의 정답률(기록이 없을 때만 25점) ② 기출을 익힐수록 남은 여지의 최대 {pct(TRANSFER)}가 더 오름(시험 효과의 전이 —
-            메타분석 Pan & Rickard 2018) ③ 변형 문항은 위 산식처럼 기출 성적을 반영합니다.
+            기출 몫은 거의 다 채워도 신규문항 몫({pct(sh.fresh)})은 시간만으로 오르지 않음(④). 처음 보는 문제를 실제로 더 맞히면 예상·최고 점수가 함께 오름 · 기출 회차를 더 넣으면
+            기출 몫이 커짐
           </li>
-          <li>
-            <b>시간을 아무리 늘려도 점수가 더 안 오르는 이유는?</b>
-            <br />
-            기출 몫은 거의 다 채워도, 신규 문항 몫({pct(sh.fresh)})은 시간을 늘린다고 바로 오르지 않기 때문입니다. 공부하며 처음 보는 문제를 실제로 더 맞히면(앱이 매일 다시 잼)
-            예상과 최고 점수가 함께 오릅니다. 기출 회차를 더 넣으면 기출 몫도 커집니다.
-          </li>
-        </ul>
-      </div>
-
-      <div className="card">
-        <h3>한계</h3>
-        <ul className="plain">
-          <li>합격을 보장하는 숫자가 아니라 모형의 어림입니다.</li>
-          <li>가상 학습자 시험에서 예상 오차는 대개 ±4점, 아주 빨리 잊는 경우 약 8점 높게 예상됐습니다.</li>
         </ul>
       </div>
     </section>

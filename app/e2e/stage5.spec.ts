@@ -57,6 +57,8 @@ test('5단계: 학습 계획 → 오늘 학습(계획량 한 묶음·틀린 문�
   await expect(page.getByTestId('forecast-avg')).toContainText('평균(홈 점수)');
   await expect(page.getByTestId('forecast-view')).not.toContainText('계획과 실제 학습량');
   await expect(page.getByTestId('forecast-ceiling')).toContainText('최고');
+  await expect(page.getByTestId('forecast-basis')).toContainText('계산 근거');
+  await expect(page.getByTestId('forecast-error')).toContainText('가정값');
   await expect(page.getByTestId('forecast-view')).not.toContainText('합격 가능성');
   await page.screenshot({ path: `test-results/stage5-forecast-${info.project.name}.png`, fullPage: true });
   await page.getByTestId('back-home').click();
@@ -76,6 +78,10 @@ test('5단계: 학습 계획 → 오늘 학습(계획량 한 묶음·틀린 문�
   await page.screenshot({ path: `test-results/stage5-recommend-${info.project.name}.png`, fullPage: true });
   await expect(page.getByTestId('today-start')).toHaveText('학습 시작 (20문항)');
   await page.getByTestId('today-start').click();
+  await expect(page.getByTestId('progress')).toHaveText('1 / 20');
+  // 풀이 중 성적 보기 → ‹ 는 이 풀이로 돌아온다(v0.8.4)
+  await page.getByRole('button', { name: '지금 성적 보기' }).click();
+  await page.getByTestId('result-back').click();
   await expect(page.getByTestId('progress')).toHaveText('1 / 20');
   for (let k = 0; k < 20; k++) {
     await expect(page.getByTestId('progress')).toHaveText(`${k + 1} / 20`);

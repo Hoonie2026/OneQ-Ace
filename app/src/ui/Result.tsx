@@ -10,7 +10,7 @@ const VERDICT: Record<NonNullable<R['verdict']>, { icon: string; text: string; c
 };
 
 /** 성적. 풀이 중에도 지금까지 푼 문항으로 실시간 계산한다(ADR 003) */
-export function Result(props: { target: Target; onHome: () => void; onSolve: (t: Target) => void; onSummary: (certCode: string) => void; toast: (m: string) => void }) {
+export function Result(props: { target: Target; onHome: () => void; /** 위 ‹ — 풀이 중 성적 보기면 그 풀이로(v0.8.4), 아니면 홈 */ onBack?: () => void; onSolve: (t: Target) => void; onSummary: (certCode: string) => void; toast: (m: string) => void }) {
   const [res, setRes] = useState<R | null>(null);
   const [rule, setRule] = useState({ min: 40, avg: 60 });
   const [packId, setPackId] = useState('');
@@ -61,7 +61,7 @@ export function Result(props: { target: Target; onHome: () => void; onSolve: (t:
   return (
     <div className="app">
       <header className="page-head">
-        <button className="icon-btn" onClick={props.onHome} aria-label="뒤로">
+        <button className="icon-btn" onClick={props.onBack ?? props.onHome} aria-label="뒤로" data-testid="result-back">
           ‹
         </button>
         <h1>{isMock ? '모의고사 결과' : res.complete ? '풀이 결과' : '지금까지 성적'}</h1>

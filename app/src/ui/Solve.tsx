@@ -20,7 +20,7 @@ const MAX_ELAPSED = 30 * 60 * 1000;
  * 답하기 전에 검색했으면 그 풀이는 "자신 없이 맞힘"(unsure)으로 기록한다. "헷갈림" 단추는 없애고,
  * "한 줄 설명"은 **메모**로 — 메모가 있는 문항은 다시 풀 때 "메모 있음"이 보인다(다른 회차의 같은 문항 메모 포함).
  */
-export function Solve(props: { target: Target; onExit: () => void; onResult: () => void; onSolve?: (t: Target) => void; onSummary?: (certCode: string) => void }) {
+export function Solve(props: { target: Target; onExit: () => void; onResult: (peek?: boolean) => void; onSolve?: (t: Target) => void; onSummary?: (certCode: string) => void }) {
   const [s, setS] = useState<Session | null>(null);
   const [index, setIndex] = useState(0);
   const [loaded, setLoaded] = useState<QuestionRow | null>(null);
@@ -304,7 +304,7 @@ export function Solve(props: { target: Target; onExit: () => void; onResult: () 
             className="score-btn"
             onClick={async () => {
               await flushNote();
-              props.onResult();
+              props.onResult(true); // 풀이 중 성적 보기 — 성적 화면의 ‹는 이 풀이로 돌아온다(v0.8.4)
             }}
             aria-label="지금 성적 보기"
           >

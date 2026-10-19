@@ -18,7 +18,7 @@ import { askConfirm, DialogHost } from './ui/Dialog';
 type Screen =
   | { name: 'home' }
   | { name: 'solve'; target: Target }
-  | { name: 'result'; target: Target }
+  | { name: 'result'; target: Target; back?: 'solve' }
   | { name: 'pack'; packId: string }
   | { name: 'plan'; certCode: string; certName: string }
   | { name: 'summary'; certCode: string }
@@ -170,10 +170,10 @@ export default function App() {
       )}
       {screen.name === 'plan' && <PlanSetup certCode={screen.certCode} certName={screen.certName} onBack={home} onSaved={flash} />}
       {screen.name === 'solve' && (
-        <Solve target={screen.target} onExit={home} onResult={() => go({ name: 'result', target: screen.target })} onSolve={(target) => go({ name: 'solve', target })} onSummary={(certCode) => go({ name: 'summary', certCode })} />
+        <Solve target={screen.target} onExit={home} onResult={(peek) => go({ name: 'result', target: screen.target, back: peek ? 'solve' : undefined })} onSolve={(target) => go({ name: 'solve', target })} onSummary={(certCode) => go({ name: 'summary', certCode })} />
       )}
       {screen.name === 'result' && (
-        <Result target={screen.target} onHome={home} onSolve={(target) => go({ name: 'solve', target })} onSummary={(certCode) => go({ name: 'summary', certCode })} toast={flash} />
+        <Result target={screen.target} onHome={home} onBack={screen.back === 'solve' ? () => go({ name: 'solve', target: screen.target }) : home} onSolve={(target) => go({ name: 'solve', target })} onSummary={(certCode) => go({ name: 'summary', certCode })} toast={flash} />
       )}
       {screen.name === 'pack' && (
         <PackDetail packId={screen.packId} onBack={() => go({ name: 'settings' })} onBackup={() => go({ name: 'settings' })} toast={flash} />
