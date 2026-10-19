@@ -27,6 +27,7 @@ import {
   type WeeklyPlan,
   DEFAULT_PLAN_SETTINGS,
 } from './engine';
+import type { ComposeOpts } from './engine/session';
 import { LEARNED_R, OUTLOOK_MIN_OBS } from './engine/outlook';
 import { TRANSFER_REF_ITEMS } from './engine/exam';
 import { trivialConcepts, type ExamShares } from './engine/similar';
@@ -41,6 +42,10 @@ export interface SubjectView {
   /** 실제 시험 기준 — 지금 / 계획대로 하면 시험일 */
   examNow: number;
   examProjected: number | null;
+  /** 계산 과정(예상 점수 풀이 화면 — ADR 014): 보유 기출 기준 점수 지금/시험일, 처음 보는 문항 정답률(0~1) 지금/시험일 */
+  bankNow: number;
+  bankProjected: number | null;
+  rateProjected: number | null;
   /** 처음 보는 문항 정답률(최근 첫 풀이) */
   newRate: NewRate;
   /** 과락선을 넘기는 데 필요한 처음 보는 문항 정답률(시험 기준, 0~1). 계획이 없으면 null */
@@ -103,19 +108,24 @@ export interface TodayPlan {
   review: number;
   fresh: number;
   bySubject: { name: string; review: number; fresh: number }[];
+  /** 문항 수 계산 근거(ADR 014): 문항당 시간(초)·그 실측 풀이 수·오늘 이미 푼 문항 수 */
+  secPerQuestion: number;
+  timingObs: number;
+  done: number;
 }
 
 /** 오늘 계획량을 다 한 뒤 더 할 때 한 번에 내는 문항 수 */
 export const EXTRA_SIZE = 15;
 
-function todayPlan(ctx: EngineContext, order: string[], doneToday: number, now: number): TodayPlan {
+function todayPlan(ctx: EngineContext, views: { order: string[]; subjects: SubjectView[] }, doneToday: number, now: number): TodayPlan {
+  const { order } = views;
   const settings = ctx.settings ?? { ...DEFAULT_PLAN_SETTINGS, examDate: '9999-12-31' };
   const minutes = minutesToday(settings, startOfDay(now));
   const target = Math.max(0, Math.round((minutes * 60) / ctx.mem.secPerQuestion));
   const left = target - doneToday;
   const extra = left <= 0;
   const want = extra ? EXTRA_SIZE : left;
-  const entries = buildDailySession(ctx.bank, ctx.mem, order, now, ctx.attempts, want);
+  const entries = buildDailySession(ctx.bank, ctx.mem, order, now, ctx.attempts, want, composeOpts(ctx, views.subjects));
   const count = (k: string) => entries.filter((e) => e.kind === k).length;
   const by = new Map<string, { name: string; review: number; fresh: number }>();
   for (const e of entries) {
@@ -135,7 +145,18 @@ function todayPlan(ctx: EngineContext, order: string[], doneToday: number, now: 
     review: count('review'),
     fresh: count('new'),
     bySubject: [...by.values()].sort((a, b) => b.review + b.fresh - (a.review + a.fresh)),
+    secPerQuestion: ctx.mem.secPerQuestion,
+    timingObs: ctx.mem.timingObs,
+    done: doneToday,
   };
+}
+
+/** 앱의 묶음 구성 옵션(ADR 014): 시험일이 있으면 시험 직전 총정리 */
+export function composeOpts(ctx: EngineContext, subjects?: SubjectView[]): ComposeOpts {
+  const o: ComposeOpts = ctx.settings ? { examDay: parseDate(ctx.settings.examDate), passRule: ctx.settings.passRule } : {};
+  // 새 문항 과목 배분: 보유 기출 기준 지금 예상 점수의 합격 확률 기여도 비례(가상 학습자 게이트와 같은 값)
+  if (subjects?.length) o.scores = new Map(subjects.map((s) => [s.key, s.bankNow]));
+  return o;
 }
 
 const r1 = (x: number) => Math.round(x * 10) / 10;
@@ -155,7 +176,7 @@ export async function loadCoach(certCode: string, now = Date.now(), d: OneQDB = 
   const forecast = engineForecast(ctx);
   const outlook = engineOutlook(ctx, now);
   const { subjects, exam, order } = examViews(ctx, forecast, outlook, now);
-  return { ctx, subjects, exam, order, today: todayPlan(ctx, order, doneToday, now), settings: ctx.settings, plan: enginePlan(ctx, now), forecast, outlook, doneToday, openToday };
+  return { ctx, subjects, exam, order, today: todayPlan(ctx, { order, subjects }, doneToday, now), settings: ctx.settings, plan: enginePlan(ctx, now), forecast, outlook, doneToday, openToday };
 }
 
 /** 과목 카드와 실제 시험 기준 예상(ADR 008) */
@@ -164,7 +185,7 @@ export function examViews(ctx: EngineContext, forecast: Forecast | null, outlook
   const shares = bank.shares ?? trivialConcepts(bank).shares;
   const rates = newItemRates(bank, attempts);
   const rec = recordedScores(bank, attempts);
-  const avail = availableCounts(bank, mem, now, attempts);
+  const avail = availableCounts(bank, mem, now, attempts, composeOpts(ctx));
   const rule = ctx.settings?.passRule ?? { subjectMin: 40, avgMin: 60 };
   const current = bank.subjects.filter((s) => s.current);
   const bankNow = new Map((forecast?.subjects ?? []).map((s) => [s.key, s.score]));
@@ -196,6 +217,9 @@ export function examViews(ctx: EngineContext, forecast: Forecast | null, outlook
       current: rec.get(s.key) ?? 0,
       examNow: examScoreMix(bn, rate, shares),
       examProjected: bp == null ? null : examScoreMix(bp, rateT, shares),
+      bankNow: bn,
+      bankProjected: bp ?? null,
+      rateProjected: bp == null ? null : rateT.exam,
       newRate: rate,
       needNewRate: bp == null ? null : needRateMix(rule.subjectMin, bp, shares),
       avail: avail.get(s.key) ?? { relearn: 0, due: 0, fresh: 0 },
@@ -246,7 +270,7 @@ export function sessionSizeFor(ctx: EngineContext, now: number): { size: number;
 export async function startSubject(certCode: string, subjectKey: string, now = Date.now(), d: OneQDB = defaultDb): Promise<Target | null> {
   const ctx = await loadEngine(certCode, d);
   if (!ctx) return null;
-  const entries = buildSubjectSession(ctx.bank, ctx.mem, subjectKey, now, ctx.attempts, sessionSizeFor(ctx, now).size);
+  const entries = buildSubjectSession(ctx.bank, ctx.mem, subjectKey, now, ctx.attempts, sessionSizeFor(ctx, now).size, new Set(), composeOpts(ctx));
   if (!entries.length) return null;
   const name = ctx.bank.subjects.find((s) => s.key === subjectKey)?.name ?? '과목';
   const run = await createSetRun(certCode, 'today', `${name} 학습`, entries.map((e) => e.qid), { now, subjectKey }, d);
@@ -289,10 +313,11 @@ export const md = (ts: number) => new Date(ts).toLocaleDateString('ko-KR', { mon
 export async function startToday(certCode: string, now = Date.now(), d: OneQDB = defaultDb): Promise<Target | null> {
   const ctx = await loadEngine(certCode, d);
   if (!ctx) return null;
-  const { order } = examViews(ctx, engineForecast(ctx), engineOutlook(ctx, now), now);
+  const views = examViews(ctx, engineForecast(ctx), engineOutlook(ctx, now), now);
+  const { order } = views;
   const doneToday = ctx.attempts.filter((a) => a.ts >= startOfDay(now)).length;
-  const tp = todayPlan(ctx, order, doneToday, now);
-  const entries = buildDailySession(ctx.bank, ctx.mem, order, now, ctx.attempts, tp.extra ? EXTRA_SIZE : Math.max(1, tp.target - doneToday));
+  const tp = todayPlan(ctx, views, doneToday, now);
+  const entries = buildDailySession(ctx.bank, ctx.mem, order, now, ctx.attempts, tp.extra ? EXTRA_SIZE : Math.max(1, tp.target - doneToday), composeOpts(ctx, views.subjects));
   if (!entries.length) return null;
   const run = await createSetRun(certCode, 'today', '오늘 학습', entries.map((e) => e.qid), { now }, d);
   return { kind: 'set', sessionId: run.sessionId };

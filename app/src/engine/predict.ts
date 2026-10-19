@@ -2,13 +2,13 @@
  * 보유 기출 기준 예상 점수와 위험 판정(개발기준서 6.3).
  *
  * P_s = 100/N_s × Σ_i p_i(T). N_s는 과목의 보유 문항 수(동일 문항도 출제된 횟수만큼 센다).
- * - 학습한 문항: p = r(T) + (1 − r(T)) × prior_s. r(T)는 FSRS 시험일 기억 확률.
+ * - 학습한 문항: p = r(T) + (1 − r(T)) × prior_s. r(T)는 시험일 기억 확률(FSRS + 긴 공백 보수 보정 — memory.examRecall, ADR 014).
  *   잊어도 미학습 문항만큼은 맞힌다고 본다(그렇지 않으면 푼 뒤 잊은 문항이 처음 보는 문항보다 낮게 계산됨 — ADR 006).
  * - 미학습 문항: prior_s = 그 과목의 첫 풀이 정답률(관측 10건 미만이면 0.25).
  */
 import { parseDate } from './days';
 import type { Bank, Item } from './items';
-import { recallAt, type MemoryState } from './memory';
+import { examRecall, recallAt, type MemoryState } from './memory';
 import { VARIANT_TRANSFER, type Concepts } from './similar';
 import type { PassRule } from './types';
 
@@ -51,7 +51,7 @@ export function itemExamP(item: Item, mem: MemoryState, T: number, conservative 
   const own = (it: Item) => {
     const m = mem.items.get(it.key);
     if (!m) return null;
-    const r = recallAt(m.card, T, mem.curve);
+    const r = examRecall(m.card, T, mem.curve);
     return r + (1 - r) * prior;
   };
   const p = own(item);

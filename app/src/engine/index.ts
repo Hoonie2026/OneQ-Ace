@@ -9,4 +9,5 @@ export { minutesOn, minutesToday, studyTime, type StudyTime } from './minutes';
 export { buildTodaySession, buildSubjectSession, buildDailySession, availableCounts, todayState, type StudyAttempt, interleave, retryTail, representativeQid, SESSION_SIZE, type SessionEntry } from './session';
 export { repeatShare, newItemRates, recordedScores, examScore, examScoreMix, needRateMix, projectedRate, TRANSFER, DEFAULT_REPEAT_SHARE, type RepeatShare, type NewRate } from './exam';
 export { buildMock, rng, type MockExam, type MockStrategy } from './mock';
+export { passProbability, passChance, MODEL_SD } from './chance';
 export * from './load';

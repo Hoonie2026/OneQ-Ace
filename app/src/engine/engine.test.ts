@@ -6,7 +6,7 @@ import { importPackBytes } from '../pack/import';
 import { makePack } from '../test/makePack';
 import { addDays, parseDate } from './days';
 import { buildBank, byFrequency, sameKey, subjectKey } from './items';
-import { gradeOf, replay } from './memory';
+import { examRecall, gradeOf, replay } from './memory';
 import { forecast } from './predict';
 import { planWeek, subjectWeights, weekStartOf } from './plan';
 import { studyTime } from './minutes';
@@ -294,7 +294,7 @@ describe('모의고사 출제 방식', () => {
           const mm = mem.items.get(it.key);
           const prior = mem.prior.get(it.subjectKey)!;
           // 시험 당일(now) 정답 확률
-          const r = mm ? Math.pow(1 + (Math.pow(0.9, -1 / mem.curve.decay) - 1) * Math.max(0, (T - mm.card.last_review!.getTime()) / 86_400_000) / (mm.card.stability * mem.curve.scale), -mem.curve.decay) : 0;
+          const r = mm ? examRecall(mm.card, T, mem.curve) : 0; // 예상 점수와 같은 기억률(ADR 014)
           s += r + (1 - r) * prior;
         }
         sum += (100 * s) / m.qids.length;

@@ -3,6 +3,8 @@ import { examViews, fmtMinutes } from '../coach';
 import { addDays, formatDate, parseDate, startOfDay } from '../engine/days';
 import { DEFAULT_PLAN_SETTINGS, engineForecast, engineOutlook, loadEngine, loadPlanSettings, savePlanSettings, type EngineContext } from '../engine';
 import { PLAN_WARN_SCORE } from './CoachCard';
+import { passChance } from '../engine/chance';
+import { pctText } from '../insight';
 
 const DAILY = [30, 45, 60, 90, 120, 150, 180, 240];
 
@@ -42,7 +44,7 @@ export function PlanSetup(props: { certCode: string; certName: string; onBack: (
 
   // 이 계획이면 시험일 예상 점수(저장 전 미리보기 — 실기기 v0.5.0: 계획을 바꿔도 예상 점수 변화가 안 보였다)
   // 날짜별 학습시간이 있으면 "없을 때"와 비교해 그 효과를 따로 보여 준다(실기기 v0.6.0: 시험 직전 집중 학습이 반영되는지 보이지 않았다)
-  let preview: { avg: number | null; rounds: number; hours: number; rho: number; base: { avg: number | null; hours: number } | null } | null = null;
+  let preview: { avg: number | null; chance: number | null; rounds: number; hours: number; rho: number; base: { avg: number | null; hours: number } | null } | null = null;
   if (ctx && valid) {
     const now = Date.now();
     const at = (dayMinutes: Record<string, number>) => {
@@ -50,7 +52,14 @@ export function PlanSetup(props: { certCode: string; certName: string; onBack: (
       const c2 = { ...ctx, settings };
       const o = engineOutlook(c2, now);
       const v = examViews(c2, engineForecast(c2), o, now);
-      return { avg: v.exam.projectedAvg, rounds: v.exam.rounds, hours: Math.round((o?.plannedMinutes ?? 0) / 6) / 10, rho: v.exam.rho };
+      const known = v.exam.status !== 'unknown' && v.subjects.every((x) => x.examProjected != null);
+      return {
+        avg: v.exam.projectedAvg,
+        chance: known ? passChance(v.subjects.map((x) => x.examProjected!), settings.passRule) : null,
+        rounds: v.exam.rounds,
+        hours: Math.round((o?.plannedMinutes ?? 0) / 6) / 10,
+        rho: v.exam.rho,
+      };
     };
     const cur = at(Object.fromEntries(specialList));
     preview = { ...cur, base: specialList.length ? at({}) : null };
@@ -158,6 +167,12 @@ export function PlanSetup(props: { certCode: string; certName: string; onBack: (
         <section className={`card plan-preview ${preview.avg < PLAN_WARN_SCORE ? 'bad' : 'ok'}`} data-testid="plan-preview">
           <p>
             이 계획이면 <b>시험일 예상 점수 {preview.avg}점</b>
+            {preview.chance != null && (
+              <>
+                {' '}
+                · 합격 가능성 <b data-testid="plan-preview-chance">{pctText(preview.chance)}</b>
+              </>
+            )}
           </p>
           <p className="hint">시험일까지 학습시간 합계 {preview.hours}시간</p>
           {preview.base?.avg != null && (

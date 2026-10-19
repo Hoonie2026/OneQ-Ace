@@ -71,8 +71,10 @@ describe('홈 대시보드·오늘 학습(5단계)', () => {
     const r = await sessionResult(s, d);
     expect(r.complete).toBe(true);
     expect(r.verdict).toBeNull(); // 오늘 학습은 합격 판정 없음
-    // 추천 과목부터(회차가 달라도 과목명으로 묶음). 두 과목 조건이 같으면 어느 쪽이든 추천된 과목 하나만
-    expect(r.subjects.map((x) => x.name)).toEqual([pre.subjects.find((x) => x.key === pre.order[0])!.name]);
+    // 처음엔 과목 진단(ADR 014): 진단이 덜 된 두 과목을 번갈아(과목마다 10문항까지) — 회차가 달라도 과목명으로 묶음
+    expect(r.subjects.map((x) => x.name).sort()).toEqual(['과목1', '과목2']);
+    const subj = await Promise.all(s.qids.slice(0, 4).map(async (q) => (await d.questions.get(q))!.subjectNo));
+    expect(subj[0]).not.toBe(subj[1]); // 번갈아
     expect(r.wrongQids).toHaveLength(5);
     // 회독 진도는 그대로 0
     const sum = await packSummary((await d.packs.get('TEST-2022-1'))!, d);

@@ -18,7 +18,8 @@ import { hasOverride, minutesToday } from './minutes';
 import { passOutlook, type OutlookStatus } from './outlook';
 import { forecast } from './predict';
 import { planWeek, type WeeklyPlan } from './plan';
-import { buildTodaySession, retryTail } from './session';
+import { buildDailySession, buildTodaySession, retryTail } from './session';
+import { OUTLOOK_MIN_OBS } from './outlook';
 import { rng } from './mock';
 import { DEFAULT_PLAN_SETTINGS, type EngineAttempt, type EngineQuestion, type PlanSettings } from './types';
 
@@ -122,7 +123,7 @@ class World {
 export interface SimResult {
   learner: string;
   days: number;
-  policy: 'engine' | 'sequential' | 'focus';
+  policy: 'engine' | 'daily' | 'sequential' | 'focus';
   response: Response;
   start: number[]; // 시작 시 진짜 점수
   final: number[]; // 시험일 진짜 점수
@@ -155,7 +156,11 @@ export const CRISIS = { fromDaysLeft: 14, minMinutes: 120, maxMinutes: 180, fina
 const START = parseDate('2027-01-04'); // 월요일
 
 export interface SimOptions {
-  policy?: 'engine' | 'sequential' | 'focus';
+  policy?: 'engine' | 'daily' | 'sequential' | 'focus';
+  /** policy 'daily'의 묶음 규칙(실험용). 기본은 앱과 같은 값 */
+  /** 끝에 진단용(시험 전용) */
+  onEnd?: (x: { recall: (key: string, t: number) => number; bank: Bank; mem: MemoryState; T: number; subjIndex: Map<string, number>; attempts: EngineAttempt[] }) => void;
+  daily?: (bank: Bank, mem: MemoryState, settings: PlanSettings, now: number, attempts: EngineAttempt[]) => import('./session').ComposeOpts;
   seed?: number;
   response?: Response;
   /** 날마다 학습시간(분)을 정해 준다(비교 기준이 엔진 학습자와 같은 시간을 쓰게) */
@@ -164,7 +169,7 @@ export interface SimOptions {
 }
 
 /**
- * @param policy 'engine' = 매일 계획 엔진의 오늘 학습, 'sequential' = 비교 기준(회차 순서대로 풀고 틀린 것만 그날 다시),
+ * @param policy 'engine' = 매일 계획 엔진의 오늘 학습, 'daily' = 앱 화면의 "시스템 추천 학습"(dailyOrder + buildDailySession — ADR 014), 'sequential' = 비교 기준(회차 순서대로 풀고 틀린 것만 그날 다시),
  *   'focus' = 참고용 상한(실력을 아는 사람이 가장 약한 과목만 회차 순서대로)
  */
 export function simulate(learner: Learner, days: number, opts: SimOptions = {}): SimResult {
@@ -196,8 +201,10 @@ export function simulate(learner: Learner, days: number, opts: SimOptions = {}):
     const daysLeft = days - d;
     let t = day + 9 * 3_600_000;
     let mem: MemoryState | null = null;
-    if (policy === 'engine') {
-      mem = replay(bank, attempts);
+    if (policy === 'engine') mem = replay(bank, attempts);
+    // 합격 기준 경고(학습자가 시간을 정하는 근거) — 날짜별 시간을 받아 쓰는 비교 실행은 건너뛴다
+    if ((policy === 'engine' || policy === 'daily') && !opts.minutesByDay) {
+      mem ??= replay(bank, attempts);
       const ol = passOutlook(bank, mem, settings, t);
       outlooks.push({ d, status: ol.status, needed: ol.neededMinutesPerDay, projectedAvg: ol.projectedAverage });
       if (response === 'crisis' && daysLeft <= CRISIS.fromDaysLeft && ol.status !== 'pass') {
@@ -259,6 +266,23 @@ export function simulate(learner: Learner, days: number, opts: SimOptions = {}):
           solve(e.qid);
         }
       }
+    } else if (policy === 'daily') {
+      // 앱과 같게: 남은 오늘 분량을 한 묶음 → 묶음의 틀린·모름 다시 풀기, 시간이 남으면 다음 묶음
+      while (budget > 0) {
+        const m = replay(bank, attempts);
+        const co = opts.daily ? opts.daily(bank, m, settings, t, attempts) : dailyOpts(bank, m, settings); // 앱과 같게(coach.composeOpts)
+        const entries = buildDailySession(bank, m, dailyOrder(bank, m, settings), t, attempts, budget, co);
+        if (!entries.length) break;
+        const wrong = new Set<string>();
+        for (const e of entries) {
+          if (budget-- <= 0) break;
+          if (!solve(e.qid)) wrong.add(e.qid);
+        }
+        for (const e of retryTail(entries, wrong)) {
+          if (budget-- <= 0) break;
+          solve(e.qid);
+        }
+      }
     } else {
       const wrong: string[] = [];
       while (budget > 0) {
@@ -274,8 +298,9 @@ export function simulate(learner: Learner, days: number, opts: SimOptions = {}):
       }
     }
   }
+  opts.onEnd?.({ recall: (k, tt) => world.recall(k, tt), bank, mem: replay(bank, attempts), T, subjIndex, attempts });
   let predictedFinal: number[] | null = null;
-  if (policy === 'engine') {
+  if (policy === 'engine' || policy === 'daily') {
     const fc = forecast(bank, replay(bank, attempts), examDate, settings.passRule, settings.safetyMargin);
     predictedFinal = SUBJECTS.map((n) => fc.subjects.find((s) => s.name === n)!.score);
   }
@@ -294,27 +319,19 @@ export function simulate(learner: Learner, days: number, opts: SimOptions = {}):
   return { learner: learner.name, days, policy, response, start, final: world.examScores(T), predictedFinal, attempts: attempts.length, bySubject, shortageAtStart, firstPlan, minutesByDay, outlooks, crisisFromDaysLeft, pushDays, pushMaxMinutes };
 }
 
-/**
- * 실제 시험(과목당 n문항)에서 합격할 확률. 과목마다 정답 수 ~ 이항(n, 점수/100), 과목끼리 독립으로 보고
- * "모든 과목 ≥ 과락선 그리고 전체 ≥ 평균 합격선"의 확률을 정확히 계산한다(정답 수 분포의 합성곱).
- * 게이트 조건 2의 비교 척도(ADR 007): 평균 점수는 과락을 감수하고 강한 과목만 올려도 높아지기 때문
- */
-export function passProbability(scores: number[], n = 20, subjectMin = 40, avgMin = 60): number {
-  const minC = Math.ceil((subjectMin / 100) * n - 1e-9);
-  let dist = [1]; // 지금까지 과목의 정답 수 합 분포(모든 과목이 과락선 이상인 경우만)
-  for (const sc of scores) {
-    const p = Math.min(1, Math.max(0, sc / 100));
-    const b: number[] = [];
-    let c = Math.pow(1 - p, n); // C(n,0) p^0 (1-p)^n
-    for (let k = 0; k <= n; k++) {
-      if (k > 0) c = p >= 1 ? (k === n ? 1 : 0) : (c * (n - k + 1) * p) / (k * (1 - p));
-      b.push(k >= minC ? c : 0);
-    }
-    if (p >= 1) b.fill(0), (b[n] = 1);
-    const next = new Array(dist.length + n).fill(0);
-    for (let i = 0; i < dist.length; i++) if (dist[i]) for (let k = 0; k <= n; k++) next[i + k] += dist[i] * b[k];
-    dist = next;
-  }
-  const need = Math.ceil((avgMin / 100) * n * scores.length - 1e-9);
-  return dist.slice(need).reduce((a, x) => a + x, 0);
+export { passProbability } from './chance';
+
+/** 앱(coach.examViews)과 같은 과목 순서: 진단이 덜 된 과목(첫 풀이 적은 순) → 예상 점수가 낮은 순 */
+export function dailyOrder(bank: Bank, mem: MemoryState, settings: PlanSettings): string[] {
+  const fc = forecast(bank, mem, settings.examDate, settings.passRule, settings.safetyMargin);
+  const obs = (k: string) => mem.priorObs.get(k) ?? 0;
+  return fc.subjects
+    .map((s) => s.key)
+    .sort((a, b) => Number(obs(b) < OUTLOOK_MIN_OBS) - Number(obs(a) < OUTLOOK_MIN_OBS) || (obs(a) < OUTLOOK_MIN_OBS ? obs(a) - obs(b) : 0) || fc.subjects.find((x) => x.key === a)!.score - fc.subjects.find((x) => x.key === b)!.score);
+}
+
+/** 앱(coach.composeOpts)과 같은 묶음 옵션: 시험일(직전 총정리) + 과목 예상 점수(새 문항 배분) */
+export function dailyOpts(bank: Bank, mem: MemoryState, settings: PlanSettings): import('./session').ComposeOpts {
+  const fc = forecast(bank, mem, settings.examDate, settings.passRule, settings.safetyMargin);
+  return { examDay: parseDate(settings.examDate), scores: new Map(fc.subjects.map((s) => [s.key, s.score])), passRule: settings.passRule };
 }

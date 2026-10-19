@@ -1871,3 +1871,224 @@ h3 {
 .solve.is-relearn .solve-progress > div {
   background: var(--check);
 }
+
+/* v0.8.0 — 학습 점검·계산 근거·학습 원리(ADR 014) */
+.score-box .chance {
+  color: var(--ink);
+  font-weight: 700;
+}
+.insight-card {
+  display: grid;
+  gap: 8px;
+  margin: 0 0 12px;
+  border-left: 5px solid var(--check);
+  background: var(--check-bg);
+}
+.insight-card.bad {
+  border-left-color: var(--fail);
+  background: var(--fail-bg);
+}
+.insight-card h2 {
+  margin: 0;
+  font-size: 18px;
+}
+.insight-card.bad h2 {
+  color: var(--fail);
+}
+.insight-card ul {
+  margin: 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 4px;
+  font-size: 15px;
+  line-height: 1.45;
+}
+.insight-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.principles-btn {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  margin: 12px 0 0;
+  text-align: left;
+  font: inherit;
+  color: var(--ink);
+  cursor: pointer;
+}
+.principles-btn > span:first-child {
+  font-size: 26px;
+}
+.principles-btn > span:nth-child(2) {
+  display: grid;
+  flex: 1;
+  gap: 2px;
+}
+.principles-btn small {
+  color: var(--muted);
+  font-size: 13px;
+}
+.principles-btn > span:last-child {
+  font-size: 22px;
+  color: var(--muted);
+}
+.calc-box {
+  margin: 10px 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--bg);
+  display: grid;
+  gap: 4px;
+}
+.calc-box p {
+  margin: 0;
+  font-size: 15px;
+}
+.tag {
+  display: inline-block;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--memo-bg);
+  color: var(--memo);
+  font-size: 12px;
+  font-weight: 700;
+  vertical-align: 1px;
+}
+.tag.app {
+  background: var(--ok-bg);
+  color: var(--ok);
+}
+.mini-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 8px 0;
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+}
+.mini-table th,
+.mini-table td {
+  padding: 6px 4px;
+  border-bottom: 1px solid var(--line);
+  text-align: right;
+}
+.mini-table th:first-child,
+.mini-table td:first-child {
+  text-align: left;
+}
+.mini-table th {
+  color: var(--muted);
+  font-weight: 600;
+  font-size: 12px;
+}
+.mini-table td.bad b {
+  color: var(--fail);
+}
+.calc-table td:first-child {
+  word-break: keep-all;
+}
+details.why {
+  margin: 8px 0 12px;
+}
+details.why summary {
+  cursor: pointer;
+  font-weight: 700;
+  color: var(--primary);
+  min-height: 40px;
+  display: flex;
+  align-items: center;
+}
+details.why ul {
+  margin: 4px 0 8px;
+  padding-left: 18px;
+  display: grid;
+  gap: 6px;
+  font-size: 14px;
+  line-height: 1.5;
+}
+.forecast h2,
+.principles h2 {
+  margin: 0 0 6px;
+  font-size: 20px;
+}
+.forecast h3,
+.principles h3 {
+  margin: 0 0 8px;
+  font-size: 17px;
+}
+.share-bar {
+  display: flex;
+  height: 14px;
+  border-radius: 7px;
+  overflow: hidden;
+  background: var(--line);
+}
+.s-same {
+  background: var(--primary);
+}
+.s-var {
+  background: var(--memo);
+}
+.s-fresh {
+  background: var(--idle);
+}
+.legend {
+  list-style: none;
+  padding: 0;
+  margin: 8px 0;
+  display: grid;
+  gap: 4px;
+  font-size: 15px;
+}
+.legend i {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  margin-right: 6px;
+  vertical-align: -1px;
+}
+.formula {
+  margin: 8px 0;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: var(--bg);
+  font-size: 13px;
+  line-height: 1.5;
+}
+ul.plain {
+  margin: 0 0 8px;
+  padding-left: 18px;
+  display: grid;
+  gap: 6px;
+  font-size: 15px;
+  line-height: 1.5;
+}
+.principle p {
+  margin: 0 0 8px;
+  line-height: 1.55;
+}
+.principle .ev {
+  font-size: 14px;
+}
+.flow {
+  margin: 8px 0 0;
+  padding-left: 22px;
+  display: grid;
+  gap: 4px;
+  font-weight: 600;
+}
+.refs ol {
+  margin: 0;
+  padding-left: 22px;
+  display: grid;
+  gap: 6px;
+  font-size: 13px;
+  line-height: 1.45;
+}
+.refs a {
+  color: var(--primary);
+  word-break: break-word;
+}

@@ -48,9 +48,25 @@ test('5단계: 학습 계획 → 오늘 학습(계획량 한 묶음·틀린 문�
   await expect(page.getByTestId('plan-open')).toBeVisible();
   await page.screenshot({ path: `test-results/stage5-home0-${info.project.name}.png`, fullPage: true });
 
+  // v0.8.0(ADR 014): 예상 점수 계산 보기 → 학습 원리(근거 문헌) → 홈
+  await page.getByTestId('forecast-open').click();
+  await expect(page.getByTestId('forecast-view')).toBeVisible();
+  await expect(page.getByTestId('forecast-table')).toContainText('과목');
+  await page.screenshot({ path: `test-results/stage5-forecast-${info.project.name}.png`, fullPage: true });
+  await page.getByTestId('back-home').click();
+  await page.getByTestId('principles-open').click();
+  await expect(page.getByTestId('principles')).toContainText('간격 반복');
+  await expect(page.getByTestId('principles')).toContainText('Roediger & Karpicke');
+  await page.screenshot({ path: `test-results/stage5-principles-${info.project.name}.png`, fullPage: true });
+  await page.getByTestId('back-home').click();
+
   // 시스템 추천 학습: 무엇을 왜 푸는지 안내 → 학습 시작(계획량 20문항 한 묶음) → 목표를 채우면 "오늘 학습 목표 달성" 상자(v0.7.1)
   await page.getByTestId('go-recommend').click();
   await expect(page.getByTestId('today-what')).toContainText('새 문항');
+  await expect(page.getByTestId('rec-count')).toContainText('30분 ÷ 문항당 1분 30초 = 20문항');
+  await expect(page.getByTestId('rec-subjects')).toBeVisible();
+  await page.getByTestId('rec-why').locator('summary').click();
+  await expect(page.getByTestId('rec-why')).toContainText('복습은 최대 60%');
   await page.screenshot({ path: `test-results/stage5-recommend-${info.project.name}.png`, fullPage: true });
   await expect(page.getByTestId('today-start')).toHaveText('학습 시작 (20문항)');
   await page.getByTestId('today-start').click();

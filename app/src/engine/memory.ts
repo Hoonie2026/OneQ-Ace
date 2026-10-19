@@ -65,6 +65,8 @@ export interface MemoryState {
   priorObs: Map<string, number>;
   /** 문항당 소요시간 실측 중앙값(초). 관측이 없으면 DEFAULT_SEC_PER_Q */
   secPerQuestion: number;
+  /** 소요시간 실측에 쓴 풀이 수(MIN_TIMING_OBS 미만이면 secPerQuestion은 기본값) */
+  timingObs: number;
   /** 개인 망각 곡선(복습 풀이 30건 미만이면 FSRS 기본값) */
   curve: Curve;
 }
@@ -77,6 +79,7 @@ export interface Curve {
   /** 근거가 된 복습 풀이 수 */
   obs: number;
 }
+
 
 export const MIN_CALIBRATION_OBS = 30;
 
@@ -165,6 +168,7 @@ export function replay(bank: Bank, attempts: EngineAttempt[]): MemoryState {
     prior,
     priorLow,
     priorObs,
+    timingObs: all.length,
     secPerQuestion: med != null && all.length >= MIN_TIMING_OBS ? Math.min(SEC_PER_Q_MAX, Math.max(SEC_PER_Q_MIN, med / 1000)) : DEFAULT_SEC_PER_Q,
     curve: fitCurve(reviews, prior),
   };
@@ -211,6 +215,22 @@ export function recallAt(card: Card, t: number, curve: Curve = DEFAULT_CURVE): n
   if (!card.last_review || card.stability <= 0) return 0;
   const elapsed = Math.max(0, (t - card.last_review.getTime()) / DAY_MS);
   return curveR(elapsed, card.stability, curve);
+}
+
+/**
+ * 시험일 기억 확률 — 예상 점수용(ADR 014). 마지막 풀이 뒤 (보정한) 안정도보다 오래 지나면 FSRS 멱함수 곡선과
+ * 지수 망각 곡선(R = 0.9^(t/S))의 평균, 둘 중 낮은 값을 넘지 않게.
+ * 앱 추천은 기억률이 90% 무렵일 때 복습을 내므로 "오래 비운 뒤" 얼마나 잊는지는 기록으로 잘 가려지지 않는다
+ * (곡선 보정이 꼬리 모양을 못 정함). 꼬리가 긴 멱함수만 쓰면 빨리 잊는 사람의 예상이 크게 높아졌다
+ * (가상 학습자 시험: 망각형 60일 예상 +8.7점) — 두 모형 사이로 보수적으로 잡는다
+ */
+export function examRecall(card: Card, t: number, curve: Curve = DEFAULT_CURVE): number {
+  const r = recallAt(card, t, curve);
+  if (!card.last_review || card.stability <= 0) return r;
+  const days = Math.max(0, (t - card.last_review.getTime()) / DAY_MS);
+  const S = card.stability * curve.scale;
+  if (days <= S) return r;
+  return Math.min(r, (r + Math.pow(TARGET_RETENTION, days / S)) / 2);
 }
 
 /** 복습 예정일: FSRS 간격에 안정도 배율을 곱한다(간격은 안정도에 비례) */

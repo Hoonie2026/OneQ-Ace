@@ -1,4 +1,5 @@
 import { fmtMinutes, type Coach } from '../coach';
+import { pctText, type Insight } from '../insight';
 
 /** 시험일 예상 점수가 이보다 낮으면 "계획 수정 필요" 배지(사용자 결정 — ADR 010) */
 export const PLAN_WARN_SCORE = 70;
@@ -10,6 +11,10 @@ export const PLAN_WARN_SCORE = 70;
  */
 export function CoachCard(props: {
   coach: Coach;
+  /** 합격 가능성·실제 학습량 점검(ADR 014). 계산이 무거워 홈을 먼저 그린 뒤 채운다 */
+  insight: Insight | null;
+  onForecast: () => void;
+  onPrinciples: () => void;
   busy: boolean;
   lastMock: { date: string; score: number } | null;
   onPlan: () => void;
@@ -56,6 +61,16 @@ export function CoachCard(props: {
             <b data-testid="projected-avg">{proj ?? '—'}</b>
             {proj != null ? '점' : ''}
           </p>
+          {props.insight?.plan && exam.status !== 'unknown' && (
+            <small className="chance" data-testid="pass-chance">
+              합격 가능성 {pctText(props.insight.plan.chance)}
+            </small>
+          )}
+          {proj != null && (
+            <button className="link-btn small" onClick={props.onForecast} data-testid="forecast-open">
+              계산 보기 ›
+            </button>
+          )}
           {warn && (
             <button className="warn-badge" onClick={props.onPlan} data-testid="plan-warn">
               계획 수정 필요({PLAN_WARN_SCORE}점 이상) ›
@@ -68,6 +83,8 @@ export function CoachCard(props: {
           )}
         </div>
       </section>
+
+      {props.insight && <InsightCard insight={props.insight} onPlan={props.onPlan} onForecast={props.onForecast} />}
 
       <section className="card today-card" data-testid="today-card">
         <div className="today-head">
@@ -111,6 +128,73 @@ export function CoachCard(props: {
           모의고사 ›
         </button>
       </section>
+
+      <button className="card principles-btn" onClick={props.onPrinciples} data-testid="principles-open">
+        <span aria-hidden="true">📘</span>
+        <span>
+          <b>학습 원리 · 예상 점수 계산 방법</b>
+          <small>이 앱이 문항을 고르고 점수를 예상하는 방법과 그 근거(연구)</small>
+        </span>
+        <span aria-hidden="true">›</span>
+      </button>
     </>
+  );
+}
+
+/**
+ * 학습 점검 카드(ADR 014 — 사용자 요청: 계획·남은 기간·지금까지 학습 패턴으로 볼 때 개선 없이는 합격이 어려우면 경고).
+ * 위험(과락·평균 미달)·아슬아슬하거나, 최근 실제 학습량이 계획보다 적을 때만 보인다
+ */
+export function InsightCard(props: { insight: Insight; onPlan: () => void; onForecast: () => void }) {
+  const { level, plan, pace, atPace, need, dailyMinutes } = props.insight;
+  const behind = !!atPace;
+  if (!(level === 'risk' || level === 'watch' || behind)) return null;
+  const title =
+    level === 'risk' ? '지금대로면 합격이 어렵습니다' : level === 'watch' ? '합격선에 아슬아슬합니다' : '계획보다 공부량이 적습니다';
+  return (
+    <section className={`card insight-card ${level === 'risk' ? 'bad' : 'warn'}`} data-testid="insight-card" role="status">
+      <h2>
+        <span aria-hidden="true">{level === 'risk' ? '⚠' : '!'}</span> {title}
+      </h2>
+      <ul>
+        {pace && (
+          <li data-testid="insight-pace">
+            최근 {pace.days}일 하루 평균 <b>{fmtMinutes(pace.minutesPerDay)}</b> 공부 — 계획({fmtMinutes(pace.plannedPerDay)})의 {Math.round(pace.ratio * 100)}%
+          </li>
+        )}
+        {atPace && (
+          <li data-testid="insight-atpace">
+            이 속도면 시험일 <b>{atPace.avg}점</b> · 합격 가능성 <b>{pctText(atPace.chance)}</b>
+            {atPace.fail.length > 0 && <> · 과락 위험 {atPace.fail.join(', ')}</>}
+          </li>
+        )}
+        {plan && (
+          <li>
+            계획대로 하면 {plan.avg}점 · 합격 가능성 {pctText(plan.chance)}
+            {plan.fail.length > 0 && <> · 과락 위험 {plan.fail.join(', ')}</>}
+          </li>
+        )}
+        {need.safe != null ? (
+          <li data-testid="insight-need">
+            여유 있게 합격하려면 평소 하루 <b>{fmtMinutes(need.safe)}</b>
+            {need.min != null && need.min < need.safe && <> (최소 {fmtMinutes(need.min)})</>}
+            {dailyMinutes > 0 && need.safe > dailyMinutes && <> — 지금 계획 {fmtMinutes(dailyMinutes)}</>}
+          </li>
+        ) : (
+          (level === 'risk' || level === 'watch') && (
+            <li data-testid="insight-need">하루 8시간으로도 여유 있는 합격선에 닿기 어렵습니다 — 기출 회차를 더 넣거나 시험일을 다시 생각해 보세요.</li>
+          )
+        )}
+        {!pace && <li className="muted">실제 학습량은 기록이 3일 이상 쌓이면 함께 반영합니다.</li>}
+      </ul>
+      <div className="insight-actions">
+        <button className="btn" onClick={props.onPlan} data-testid="insight-plan">
+          학습계획 수정
+        </button>
+        <button className="btn" onClick={props.onForecast}>
+          계산 근거
+        </button>
+      </div>
+    </section>
   );
 }
