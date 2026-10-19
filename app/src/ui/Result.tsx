@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { startSubject, startToday } from '../coach';
 import { ensureWrongRun, loadSession, passHistory, restartPass, sessionResult, type PassRecord, type Result as R, type Target } from '../study';
+import { askConfirm } from './Dialog';
 
 const VERDICT: Record<NonNullable<R['verdict']>, { icon: string; text: string; cls: string }> = {
   pass: { icon: '✓', text: '합격선 통과', cls: 'ok' },
@@ -52,7 +53,7 @@ export function Result(props: { target: Target; onHome: () => void; onSolve: (t:
   };
   const isMock = set?.mode === 'mock';
   const newPass = async () => {
-    if (!window.confirm('이 회차를 처음부터 다시 풉니다(새 회독). 지금까지의 풀이 기록은 그대로 남습니다. 시작할까요?')) return;
+    if (!(await askConfirm('이 회차를 처음부터 다시 풉니다(새 회독). 지금까지의 풀이 기록은 그대로 남습니다. 시작할까요?', { okText: '시작' }))) return;
     await restartPass(packId);
     props.onSolve({ kind: 'pass', packId });
   };

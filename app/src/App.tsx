@@ -13,6 +13,7 @@ import { DaySummary } from './ui/DaySummary';
 import { Result } from './ui/Result';
 import { Settings } from './ui/Settings';
 import { Solve } from './ui/Solve';
+import { askConfirm, DialogHost } from './ui/Dialog';
 
 type Screen =
   | { name: 'home' }
@@ -76,7 +77,7 @@ export default function App() {
               identical++;
               continue;
             }
-            if (window.confirm(`${f.name}: 같은 버전(v${r.installedVersion})인데 내용이 다른 팩입니다. 새 것으로 바꿀까요? 학습 기록은 이어집니다`)) {
+            if (await askConfirm(`${f.name}: 같은 버전(v${r.installedVersion})인데 내용이 다른 팩입니다. 새 것으로 바꿀까요? 학습 기록은 이어집니다`, { okText: '바꾸기' })) {
               r = await importPackFile(f, { force: true });
             } else continue;
           }
@@ -191,6 +192,7 @@ export default function App() {
       )}
       </ErrorBoundary>
 
+      <DialogHost />
       {toast && (
         <div className="toast" role="status" onClick={() => setToast(null)}>
           {toast}

@@ -158,6 +158,8 @@ describe('과목별 학습·실제 시험 기준 예상(ADR 008)', () => {
 
   it('과목 학습: 그 과목만, 출제빈도 높은 문항 먼저, 오늘 푼 문항은 다시 내지 않음', async () => {
     await withRepeat();
+    // 과목 학습 한 묶음 = 오늘 남은 목표 문항 수(v0.7.2): 22.5분 ÷ 1.5분 = 15문항
+    await savePlanSettings('TEST', { examDate: '2027-01-18', dailyMinutes: 22.5 }, d);
     const c = (await loadCoach('TEST', NOW, d))!;
     const k1 = c.subjects[0].key;
     const t = (await startSubject('TEST', k1, NOW, d))!;
@@ -186,7 +188,7 @@ describe('과목별 학습·실제 시험 기준 예상(ADR 008)', () => {
 
   it('현재 점수는 기록 그대로(모름 0점), 예상은 실제 시험 기준(반복 출제 비율 + 처음 보는 문항 정답률, 모름은 25%)', async () => {
     await withRepeat();
-    await savePlanSettings('TEST', { examDate: '2027-01-18' }, d);
+    await savePlanSettings('TEST', { examDate: '2027-01-18', dailyMinutes: 22.5 }, d); // 한 묶음 15문항
     const k1 = (await loadCoach('TEST', NOW, d))!.subjects[0].key;
     // 과목1 15문항 모두 모름
     await solveSet((await startSubject('TEST', k1, NOW, d))!, () => 0);

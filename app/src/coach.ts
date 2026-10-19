@@ -19,7 +19,6 @@ import {
   enginePlan,
   loadEngine,
   savePlanSettings,
-  SESSION_SIZE,
   type EngineContext,
   type Forecast,
   type NewRate,
@@ -232,11 +231,22 @@ export function examViews(ctx: EngineContext, forecast: Forecast | null, outlook
   };
 }
 
-/** 과목별 학습 한 세션(15문항, 자동 순서) */
+/**
+ * 한 번에 내는 문항 수(v0.7.2 — 실기기 의견: 오늘 목표 40문항인데 과목별은 15문항이라 어긋남).
+ * 시스템 추천·과목별 모두 **오늘 남은 목표 문항 수**를 한 묶음으로, 목표를 다 채웠으면 추가 EXTRA_SIZE(15)
+ */
+export function sessionSizeFor(ctx: EngineContext, now: number): { size: number; extra: boolean } {
+  const settings = ctx.settings ?? { ...DEFAULT_PLAN_SETTINGS, examDate: '9999-12-31' };
+  const target = Math.max(0, Math.round((minutesToday(settings, startOfDay(now)) * 60) / ctx.mem.secPerQuestion));
+  const left = target - ctx.attempts.filter((a) => a.ts >= startOfDay(now)).length;
+  return left > 0 ? { size: left, extra: false } : { size: EXTRA_SIZE, extra: true };
+}
+
+/** 과목별 학습 한 묶음(오늘 남은 목표 문항 수 — 그 과목에 낼 문항이 그보다 적으면 있는 만큼, 자동 순서) */
 export async function startSubject(certCode: string, subjectKey: string, now = Date.now(), d: OneQDB = defaultDb): Promise<Target | null> {
   const ctx = await loadEngine(certCode, d);
   if (!ctx) return null;
-  const entries = buildSubjectSession(ctx.bank, ctx.mem, subjectKey, now, ctx.attempts, SESSION_SIZE);
+  const entries = buildSubjectSession(ctx.bank, ctx.mem, subjectKey, now, ctx.attempts, sessionSizeFor(ctx, now).size);
   if (!entries.length) return null;
   const name = ctx.bank.subjects.find((s) => s.key === subjectKey)?.name ?? '과목';
   const run = await createSetRun(certCode, 'today', `${name} 학습`, entries.map((e) => e.qid), { now, subjectKey }, d);

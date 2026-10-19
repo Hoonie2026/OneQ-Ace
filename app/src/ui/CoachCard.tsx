@@ -58,7 +58,7 @@ export function CoachCard(props: {
           </p>
           {warn && (
             <button className="warn-badge" onClick={props.onPlan} data-testid="plan-warn">
-              계획 수정 필요 ›
+              계획 수정 필요({PLAN_WARN_SCORE}점 이상) ›
             </button>
           )}
           {proj == null && (

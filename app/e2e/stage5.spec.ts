@@ -65,7 +65,12 @@ test('5단계: 학습 계획 → 오늘 학습(계획량 한 묶음·틀린 문�
   await expect(page.getByTestId('goal-box')).toBeVisible();
   await expect(page.getByTestId('goal-box')).toContainText('20');
   await page.screenshot({ path: `test-results/stage5-goal-${info.project.name}.png`, fullPage: true });
+  await expect(page.getByTestId('goal-continue')).toContainText('다시 풀기부터');
   await page.getByTestId('goal-continue').click();
+  // 계속 → 먼저 틀린·모름 "다시 풀기"(주황 띠·다시 풀기 n/m — v0.7.2)
+  await expect(page.getByTestId('relearn-banner')).toContainText('다시 풀기 · 1 /');
+  await expect(page.getByTestId('relearn-banner')).toContainText('새 문항이 아닙니다');
+  await page.screenshot({ path: `test-results/stage5-relearn-${info.project.name}.png` });
   await expect(page.getByTestId('progress')).toContainText('1 /');
   await page.getByRole('button', { name: '1번' }).click();
   await page.getByRole('button', { name: '풀이 멈추고 홈으로' }).click();
@@ -114,7 +119,11 @@ test('5단계: 학습 계획 → 오늘 학습(계획량 한 묶음·틀린 문�
   await page.getByTestId('mock-resume').click();
   const toSec = (t: string) => t.match(/(\d+):(\d\d):(\d\d)/)!.slice(1).map(Number).reduce((a, b) => a * 60 + b, 0);
   expect(toSec(left1) - toSec((await page.getByTestId('mock-timer').textContent())!)).toBeLessThanOrEqual(2);
-  await page.getByTestId('mock-submit').click(); // 확인 창은 수락
+  await page.getByTestId('mock-submit').click();
+  // 앱 안 확인 창(v0.7.2): 주소가 아니라 제목·큰 글자, [계속 풀기] [제출]
+  await expect(page.getByTestId('dialog')).toContainText('모의고사 제출');
+  await expect(page.getByTestId('dialog')).not.toContainText('github');
+  await page.getByTestId('dialog-ok').click();
   await expect(page.getByRole('heading', { name: '모의고사 결과' })).toBeVisible();
   await expect(page.getByTestId('result')).toContainText('5/100문항 풀이');
   await expect(page.locator('.verdict')).toBeVisible();

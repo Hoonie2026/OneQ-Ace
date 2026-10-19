@@ -59,6 +59,14 @@ test('3단계 게이트(5단계 개편 후): 오프라인 과목별 학습·이�
   // ① 팩 가져오기
   await page.getByTestId('pack-input').first().setInputFiles(pack);
   await expect(page.getByTestId('go-recommend')).toBeVisible({ timeout: 30_000 });
+  // 학습 계획: 하루 4시간(160문항) — 과목 학습 한 묶음 = 오늘 남은 목표(v0.7.2)라 과목 문항 수(20)만큼 나오게
+  await page.getByTestId('plan-open').click();
+  const exam = new Date();
+  exam.setDate(exam.getDate() + 30);
+  await page.getByTestId('plan-exam-date').fill(`${exam.getFullYear()}-${String(exam.getMonth() + 1).padStart(2, '0')}-${String(exam.getDate()).padStart(2, '0')}`);
+  await page.getByTestId('plan-daily').selectOption('240');
+  await page.getByTestId('plan-save').click();
+  await expect(page.getByTestId('today-plan')).toHaveText('4시간 · 160문항');
 
   // ② 비행기 모드에서 다시 열기
   await ctx.setOffline(true);
@@ -93,7 +101,7 @@ test('3단계 게이트(5단계 개편 후): 오프라인 과목별 학습·이�
     }
     if (last) {
       // 묶음 끝: 틀린 문항이 있으면 "한 번 더" 묶음으로 바로 이어지고(ADR 010), 없으면 성적
-      await expect(page.getByTestId('result').or(page.getByText('방금 틀린·모름 문항 한 번 더'))).toBeVisible();
+      await expect(page.getByTestId('result').or(page.getByTestId('relearn-banner'))).toBeVisible();
       return page.getByTestId('result').isVisible();
     }
     await expect(page.getByTestId('feedback')).toBeHidden();
@@ -101,7 +109,7 @@ test('3단계 게이트(5단계 개편 후): 오프라인 과목별 학습·이�
     return false;
   };
   const doneToday = async () => Number((await page.getByTestId('week-goal').textContent())!.match(/오늘 (\d+) \//)![1]);
-  /** 과목 학습 한 세션(15문항 + 틀린 문항 한 번 더)을 끝까지. 첫 문항에서 확대·메모를 한 번 해 본다(v0.7: 헷갈림 없앰, 한 줄 설명 → 메모) */
+  /** 과목 학습 한 묶음(그 과목 20문항 + 틀린 문항 한 번 더)을 끝까지. 첫 문항에서 확대·메모를 한 번 해 본다(v0.7: 헷갈림 없앰, 한 줄 설명 → 메모) */
   const studySession = async (nth: number, extras = false) => {
     await page.getByTestId('go-subjects').click();
     await page.getByTestId('subject-study').nth(nth).click();
@@ -129,16 +137,18 @@ test('3단계 게이트(5단계 개편 후): 오프라인 과목별 학습·이�
 
   // ③-2 다른 과목을 7문항 풀다 멈춤 → 앱 종료·다시 열기(오프라인) → 홈에서 이어서
   await page.getByTestId('go-subjects').click();
+  await expect(page.getByTestId('subject-study').nth(1)).toHaveText('학습하기 (20문항)'); // 오늘 남은 목표 vs 그 과목 낼 문항(20)
   await page.getByTestId('subject-study').nth(1).click();
+  await expect(page.getByTestId('progress')).toHaveText('1 / 20');
   for (let k = 0; k < 7; k++) {
     await answerOne();
     await goNext();
   }
   await page.getByRole('button', { name: '풀이 멈추고 홈으로' }).click();
   await page.reload();
-  await expect(page.getByTestId('today-resume')).toContainText('8문항 남음');
+  await expect(page.getByTestId('today-resume')).toContainText('13문항 남음');
   await page.getByTestId('today-resume').click();
-  await expect(page.getByTestId('progress')).toHaveText('8 / 15');
+  await expect(page.getByTestId('progress')).toHaveText('8 / 20');
   for (let guard = 0; guard < 40; guard++) {
     await answerOne();
     if (await goNext()) break;
@@ -148,7 +158,7 @@ test('3단계 게이트(5단계 개편 후): 오프라인 과목별 학습·이�
   expect(counts.map(Number).reduce((a, b) => a + b, 0)).toBeGreaterThan(0);
   await page.getByRole('button', { name: '뒤로' }).click();
   const solved = await doneToday(); // 풀이 기록 수(한 번 더 푼 것 포함)
-  expect(solved).toBeGreaterThanOrEqual(n1 + 15);
+  expect(solved).toBeGreaterThanOrEqual(n1 + 20);
 
   // ④ 백업(다운로드)
   const before = await fingerprintText(page);
@@ -168,6 +178,7 @@ test('3단계 게이트(5단계 개편 후): 오프라인 과목별 학습·이�
   await p2.getByRole('button', { name: '백업·설정' }).click();
   p2.on('dialog', (d) => d.accept());
   await p2.getByTestId('restore-input').setInputFiles(backupPath);
+  await p2.getByTestId('dialog-ok').click(); // 앱 안 확인 창(v0.7.2)
   await expect(p2.getByTestId('restore-report')).toContainText('백업과 기록 일치');
   await expect(p2.getByTestId('restore-report')).toContainText(`매핑 대기 ${solved + 1}건`); // 풀이 30 + 메모 1
   expect(await p2.getByTestId('fingerprint').textContent()).toBe(before);
@@ -199,10 +210,12 @@ test('3단계 게이트(5단계 개편 후): 오프라인 과목별 학습·이�
   await p2.getByTestId('wipe-records').click();
   await p2.getByTestId('wipe-cert').selectOption('*');
   await p2.getByTestId('wipe-records-go').click();
+  await p2.getByTestId('dialog-ok').click();
   await p2.getByRole('button', { name: '뒤로' }).click();
   await expect(p2.getByTestId('week-goal')).toContainText('오늘 0 /');
   await p2.getByRole('button', { name: '백업·설정' }).click();
   await p2.getByTestId('restore-input').setInputFiles(backupPath);
+  await p2.getByTestId('dialog-ok').click(); // 앱 안 확인 창(v0.7.2)
   await expect(p2.getByTestId('restore-report')).toContainText('백업과 기록 일치');
   await expect(p2.getByTestId('restore-report')).not.toContainText('매핑 대기');
   expect(await p2.getByTestId('fingerprint').textContent()).toBe(before);
@@ -214,9 +227,12 @@ test('3단계 게이트(5단계 개편 후): 오프라인 과목별 학습·이�
   await p2.getByTestId('wipe-cert').selectOption('TEST');
   await p2.getByTestId('wipe-pick-all').check();
   await p2.getByTestId('wipe-packs-go').click();
+  await p2.getByTestId('dialog-ok').click();
   await expect(p2.getByTestId('pack-section')).toContainText('문제팩 1회차');
   await p2.getByTestId('wipe-cert').selectOption('*');
   await p2.getByTestId('wipe-all-go').click();
+  await p2.getByTestId('dialog-ok').click();
+  await p2.getByTestId('dialog-ok').click();
   await expect(p2.getByText('문제팩을 가져오세요')).toBeVisible();
   await ctx2.close();
 });

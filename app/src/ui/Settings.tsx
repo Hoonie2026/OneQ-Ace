@@ -18,6 +18,7 @@ import { deletePacks, wipeAll, wipeCertRecords, wipeRecords } from '../wipe';
 import { deviceSummary, formatBytes, readStorageInfo, type StorageInfo } from '../util';
 import { examLabel } from '../study';
 import { PackPicker } from './PackPicker';
+import { askConfirm, showNotice } from './Dialog';
 import type { PackRow } from '../db';
 
 export function Settings(props: {
@@ -94,7 +95,7 @@ export function Settings(props: {
     try {
       const b = parseBackup(await file.text());
       const msg = `${new Date(b.createdAt).toLocaleString('ko-KR')}에 만든 백업(${formatFingerprint(b.fingerprint)})을 이 기기 기록에 합칩니다.\n같은 기록은 한 번만 들어갑니다. 계속할까요?`;
-      if (!window.confirm(msg)) return;
+      if (!(await askConfirm(msg, { title: '백업 복원', okText: '복원' }))) return;
       const r = await restoreBackup(b);
       setReport(r);
       props.onChanged();
@@ -129,7 +130,7 @@ export function Settings(props: {
       await navigator.clipboard.writeText(text);
       props.toast(done);
     } catch {
-      window.prompt('아래 내용을 길게 눌러 복사하세요', text);
+      await showNotice('자동 복사가 안 됩니다. 아래 내용을 길게 눌러 복사하세요.', { copyText: text });
     }
   };
 
@@ -223,7 +224,7 @@ export function Settings(props: {
             <button
               className="btn btn-small"
               onClick={async () => {
-                if (!window.confirm('0단계 검증 데이터만 지웁니다(학습 기록과 무관). 계속할까요?')) return;
+                if (!(await askConfirm('0단계 검증 데이터만 지웁니다(학습 기록과 무관). 계속할까요?', { okText: '지우기', danger: true }))) return;
                 await Dexie.delete(STAGE0_DB_NAME);
                 props.toast('0단계 검증 데이터를 지웠습니다');
                 await load();
@@ -356,7 +357,7 @@ export function Settings(props: {
                     data-testid="wipe-records-go"
                     onClick={async () => {
                       const what = wipeCert === '*' ? '모든 종목' : c?.name;
-                      if (!window.confirm(`${what}의 학습 기록을 지웁니다. 백업 파일을 저장했나요?`)) return;
+                      if (!(await askConfirm(`${what}의 학습 기록을 지웁니다. 되돌릴 수 없습니다. 백업 파일을 저장했나요?`, { title: '학습 기록 지우기', okText: '지우기', danger: true }))) return;
                       if (wipeCert === '*') await wipeRecords();
                       else await wipeCertRecords(wipeCert);
                       props.toast(`${what}의 학습 기록을 지웠습니다. 문제팩은 그대로입니다`);
@@ -377,8 +378,8 @@ export function Settings(props: {
                   className="btn btn-danger btn-block"
                   data-testid="wipe-all-go"
                   onClick={async () => {
-                    if (!window.confirm(`문제팩과 학습 기록(${fp ? formatFingerprint(fp) : ''})을 모두 지웁니다. 백업 파일을 저장했나요?`)) return;
-                    if (!window.confirm('정말 모두 지울까요? 되돌릴 수 없습니다.')) return;
+                    if (!(await askConfirm(`문제팩과 학습 기록(${fp ? formatFingerprint(fp) : ''})을 모두 지웁니다. 백업 파일을 저장했나요?`, { title: '모두 지우기', okText: '지우기', danger: true }))) return;
+                    if (!(await askConfirm('정말 모두 지울까요? 되돌릴 수 없습니다.', { title: '마지막 확인', okText: '모두 지우기', danger: true }))) return;
                     await wipeAll();
                     await Dexie.delete(STAGE0_DB_NAME).catch(() => undefined);
                     props.toast('모두 지웠습니다. 문제팩을 다시 가져오세요');
@@ -431,7 +432,7 @@ export function Settings(props: {
                     data-testid="wipe-packs-go"
                     onClick={async () => {
                       const ids = list.filter((p) => picked.has(p.packId)).map((p) => p.packId);
-                      if (!window.confirm(`${name} 문제팩 ${ids.length}개와 그 학습 기록을 지웁니다${allOn ? `(종목 삭제)` : ''}. 백업 파일을 저장했나요?`)) return;
+                      if (!(await askConfirm(`${name} 문제팩 ${ids.length}개와 그 학습 기록을 지웁니다${allOn ? '(종목 삭제)' : ''}. 되돌릴 수 없습니다. 백업 파일을 저장했나요?`, { title: '문제팩 지우기', okText: '지우기', danger: true }))) return;
                       const r = await deletePacks(ids);
                       props.toast(`${name} 문제팩 ${r.packs}개 삭제 · 풀이 기록 ${r.attempts}건 삭제${r.certsGone.length ? ' · 종목 삭제' : ''}`);
                       setPicked(new Set());

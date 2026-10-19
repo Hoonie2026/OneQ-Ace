@@ -1761,3 +1761,113 @@ h3 {
   font-size: 26px;
   color: var(--primary);
 }
+
+/* ── 앱 안 확인 창(v0.7.2): 브라우저 기본 창보다 1.5배 이상 큰 글자 ── */
+.dlg-back {
+  z-index: 60;
+}
+.dlg {
+  padding: 22px 20px 18px;
+}
+.dlg h2 {
+  margin: 0 0 10px;
+  font-size: 22px;
+}
+.dlg-msg {
+  margin: 0 0 18px;
+  font-size: 21px;
+  line-height: 1.5;
+  white-space: pre-line;
+  word-break: keep-all;
+}
+.dlg-copy {
+  width: 100%;
+  margin: 0 0 16px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--bg);
+  color: var(--ink);
+  font: inherit;
+  font-size: 16px;
+}
+.dlg-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.dlg-actions.one {
+  grid-template-columns: 1fr;
+}
+.dlg-btn {
+  min-height: 58px;
+  font-size: 20px;
+  font-weight: 700;
+}
+.btn-danger-solid {
+  border-color: var(--fail);
+  background: var(--fail);
+  color: #fff;
+}
+
+/* 과목별 학습 막대(v0.7.2): 막대 = 현재(현재 기준 색), 굵은 실선 = 시험일 예상 */
+.bar-fill.ok {
+  background: var(--ok);
+}
+.bar-fill.warn {
+  background: #e0a400;
+}
+.bar.dual .bar-fill.ghost {
+  opacity: 0.28;
+}
+/* 시험일 예상 = 굵은 세로 실선 */
+.bar-mark {
+  position: absolute;
+  top: -6px;
+  bottom: -6px;
+  width: 4px;
+  margin-left: -2px;
+  border-radius: 2px;
+  background: var(--ink);
+}
+.bar-mark em {
+  position: absolute;
+  bottom: calc(100% + 3px);
+  left: 50%;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  font-style: normal;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+/* 다시 풀기 단계(v0.7.2): 주황 띠 + 큰 글자로 일반 학습과 구분 */
+.relearn-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 8px 12px 0;
+  padding: 10px 12px;
+  border: 2px solid var(--check);
+  border-radius: 12px;
+  background: var(--check-bg);
+  color: var(--ink);
+}
+.relearn-icon {
+  font-size: 26px;
+  line-height: 1;
+}
+.relearn-banner b {
+  display: block;
+  font-size: 18px;
+  color: var(--check);
+}
+.relearn-banner span {
+  display: block;
+  font-size: 15px;
+  line-height: 1.4;
+}
+.solve.is-relearn .solve-progress > div {
+  background: var(--check);
+}

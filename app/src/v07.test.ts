@@ -173,3 +173,18 @@ describe('v0.7.1', () => {
     expect(u.searchParams.get('q')).toBe('단곡선의 중앙종거 — 측량및지형공간정보기사 필기 시험 대비로 이 개념을 쉽게 설명해 줘');
   });
 });
+
+describe('v0.7.2', () => {
+  it('과목 학습 한 묶음 = 오늘 남은 목표 문항 수(시스템 추천과 같음), 다 채웠으면 추가 15', async () => {
+    const { startSubject, loadCoach } = await import('./coach');
+    await importPackBytes(await makePack({ questions: Array.from({ length: 30 }, (_, i) => ({ hash: `z${i}`, answer: 1 })) }), {}, d);
+    await savePlanSettings('TEST', { examDate: '2027-02-01', dailyMinutes: 12 }, d); // 8문항
+    const k = (await loadCoach('TEST', NOW, d))!.subjects[0].key;
+    const t = (await startSubject('TEST', k, NOW, d))!;
+    let s = (await loadSession(t, d))!;
+    expect(s.qids).toHaveLength(8);
+    for (const qid of s.qids) ({ session: s } = await recordAnswer(s, (await d.questions.get(qid))!, 1, 30_000, { now: NOW }, d));
+    const t2 = (await startSubject('TEST', k, NOW + 1000, d))!;
+    expect((await loadSession(t2, d))!.qids).toHaveLength(15);
+  });
+});

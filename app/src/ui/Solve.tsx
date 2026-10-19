@@ -4,6 +4,7 @@ import { deadlineOf, examLabel, finishRun, firstUnanswered, loadSession, pauseRu
 import { ZoomImage } from './ZoomImage';
 import { questionMeta, startRelearn, startSubject, startToday, todayStatus, type TodayStatus } from '../coach';
 import { aiModeUrl, searchQuery } from '../search';
+import { askConfirm } from './Dialog';
 
 const CIRCLED = ['', '①', '②', '③', '④', '⑤'];
 const MAX_ELAPSED = 30 * 60 * 1000;
@@ -211,7 +212,13 @@ export function Solve(props: { target: Target; onExit: () => void; onResult: () 
     const left = s.qids.some((x) => !s.answers.has(x));
     if (s.run.subjectKey && left) return next();
     await finishRun(s.run.sessionId);
-    const t = s.run.subjectKey ? await startSubject(certCode, s.run.subjectKey) : await startToday(certCode);
+    // 오늘 학습 묶음을 다 풀었으면 먼저 그 묶음의 틀린·모름 문항 "다시 풀기"(주황 띠로 구분), 없으면 새 추천
+    const wrong = s.run.relearn || left ? [] : s.qids.filter((x) => s.answers.get(x) && !s.answers.get(x)!.correct);
+    const t = s.run.subjectKey
+      ? await startSubject(certCode, s.run.subjectKey)
+      : wrong.length
+        ? await startRelearn(certCode, wrong)
+        : await startToday(certCode);
     if (t && props.onSolve) props.onSolve(t);
     else props.onExit();
   };
@@ -246,7 +253,7 @@ export function Solve(props: { target: Target; onExit: () => void; onResult: () 
   const submit = async () => {
     if (!s) return;
     const left = s.qids.filter((x) => !s.answers.has(x)).length;
-    if (left && !window.confirm(`${left}문항을 아직 안 풀었습니다(0점 처리). 제출하고 채점할까요?`)) return;
+    if (left && !(await askConfirm(`${left}문항을 아직 안 풀었습니다(안 푼 문항은 0점). 제출하고 채점할까요?`, { title: '모의고사 제출', okText: '제출', cancelText: '계속 풀기' }))) return;
     await finishRun(s.run.sessionId);
     props.onResult();
   };
@@ -259,7 +266,7 @@ export function Solve(props: { target: Target; onExit: () => void; onResult: () 
   const chosenOk = attempt?.correct;
 
   return (
-    <div className="solve">
+    <div className={`solve${s.run.relearn ? ' is-relearn' : ''}`}>
       <header className="solve-top">
         <button className="icon-btn" onClick={exit} aria-label="풀이 멈추고 홈으로">
           ✕
@@ -295,7 +302,20 @@ export function Solve(props: { target: Target; onExit: () => void; onResult: () 
       <div className="solve-progress" aria-hidden="true">
         <div style={{ width: `${(answeredCount / s.qids.length) * 100}%` }} />
       </div>
-      {s.run.relearn && <p className="mock-timer">방금 틀린·모름 문항 한 번 더</p>}
+      {s.run.relearn && (
+        // v0.7.2(실기기 의견): 새 문항이 아니라 오늘 틀린·모름 문항을 다시 푸는 단계임을 한눈에
+        <div className="relearn-banner" role="status" data-testid="relearn-banner">
+          <span className="relearn-icon" aria-hidden="true">
+            🔁
+          </span>
+          <div>
+            <b>
+              다시 풀기 · {index + 1} / {s.qids.length}
+            </b>
+            <span>방금 푼 묶음에서 틀리거나 모른 {s.qids.length}문항을 한 번 더 풉니다. 새 문항이 아닙니다.</span>
+          </div>
+        </div>
+      )}
       {isMock && (
         <p className={`mock-timer${deadline && deadline - nowMs < 5 * 60_000 ? ' bad' : ''}`} role="timer" data-testid="mock-timer">
           남은 시간 <b>{fmtLeft(deadline ? deadline - nowMs : 0)}</b>
@@ -391,7 +411,9 @@ export function Solve(props: { target: Target; onExit: () => void; onResult: () 
             </p>
             <div className="stack">
               <button className="btn btn-primary btn-block btn-big" onClick={continueToday} data-testid="goal-continue">
-                계속 학습하기 (오늘 기록으로 추천)
+                {!s.run.subjectKey && !s.run.relearn && s.qids.some((x) => s.answers.get(x) && !s.answers.get(x)!.correct)
+                  ? `계속 학습하기 (틀린·모름 ${s.qids.filter((x) => s.answers.get(x) && !s.answers.get(x)!.correct).length}문항 다시 풀기부터)`
+                  : '계속 학습하기 (오늘 기록으로 추천)'}
               </button>
               <button className="btn btn-block" onClick={endToday} data-testid="goal-end">
                 오늘 학습 마치기
