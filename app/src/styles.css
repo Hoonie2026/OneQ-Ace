@@ -258,7 +258,7 @@ h3 {
 .foot {
   margin: 6px 0 0;
   text-align: center;
-  font-size: 12px;
+  font-size: 13px;
   color: var(--muted);
 }
 
@@ -442,7 +442,7 @@ h3 {
   margin: 0;
 }
 .kv dt {
-  font-size: 12px;
+  font-size: 13px;
   color: var(--muted);
 }
 .kv dd {
@@ -478,7 +478,7 @@ h3 {
   padding: 10px;
   border-radius: 10px;
   background: var(--bg);
-  font-size: 12px;
+  font-size: 13px;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
@@ -603,7 +603,7 @@ h3 {
   transform: translateX(-50%);
   white-space: nowrap;
   font-style: normal;
-  font-size: 11px;
+  font-size: 12.5px;
   font-weight: 700;
   color: var(--ink);
 }
@@ -641,7 +641,7 @@ h3 {
 }
 .solve-meta span {
   display: block;
-  font-size: 12px;
+  font-size: 13px;
   color: var(--muted);
   white-space: nowrap;
   overflow: hidden;
@@ -854,7 +854,7 @@ h3 {
 }
 .memo-label {
   color: var(--memo);
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 700;
 }
 .chip-btn.memo-btn.on {
@@ -999,7 +999,7 @@ h3 {
   text-align: left;
 }
 .history th {
-  font-size: 12px;
+  font-size: 13px;
   color: var(--muted);
   font-weight: 600;
 }
@@ -1054,7 +1054,7 @@ h3 {
   font-variant-numeric: tabular-nums;
 }
 .avg-badge small {
-  font-size: 11px;
+  font-size: 13px;
 }
 .avg-badge.warn {
   background: var(--check-bg);
@@ -1248,7 +1248,7 @@ h3 {
   color: var(--muted);
 }
 .outlook-title {
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 700;
   letter-spacing: 0.04em;
   opacity: 0.8;
@@ -1279,7 +1279,7 @@ h3 {
   border-radius: 999px;
   background: var(--primary);
   color: var(--primary-ink);
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 700;
 }
 .bar.dual {
@@ -1369,7 +1369,7 @@ h3 {
   cursor: pointer;
 }
 .freq-list {
-  font-size: 12px;
+  font-size: 13px;
   color: var(--muted);
 }
 
@@ -1401,7 +1401,7 @@ h3 {
 }
 .exam-date small,
 .exam-dday small {
-  font-size: 12px;
+  font-size: 13px;
   color: var(--muted);
 }
 .exam-date small.link {
@@ -1522,12 +1522,12 @@ h3 {
   background: var(--fail-bg);
   color: var(--fail);
   font: inherit;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 700;
   cursor: pointer;
 }
 .link-btn.small {
-  font-size: 12px;
+  font-size: 13px;
   color: var(--primary);
 }
 .today-card {
@@ -1736,7 +1736,7 @@ h3 {
   background: var(--bg);
 }
 .goal-stats small {
-  font-size: 12px;
+  font-size: 13px;
   color: var(--muted);
 }
 .goal-stats b {
@@ -1837,7 +1837,7 @@ h3 {
   transform: translateX(-50%);
   white-space: nowrap;
   font-style: normal;
-  font-size: 12px;
+  font-size: 12.5px;
   font-weight: 700;
   color: var(--ink);
 }
@@ -1953,7 +1953,7 @@ h3 {
   border-radius: 999px;
   background: var(--memo-bg);
   color: var(--memo);
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 700;
   vertical-align: 1px;
 }
@@ -1981,7 +1981,7 @@ h3 {
 .mini-table th {
   color: var(--muted);
   font-weight: 600;
-  font-size: 12px;
+  font-size: 13px;
 }
 .mini-table td.bad b {
   color: var(--fail);
@@ -2123,7 +2123,7 @@ ul.plain {
 .mini-table td small {
   display: block;
   color: var(--muted);
-  font-size: 11px;
+  font-size: 13px;
 }
 
 /* v0.8.2 — 홈 글자 크기·"학습계획 설정(재설정)" 한 줄(실기기 X1) */
@@ -2225,13 +2225,13 @@ ul.plain {
   font-size: 20px;
 }
 .share-tiles .num small {
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 400;
 }
 /* v0.8.4 — 계산 근거 상자 */
 .mini-table th.nowrap {
   white-space: nowrap;
-  font-size: 11px;
+  font-size: 12.5px;
 }
 .basis {
   margin-top: 12px;
@@ -2264,7 +2264,7 @@ ul.plain {
   margin-left: 4px;
   padding: 1px 7px;
   border-radius: 999px;
-  font-size: 11px;
+  font-size: 12.5px;
   font-weight: 700;
   vertical-align: 1px;
 }
@@ -2290,4 +2290,208 @@ ul.plain {
   padding-left: 18px;
   font-size: 13.5px;
   line-height: 1.55;
+}
+
+/* ── v0.8.5 디자인 점검 반영(docs/design-review-gemini.md — 채택 항목) ── */
+/* 1. 라이트 모드 초록 글자 대비(연초록 배경 위 3.90 → 5.18) */
+:root {
+  --ok: #0e7440;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --ok: #4cc98a;
+    --paper: #eceff4; /* 4. 다크 모드 문제 그림 바탕 눈부심 완화 */
+  }
+  .zoom-inner img {
+    filter: brightness(0.92) contrast(1.04);
+  }
+  .bar-fill.warn {
+    background: #ffbe5c;
+  }
+  .share-bar.big span {
+    color: var(--primary-ink);
+  }
+  .s-fresh {
+    background: #8fa0b5;
+  }
+}
+/* 2. 과목별 막대 노랑(흰 배경 대비 2.22 → 3.52) */
+.bar-fill.warn {
+  background: #b87d00;
+}
+/* 3. 출제 유형 막대: 신규 회색 진하게(흰 글자 대비 2.97 → 5.45) */
+.s-fresh {
+  background: #5c6b7d;
+}
+/* 5. 홈 작은 링크 누르는 영역 44px */
+.score-box .link-btn.small {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  margin: -6px 0 -10px;
+  font-weight: 700;
+}
+.center-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 8px 16px;
+  font-size: 15px;
+}
+/* 6. 오늘 학습 마침 — 예상 점수 주황(60~75) */
+.score-pair .warn b {
+  color: var(--check);
+}
+/* 7. 상단 배너가 있으면 노치 여백은 배너에서만 */
+.top-banners:not(:empty) + .app {
+  padding-top: 12px;
+}
+/* 8. 날짜 입력 모양 통일(iOS) */
+.field input,
+.day-add input {
+  -webkit-appearance: none;
+  appearance: none;
+  min-height: 48px;
+}
+.day-add .btn-small,
+.day-list .btn-small {
+  min-height: 48px;
+  padding: 0 14px;
+}
+/* 9. 접기·펼치기 표시 */
+details.why summary {
+  min-height: 48px;
+  padding: 0 12px;
+  border-radius: 10px;
+  background: var(--bg);
+  justify-content: space-between;
+  list-style: none;
+}
+details.why summary::-webkit-details-marker {
+  display: none;
+}
+details.why summary::after {
+  content: '▾';
+  font-size: 16px;
+}
+details.why[open] summary::after {
+  content: '▴';
+}
+/* 10. 모의고사 이력 행 */
+.history th,
+.history td {
+  padding: 12px 6px;
+  font-size: 15px;
+}
+.history th {
+  font-size: 13px;
+}
+.history tr.clickable td:last-child::after {
+  content: ' ›';
+  color: var(--muted);
+  font-weight: 700;
+}
+.history tr.clickable:active {
+  background: var(--bg);
+}
+/* 11. 계산 근거 글자 */
+.basis dt {
+  margin-top: 14px;
+  font-size: 15.5px;
+}
+.basis dd,
+.basis .err ul {
+  font-size: 14.5px;
+  line-height: 1.6;
+}
+.basis .lv {
+  padding: 2px 8px;
+}
+/* 12. 보기 단추: 색과 함께 ✓/✕ 표시 */
+.choice {
+  position: relative;
+}
+.choice.is-answer,
+.choice.is-chosen {
+  border-width: 3px;
+}
+.choice.is-answer::after,
+.choice.is-chosen::after {
+  position: absolute;
+  top: 3px;
+  right: 7px;
+  font-size: 14px;
+  font-weight: 900;
+}
+.choice.is-answer::after {
+  content: '✓';
+}
+.choice.is-chosen::after {
+  content: '✕';
+}
+/* 13. 풀이 화면 하단 여백 최소 8px 보장 */
+.solve-bottom {
+  padding-bottom: calc(max(env(safe-area-inset-bottom), 8px) + 10px);
+}
+/* 14. ✕(나가기)와 ‹(이전 문항) 사이 간격 */
+.solve-top > .icon-btn + .icon-btn {
+  margin-left: 8px;
+}
+/* 15·16. 메모·웹검색 칩 40px, 확대 단추 44px, 그림 아래 여백 */
+.chip-btn {
+  min-height: 40px;
+  padding: 0 14px;
+  border-radius: 20px;
+}
+.zoom-btn {
+  min-width: 44px;
+  height: 44px;
+  border-radius: 22px;
+}
+.zoom-tools {
+  gap: 8px;
+}
+.zoom-box {
+  padding-bottom: 48px;
+}
+/* 17. 메모 입력 시 키보드에 화면이 찌그러지지 않게 */
+.feedback {
+  max-height: 44dvh;
+  overflow-y: auto;
+}
+/* 18. 계산 보기 표 머리(한 줄 유지) */
+.mini-table th.nowrap {
+  font-size: 12.5px;
+  letter-spacing: -0.04em;
+  color: var(--ink);
+  padding: 8px 3px;
+}
+/* 19. 풀이 화면 출처·과목 줄 */
+.solve-meta span {
+  font-size: 13.5px;
+  color: var(--ink);
+  opacity: 0.78;
+}
+/* 기타: 학습 점검 카드 과목명 줄바꿈, 지우기 목록 체크 줄 맞춤 */
+.insight-card ul {
+  word-break: keep-all;
+  line-height: 1.55;
+}
+.check-line.all {
+  padding: 0 12px;
+}
+/* 다크 모드 덮어쓰기(위 2·3번 뒤에 와야 함) */
+@media (prefers-color-scheme: dark) {
+  .bar-fill.warn {
+    background: #ffbe5c;
+  }
+  .s-fresh {
+    background: #8fa0b5;
+  }
+}
+/* 폭 380px 미만 폰(갤럭시 일부 등): 표 머리 한 줄 유지 */
+@media (max-width: 380px) {
+  .mini-table th.nowrap {
+    font-size: 11.5px;
+  }
 }

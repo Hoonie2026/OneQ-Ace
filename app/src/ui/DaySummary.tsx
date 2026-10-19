@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { daySummary, finishToday, type DaySummary as S } from '../coach';
+import { scoreTone } from './CoachCard';
 
 /**
  * 오늘 학습 마치기(ADR 009 — 실기기 v0.3.0 Q5): 오늘 푼 것, 현재 점수 ☞ 계획 이행 시 예상 점수.
@@ -50,7 +51,7 @@ export function DaySummary(props: { certCode: string; onHome: () => void }) {
           <span className="arrow" aria-hidden="true">
             ☞
           </span>
-          <div className={s.short ? 'bad' : s.short === false ? 'ok' : ''}>
+          <div className={scoreTone(s.projectedAvg)}>
             <small>계획 이행 시</small>
             <b data-testid="summary-projected">{s.projectedAvg ?? '—'}</b>
             <small>{s.projectedAvg != null ? '점' : ''}</small>
