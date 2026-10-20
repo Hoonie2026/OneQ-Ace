@@ -80,7 +80,16 @@ test('3단계 게이트(5단계 개편 후): 오프라인 과목별 학습·이�
     await expect.poll(imgOk, { timeout: 10_000 }).toBe(true);
     const n = Number((await page.getByTestId('progress').textContent())!.split('/')[0]);
     if (n % 7 === 3) await page.getByRole('button', { name: '모름' }).click();
-    else await page.getByRole('button', { name: `${(n % 4) + 1}번` }).click();
+    else if (n % 11 === 5) {
+      // [쉬움](v0.9.2): 보기 없이 정답 처리 → 정답 화면. 5번째 문항은 "모름으로 바꾸기"까지(백업·복원 지문에 쉬움·바꾼 기록이 함께 들어감)
+      await page.getByTestId('easy').click();
+      await expect(page.getByTestId('feedback')).toContainText('쉬움');
+      if (n === 5) {
+        await page.getByTestId('easy-undo').click();
+        await expect(page.getByTestId('feedback')).toContainText('모름');
+        await expect(page.getByTestId('easy-undo')).toHaveCount(0);
+      }
+    } else await page.getByRole('button', { name: `${(n % 4) + 1}번` }).click();
     await expect(page.getByTestId('feedback')).toBeVisible();
     return n;
   };
@@ -113,10 +122,15 @@ test('3단계 게이트(5단계 개편 후): 오프라인 과목별 학습·이�
   const studySession = async (nth: number, extras = false) => {
     await page.getByTestId('go-subjects').click();
     await page.getByTestId('subject-study').nth(nth).click();
-    if (extras) await expect(page.getByTestId('web-search')).toBeVisible(); // 모름 | 웹검색(v0.7)
+    if (extras) {
+      // v0.9.2: 풀기 전에는 모름 | 쉬움 — 웹검색은 답한 뒤에만
+      await expect(page.getByTestId('easy')).toBeVisible();
+      await expect(page.getByTestId('web-search')).toHaveCount(0);
+    }
     for (let k = 0; k < 40; k++) {
       await answerOne();
       if (extras && k === 0) {
+        await expect(page.getByTestId('search-after')).toBeVisible(); // 웹검색은 답한 뒤 화면에
         await page.getByTestId('zoom-box').dblclick(); // 더블탭 확대 → 원래대로
         await expect(page.getByRole('button', { name: '원래 크기로' })).toBeVisible();
         await page.getByRole('button', { name: '원래 크기로' }).click();

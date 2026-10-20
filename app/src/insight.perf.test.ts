@@ -19,7 +19,7 @@ it.runIf(process.env.PERF)('insight perf', () => {
   let k = 0;
   for (let d = 0; d < 20; d++) for (let i = 0; i < 40; i++) {
     const it = bank.items[(k++ * 7) % bank.items.length];
-    attempts.push({ qid: it.qids[0], ts: addDays(T0, d) + i * 60000, correct: r() < 0.6, chosen: 1, unsure: false, elapsedMs: 60000 + r() * 60000 });
+    attempts.push({ qid: it.qids[0], ts: addDays(T0, d) + i * 60000, correct: r() < 0.6, chosen: 1, elapsedMs: 60000 + r() * 60000 });
   }
   const now = addDays(T0, 20);
   const mem = replay(bank, attempts);

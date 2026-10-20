@@ -31,7 +31,6 @@ const att = (qid: string, dayOffset: number, correct: boolean, extra: Partial<En
   ts: T0 + dayOffset * 86_400_000,
   correct,
   chosen: correct ? 1 : 2,
-  unsure: false,
   elapsedMs: 60_000,
   ...extra,
 });
@@ -68,10 +67,10 @@ describe('과목·동일 문항', () => {
 });
 
 describe('FSRS 등급(6.2)과 원장 재생', () => {
-  it('오답·모름 Again, 헷갈림·오래 걸림 Hard, 정답 Good', () => {
+  it('오답·모름 Again, 오래 걸림 Hard, 정답 Good, 쉬움 Easy', () => {
     expect(gradeOf(att('x', 0, false), 60_000)).toBe(Rating.Again);
     expect(gradeOf(att('x', 0, false, { chosen: 0 }), 60_000)).toBe(Rating.Again);
-    expect(gradeOf(att('x', 0, true, { unsure: true }), 60_000)).toBe(Rating.Hard);
+    expect(gradeOf(att('x', 0, true, { easy: true, elapsedMs: 2_000 }), 60_000)).toBe(Rating.Easy);
     expect(gradeOf(att('x', 0, true, { elapsedMs: 90_000 }), 60_000)).toBe(Rating.Hard);
     expect(gradeOf(att('x', 0, true, { elapsedMs: 89_000 }), 60_000)).toBe(Rating.Good);
   });
@@ -332,7 +331,7 @@ describe('DB 연결(load.ts)', () => {
 
     await savePlanSettings('TEST', { examDate: '2027-02-01' }, d);
     await savePlanSettings('TEST', { examDate: '2027-02-01', dayMinutes: { '2027-01-31': 300 } }, d); // 날짜별 학습시간도 같이 저장
-    await d.attempts.add({ uid: 'u1', qid: 'TEST-2022-1-001', contentHash: 'x', ts: T0 - 86_400_000, chosen: 2, correct: false, unsure: false, elapsedMs: 5000, mode: 'round', sessionId: 's' });
+    await d.attempts.add({ uid: 'u1', qid: 'TEST-2022-1-001', contentHash: 'x', ts: T0 - 86_400_000, chosen: 2, correct: false, elapsedMs: 5000, mode: 'round', sessionId: 's' });
     ctx = (await loadEngine('TEST', d))!;
     expect(ctx.settings!.examDate).toBe('2027-02-01');
     expect(ctx.settings!.passRule).toEqual({ subjectMin: 40, avgMin: 60 });

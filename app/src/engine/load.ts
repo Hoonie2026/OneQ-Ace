@@ -2,7 +2,7 @@
  * DB → 엔진 입력. 엔진 본체(순수 함수)와 DB를 잇는 유일한 곳.
  * 5단계 홈·오늘 학습·모의고사 화면이 이 함수들을 부른다.
  */
-import { db as defaultDb, getSetting, setSetting, type OneQDB } from '../db';
+import { db as defaultDb, getSetting, safeWrite, setSetting, type OneQDB } from '../db';
 import { buildBank, type Bank } from './items';
 import { buildConcepts, type Concepts, type ExamShares } from './similar';
 import { replay, type MemoryState } from './memory';
@@ -32,7 +32,8 @@ export async function loadPlanSettings(certCode: string, d: OneQDB = defaultDb):
 
 export async function savePlanSettings(certCode: string, s: Partial<PlanSettings> & { examDate: string }, d: OneQDB = defaultDb): Promise<void> {
   const cur = (await getSetting<Partial<PlanSettings> | null>(planSettingKey(certCode), null, d)) ?? {};
-  await setSetting(planSettingKey(certCode), { ...cur, ...s }, d);
+  // 바꾼 시각을 함께 — 다른 기기 백업을 합칠 때 더 최신 계획이 이긴다(v0.9.2)
+  await safeWrite('학습 계획 저장', () => d.settings.put({ key: planSettingKey(certCode), value: { ...cur, ...s }, updatedAt: Date.now() }));
 }
 
 export async function loadEngine(certCode: string, d: OneQDB = defaultDb): Promise<EngineContext | null> {
@@ -59,7 +60,7 @@ export async function loadEngine(certCode: string, d: OneQDB = defaultDb): Promi
     ts: a.ts,
     correct: a.correct,
     chosen: a.chosen,
-    unsure: a.unsure,
+    easy: a.easy,
     elapsedMs: a.elapsedMs,
     mode: a.mode,
   }));

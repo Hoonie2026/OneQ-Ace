@@ -2,7 +2,7 @@ import 'fake-indexeddb/auto';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { OneQDB } from './db';
 import { deletePack, importPackBytes } from './pack/import';
-import { ensureWrongRun, firstUnanswered, loadSession, passHistory, recordAnswer, restartPass, saveNote, sessionResult, setUnsure, type Target } from './study';
+import { ensureWrongRun, firstUnanswered, loadSession, passHistory, recordAnswer, restartPass, saveNote, sessionResult, type Target } from './study';
 import { deleteCert, wipeAll, wipeRecords } from './wipe';
 import { backupDue, buildBackup, fingerprint, parseBackup, restoreBackup, BackupFormatError } from './backup';
 import { makePack, type FakeQ } from './test/makePack';
@@ -120,7 +120,7 @@ describe('회독·이어 풀기 (ADR 003, 실기기 S3·S6 NG 회귀)', () => {
   it('첫 회독은 회독이 생기기 전에 푼 기록도 포함한다(v0.1.0 데이터 이어받기)', async () => {
     await importPackBytes(await six(), {}, d);
     const q = (await d.questions.get(`${PID}-002`))!;
-    await d.attempts.add({ uid: 'old', qid: q.qid, contentHash: q.contentHash, ts: 5, chosen: 1, correct: true, unsure: false, elapsedMs: 1, mode: 'subject', sessionId: 'old-run' });
+    await d.attempts.add({ uid: 'old', qid: q.qid, contentHash: q.contentHash, ts: 5, chosen: 1, correct: true, elapsedMs: 1, mode: 'subject', sessionId: 'old-run' });
     const s = (await loadSession({ kind: 'pass', packId: PID }, d))!;
     expect(s.answers.has(q.qid)).toBe(true);
     expect(firstUnanswered(s)).toBe(0);
@@ -176,7 +176,8 @@ describe('백업·복원 (3단계 게이트: 백업 → 앱 삭제 → 복원 �
     const pack = await makePack({ questions: qs(['a', 'b', 'c', 'd']) });
     await importPackBytes(pack, {}, d);
     const run = await solveAll('TEST-2022-1', (i) => [1, 2, 0, 1][i]);
-    await setUnsure(run.answers.get('TEST-2022-1-001')!.uid, true, d);
+    // 쉬움 기록(v0.9.2)도 백업 → 복원 후 지문이 같아야 한다
+    await d.attempts.where('uid').equals(run.answers.get('TEST-2022-1-001')!.uid).modify({ easy: true });
     await saveNote((await d.questions.get('TEST-2022-1-002'))!, '측지위도와 천문위도 차이', d);
     const fp = await fingerprint(d);
     const { json } = await buildBackup('test', d);

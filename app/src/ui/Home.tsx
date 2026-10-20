@@ -10,7 +10,7 @@ import { SubjectList } from './SubjectList';
 import { ForecastView } from './ForecastView';
 import { Principles } from './Principles';
 import { computeInsight, type Insight } from '../insight';
-import { resetPageZoom } from '../util';
+import { deviceEnv, resetPageZoom } from '../util';
 import { BackButton, BrandLogo, Icon } from './Icon';
 
 /** 홈 안의 보기: 홈 / 과목 골라서 / 모의고사(ADR 010 — 홈에는 오늘 학습만, 나머지는 한 번 더 들어가서) */
@@ -163,6 +163,12 @@ export function Home(props: {
               <h2>홈 화면에 설치해서 쓰세요</h2>
               <p className="hint">
                 설치한 앱에서만 기록이 오래 보존됩니다. Android Chrome: ⋮ → <b>앱 설치</b> / iPhone Safari: 공유 → <b>홈 화면에 추가</b>
+                {deviceEnv().os === 'ios' && (
+                  <>
+                    <br />
+                    아이폰·아이패드는 브라우저 탭과 홈 화면 앱의 기록이 <b>따로 저장</b>됩니다. 설치한 앱에서 문제팩을 가져와 학습하세요.
+                  </>
+                )}
               </p>
             </section>
           )}

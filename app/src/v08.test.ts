@@ -25,7 +25,7 @@ function world(rounds: number, days: number, perDay: number, rate: number, setti
   for (let d = days; d >= 1; d--) {
     for (let i = 0; i < perDay; i++) {
       const it = bank.items[(k++ * 7) % bank.items.length];
-      attempts.push({ qid: it.qids[0], ts: addDays(T0, -d) + i * 90_000, correct: r() < rate, chosen: 1, unsure: false, elapsedMs: 60_000 });
+      attempts.push({ qid: it.qids[0], ts: addDays(T0, -d) + i * 90_000, correct: r() < rate, chosen: 1, elapsedMs: 60_000 });
     }
   }
   const mem = replay(bank, attempts);

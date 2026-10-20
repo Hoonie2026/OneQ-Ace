@@ -8,7 +8,7 @@
 
 | 폴더 | 내용 | 상태 |
 |---|---|---|
-| `app/` | 스마트폰 학습앱 — 정적 PWA (Vite + React + TypeScript) | **v0.9.1**(5단계 마무리): 학습 계획·시스템 추천·과목별 학습·모의고사·시험일 예상 점수(계산 보기)·학습 원리, 백업/복원. `src/engine/` 학습 엔진(FSRS) |
+| `app/` | 학습앱 — 정적 PWA (Vite + React + TypeScript). 스마트폰·태블릿·PC 브라우저 | **v0.10.0**: 학습 계획·시스템 추천·과목별 학습·모의고사·시험일 예상 점수(계산 보기)·학습 원리, [쉬움], 계산기·손글씨 메모, 백업/복원(기기 간 합치기). `src/engine/` 학습 엔진(FSRS) |
 | `preprocessor/` | PC 기출 PDF 전처리기 `oneq-prep` (Python) | v0.2.0 2단계 MVP: 명령줄 + HTML 검수 보고서(ADR 012) — **다음 개발 대상** |
 | `shared/` | 팩 포맷 스키마(`pack-schema.json`)·두 검증기 공용 시험 사례 | oqp/1 |
 | `docs/` | 세션 기록, 실기기 결과표, 결정 기록(ADR), 사용 안내 초안(`USER-GUIDE.md`) | |

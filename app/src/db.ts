@@ -54,7 +54,10 @@ export interface AttemptRow {
   ts: number;
   chosen: number;
   correct: boolean;
-  unsure: boolean; // 자신 없이 맞힘 — 답하기 전 웹검색(v0.7) 또는 예전 "헷갈림" 체크. 정답이어도 FSRS Hard, 첫 풀이 정답률에선 찍은 것으로
+  /** 예전 "자신 없이 맞힘"(v0.7 답하기 전 웹검색·헷갈림). v0.9.2부터 쓰지도 읽지도 않음 — 옛 기록·백업 호환으로만 남김 */
+  unsure?: boolean;
+  /** [쉬움]으로 답함(v0.9.2): 보기 없이 정답 처리. chosen에는 정답 번호를 넣는다 */
+  easy?: boolean;
   elapsedMs: number;
   mode: AttemptMode;
   sessionId: string;
@@ -70,6 +73,8 @@ export interface NoteRow {
 export interface SettingRow {
   key: string;
   value: unknown;
+  /** 학습 계획(plan:종목)처럼 기기 간에 맞출 설정만 — 복원 때 더 최신 것이 이긴다(v0.9.2) */
+  updatedAt?: number;
 }
 
 /** 풀이 묶음(회차 전체·과목·오답 다시 풀기). 이어 풀기 위치를 기억한다 */
@@ -173,6 +178,7 @@ export const SETTING = {
   lastBackupAt: 'lastBackupAt',
   attemptsAtLastBackup: 'attemptsAtLastBackup',
   certCode: 'certCode', // 홈에서 고른 자격종목
+  autoTools: 'autoTools', // 계산 문제에서 계산기·메모 저절로 열기(v0.10, 기본 켬)
 } as const;
 
 export async function getSetting<T>(key: string, fallback: T, d: OneQDB = db): Promise<T> {

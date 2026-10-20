@@ -42,7 +42,9 @@ export function CoachCard(props: {
   const pct = today.target ? Math.min(100, (coach.doneToday / today.target) * 100) : 0;
 
   return (
-    <>
+    // v0.10: 태블릿 가로·PC(폭 960px 이상)에서는 두 단 — 왼쪽 시험일·점수·점검, 오른쪽 오늘 학습·모의고사·원리. 휴대폰은 한 단 그대로
+    <div className="home-grid">
+      <div className="home-col">
       <section className="card exam-row" data-testid="coach">
         <button className="exam-date" onClick={props.onPlan} data-testid="plan-open">
           <small>시험일{settings ? ` · ${settings.examDate.slice(0, 4)}년` : ''}</small>
@@ -80,6 +82,8 @@ export function CoachCard(props: {
       </section>
 
       {props.insight && <InsightCard insight={props.insight} />}
+      </div>
+      <div className="home-col">
 
       <section className="card today-card" data-testid="today-card">
         <div className="today-head">
@@ -134,7 +138,8 @@ export function CoachCard(props: {
         </span>
         <Icon name="forward" size={20} />
       </button>
-    </>
+      </div>
+    </div>
   );
 }
 

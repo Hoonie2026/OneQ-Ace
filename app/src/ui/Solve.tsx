@@ -1,11 +1,14 @@
 import { useEffect, useRef, useState } from 'react';
-import { db, type AttemptRow, type QuestionRow } from '../db';
-import { deadlineOf, examLabel, finishRun, firstUnanswered, loadSession, pauseRun, recordAnswer, resumeRun, saveNote, type Session, type Target } from '../study';
+import { db, getSetting, SETTING, type AttemptRow, type QuestionRow } from '../db';
+import { deadlineOf, easyToUnknown, examLabel, finishRun, firstUnanswered, loadSession, pauseRun, recordAnswer, resumeRun, saveNote, type Session, type Target } from '../study';
 import { ZoomImage } from './ZoomImage';
 import { questionMeta, startRelearn, startSubject, startToday, todayStatus, type TodayStatus } from '../coach';
 import { aiModeUrl, searchQuery } from '../search';
 import { askChoice, askConfirm } from './Dialog';
 import { Icon } from './Icon';
+import { Calculator } from './Calculator';
+import { Scratchpad } from './Scratchpad';
+import { isCalcQuestion } from '../calc/detect';
 
 const CIRCLED = ['', '①', '②', '③', '④', '⑤'];
 const MAX_ELAPSED = 30 * 60 * 1000;
@@ -17,8 +20,9 @@ const MAX_ELAPSED = 30 * 60 * 1000;
  * 모의고사(5단계): 정답을 보여 주지 않고 고르면 다음 문항으로. 남은 시간이 위에 보이고, 제출하거나 시간이 끝나면 채점(성적 화면).
  * ✕로 나가면 남은 시간이 멈추고, 이어서 열면 그때부터 다시 흐른다(앱을 강제로 닫으면 계속 흐름).
  *
- * v0.7(실기기 v0.6.0 의견): 교재 없이 앱만으로 공부하므로 "모름" 옆에 **웹검색**(문항 핵심 낱말로 구글 검색).
- * 답하기 전에 검색했으면 그 풀이는 "자신 없이 맞힘"(unsure)으로 기록한다. "헷갈림" 단추는 없애고,
+ * v0.7(실기기 v0.6.0 의견): 교재 없이 앱만으로 공부하므로 **웹검색**(문항 핵심 낱말로 구글 AI 모드).
+ * v0.9.2(실사용 의견): 웹검색은 **답한 뒤 정답·오답 화면에서만** — 검색으로 맞힌 기록이 성적을 왜곡하지 못하게.
+ * 그 자리에는 **[쉬움]**: 보기를 고르지 않고 정답 처리(FSRS Easy — 다음 복습이 길게). 정답을 보고 사실 몰랐으면 [모름으로 바꾸기].
  * "한 줄 설명"은 **메모**로 — 메모가 있는 문항은 다시 풀 때 "메모 있음"이 보인다(다른 회차의 같은 문항 메모 포함).
  */
 export function Solve(props: { target: Target; onExit: () => void; onResult: (peek?: boolean) => void; onSolve?: (t: Target) => void; onSummary?: (certCode: string) => void }) {
@@ -34,13 +38,15 @@ export function Solve(props: { target: Target; onExit: () => void; onResult: (pe
   const [siblings, setSiblings] = useState<Map<string, string[]>>(new Map());
   /** 다른 회차의 같은 문항에 쓴 메모(이 문항 메모가 없을 때) */
   const [otherNote, setOtherNote] = useState('');
-  /** 답하기 전에 웹검색한 문항 */
-  const searched = useRef(new Set<string>());
   /** 오늘 학습 진행(오늘 학습·과목 학습 묶음만). 목표를 넘는 답을 하면 다음 단추에서 "오늘 목표 달성" 상자(v0.7.1) */
   const [today, setToday] = useState<TodayStatus | null>(null);
   const [goalPending, setGoalPending] = useState(false);
   const [goalOpen, setGoalOpen] = useState(false);
   const [showRounds, setShowRounds] = useState(false);
+  /** 계산 도구(v0.10): 계산기·손글씨 메모. 계산 문제면 마지막에 쓴 도구가 저절로 열린다(설정에서 끌 수 있음) */
+  const [tool, setTool] = useState<'calc' | 'memo' | null>(null);
+  const lastTool = useRef<'calc' | 'memo'>('calc');
+  const [autoTools, setAutoTools] = useState(true);
   const shownAt = useRef(performance.now());
   const hiddenFor = useRef(0);
   const hiddenAt = useRef<number | null>(null);
@@ -140,13 +146,27 @@ export function Solve(props: { target: Target; onExit: () => void; onResult: (pe
   // 다음 문항을 읽는 동안에는 이전 문항을 쓰지 않는다(빠른 연속 탭이 이전 문항에 기록되던 경합 방지)
   const q = loaded && loaded.qid === qid ? loaded : null;
   const attempt: AttemptRow | undefined = q ? s?.answers.get(q.qid) : undefined;
+  const calcQ = !!q && isCalcQuestion(q);
 
-  const answer = async (chosen: number) => {
+  useEffect(() => {
+    getSetting<boolean>(SETTING.autoTools, true).then(setAutoTools).catch(() => undefined);
+  }, []);
+  // 문항이 바뀌면: 계산 문제면 도구를 열고, 아니면 닫아 문제 그림을 넓게(메모는 문항마다 새 장)
+  useEffect(() => {
+    if (!q) return;
+    setTool(calcQ && autoTools ? lastTool.current : null);
+  }, [q?.qid, autoTools]);
+  const pickTool = (t: 'calc' | 'memo') => {
+    lastTool.current = t;
+    setTool((cur) => (cur === t ? null : t));
+  };
+
+  const answer = async (chosen: number, easy = false) => {
     if (!s || !q || attempt || saving) return;
     setSaving(true);
     try {
       const elapsed = Math.min(MAX_ELAPSED, performance.now() - shownAt.current - hiddenFor.current);
-      const res = await recordAnswer(s, q, chosen, elapsed, { unsure: searched.current.has(q.qid) });
+      const res = await recordAnswer(s, q, chosen, elapsed, { easy });
       setS(res.session);
       if (isMock) {
         // 모의고사: 정답을 알리지 않고 다음 안 푼 문항으로(다 풀었으면 채점)
@@ -166,6 +186,18 @@ export function Solve(props: { target: Target; onExit: () => void; onResult: (pe
         setToday(t);
         if (t.target > 0 && today.done < t.target && t.done >= t.target) setGoalPending(true);
       }
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  /** [쉬움]을 눌렀지만 정답을 보니 몰랐을 때 → 모름으로(오늘 진행 수도 고침) */
+  const toUnknown = async () => {
+    if (!s || !q || !attempt?.easy || saving) return;
+    setSaving(true);
+    try {
+      setS(await easyToUnknown(s, q.qid));
+      if (today) setToday({ ...today, correct: Math.max(0, today.correct - 1), unknown: today.unknown + 1 });
     } finally {
       setSaving(false);
     }
@@ -269,10 +301,9 @@ export function Solve(props: { target: Target; onExit: () => void; onResult: (pe
     props.onExit();
   };
 
-  /** 문항 핵심 낱말로 구글 검색 AI 모드(새 탭). 답하기 전이면 이 풀이를 "자신 없이 맞힘"으로 */
+  /** 문항 핵심 낱말로 구글 검색 AI 모드(새 탭). v0.9.2부터 답한 뒤 정답·오답 화면에서만 */
   const webSearch = () => {
     if (!q || !s) return;
-    if (!attempt) searched.current.add(q.qid);
     const m = (s.packs.get(q.packId) ?? s.pack).manifest;
     const subjName = m.subjects.find((x) => x.no === q.subjectNo)?.name ?? '';
     window.open(aiModeUrl(searchQuery(q.text ?? '', subjName), m.cert.name), '_blank', 'noopener');
@@ -285,6 +316,27 @@ export function Solve(props: { target: Target; onExit: () => void; onResult: (pe
     await finishRun(s.run.sessionId);
     props.onResult();
   };
+
+  // PC 키보드(v0.10): 1~4 보기, M 모름, E 쉬움, Enter·→ 다음, ← 이전. 계산기·메모 입력 중이거나 창이 떠 있으면 무시
+  const keyRef = useRef<(e: KeyboardEvent) => void>(() => undefined);
+  keyRef.current = (e: KeyboardEvent) => {
+    const el = e.target as HTMLElement | null;
+    if (e.ctrlKey || e.metaKey || e.altKey || goalOpen || document.querySelector('[data-testid="dialog"]')) return;
+    if (el && (el.closest('input, textarea, select, [contenteditable="true"], .calc') !== null)) return;
+    const k = e.key;
+    if (!attempt && /^[1-5]$/.test(k) && Number(k) <= (q?.choiceCount ?? 4)) answer(Number(k));
+    else if (!attempt && (k === 'm' || k === 'M' || k === 'ㅡ')) answer(0);
+    else if (!attempt && !isMock && (k === 'e' || k === 'E' || k === 'ㄷ')) answer(0, true);
+    else if (attempt && (k === 'Enter' || k === 'ArrowRight')) next();
+    else if (k === 'ArrowLeft' && index > 0) prev();
+    else return;
+    e.preventDefault();
+  };
+  useEffect(() => {
+    const h = (e: KeyboardEvent) => keyRef.current(e);
+    window.addEventListener('keydown', h);
+    return () => window.removeEventListener('keydown', h);
+  }, []);
 
   if (!s) return <div className="solve" />;
   const qPack = (q && s.packs.get(q.packId)) || s.pack;
@@ -366,49 +418,112 @@ export function Solve(props: { target: Target; onExit: () => void; onResult: (pe
         </div>
       )}
 
-      {q ? <ZoomImage key={q.qid} src={img} width={q.imgSize[0]} height={q.imgSize[1]} alt={`${q.no}번 문항`} /> : <div className="zoom" />}
+      <div className="solve-body">
+        {q ? <ZoomImage key={q.qid} src={img} width={q.imgSize[0]} height={q.imgSize[1]} alt={`${q.no}번 문항`} /> : <div className="zoom" />}
+        <div className="solve-side">
+          {attempt && q && !isMock && (
+            <section className={`feedback ${chosenOk ? 'is-ok' : 'is-bad'}`} aria-live="polite" data-testid="feedback">
+              <p className="feedback-line">
+                <b>{attempt.easy ? '✓ 쉬움' : chosenOk ? '✓ 정답' : attempt.chosen === 0 ? '? 모름' : '✕ 오답'}</b>
+                <span>
+                  정답 {CIRCLED[q.answer]}
+                  {(q.acceptAlso ?? []).map((x) => `·${CIRCLED[x]}`).join('')}
+                  {attempt.chosen !== 0 && !chosenOk && ` · 내 답 ${CIRCLED[attempt.chosen]}`}
+                </span>
+              </p>
+              {!noteOpen && (note || otherNote) && (
+                <div className="memo-box" data-testid="memo-box">
+                  <span className="memo-label">{note ? '내 메모' : '다른 회차 같은 문항 메모'}</span>
+                  <p>{note || otherNote}</p>
+                </div>
+              )}
+              <div className="feedback-tools">
+                <button className={`chip-btn memo-btn${note ? ' on' : ''}`} onClick={() => {
+                  if (!note && otherNote) setNote(otherNote);
+                  setNoteOpen((v) => !v);
+                }} aria-expanded={noteOpen} data-testid="memo-btn">
+                  <Icon name="pencil" size={17} /> {note ? '메모 수정' : '메모 쓰기'}
+                </button>
+                <button className="chip-btn" onClick={webSearch} data-testid="search-after">
+                  <Icon name="search-ai" size={17} /> 웹검색
+                </button>
+                {attempt.easy && (
+                  <button className="chip-btn" onClick={toUnknown} data-testid="easy-undo">
+                    모름으로 바꾸기
+                  </button>
+                )}
+              </div>
+              {noteOpen && (
+                <textarea
+                  className="note"
+                  rows={3}
+                  maxLength={500}
+                  value={note}
+                  autoFocus
+                  placeholder="이 문제의 개념·풀이 요령을 메모해 두세요. 다시 풀 때 '메모 있음'으로 보입니다"
+                  onChange={(e) => setNote(e.target.value)}
+                  onBlur={() => saveNote(q, note)}
+                />
+              )}
+            </section>
+          )}
 
-      {attempt && q && !isMock && (
-        <section className={`feedback ${chosenOk ? 'is-ok' : 'is-bad'}`} aria-live="polite" data-testid="feedback">
-          <p className="feedback-line">
-            <b>{chosenOk ? '✓ 정답' : attempt.chosen === 0 ? '? 모름' : '✕ 오답'}</b>
-            <span>
-              정답 {CIRCLED[q.answer]}
-              {(q.acceptAlso ?? []).map((x) => `·${CIRCLED[x]}`).join('')}
-              {attempt.chosen !== 0 && !chosenOk && ` · 내 답 ${CIRCLED[attempt.chosen]}`}
-            </span>
-          </p>
-          {!noteOpen && (note || otherNote) && (
-            <div className="memo-box" data-testid="memo-box">
-              <span className="memo-label">{note ? '내 메모' : '다른 회차 같은 문항 메모'}</span>
-              <p>{note || otherNote}</p>
+          {tool && (
+            <div className={`tool-panel is-${tool}`} data-testid="tool-panel">
+              {tool === 'calc' ? <Calculator /> : <Scratchpad key={qid} />}
             </div>
           )}
-          <div className="feedback-tools">
-            <button className={`chip-btn memo-btn${note ? ' on' : ''}`} onClick={() => {
-              if (!note && otherNote) setNote(otherNote);
-              setNoteOpen((v) => !v);
-            }} aria-expanded={noteOpen} data-testid="memo-btn">
-              <Icon name="pencil" size={17} /> {note ? '메모 수정' : '메모 쓰기'}
-            </button>
-            <button className="chip-btn" onClick={webSearch} data-testid="search-after">
-              <Icon name="search-ai" size={17} /> 웹검색
-            </button>
-          </div>
-          {noteOpen && (
-            <textarea
-              className="note"
-              rows={3}
-              maxLength={500}
-              value={note}
-              autoFocus
-              placeholder="이 문제의 개념·풀이 요령을 메모해 두세요. 다시 풀 때 '메모 있음'으로 보입니다"
-              onChange={(e) => setNote(e.target.value)}
-              onBlur={() => saveNote(q, note)}
-            />
-          )}
-        </section>
-      )}
+          <footer className="solve-bottom">
+            <div className="tool-bar" role="toolbar" aria-label="계산 도구">
+              <button type="button" className={`chip-btn${tool === 'calc' ? ' on' : ''}`} onClick={() => pickTool('calc')} aria-pressed={tool === 'calc'} data-testid="tool-calc">
+                계산기
+              </button>
+              <button type="button" className={`chip-btn${tool === 'memo' ? ' on' : ''}`} onClick={() => pickTool('memo')} aria-pressed={tool === 'memo'} data-testid="tool-memo">
+                <Icon name="pencil" size={16} /> 메모
+              </button>
+              {calcQ && <span className="calc-tag" data-testid="calc-tag">계산 문제</span>}
+            </div>
+            <div className="choices" role="group" aria-label="보기 선택">
+              {Array.from({ length: q?.choiceCount ?? 4 }, (_, i) => i + 1).map((n) => {
+                const state = !attempt
+                  ? ''
+                  : isMock
+                    ? n === attempt.chosen
+                      ? ' is-picked'
+                      : ' is-dim'
+                    : n === q?.answer || q?.acceptAlso?.includes(n)
+                    ? ' is-answer'
+                    : n === attempt.chosen
+                      ? ' is-chosen'
+                      : ' is-dim';
+                return (
+                  <button key={n} className={`choice${state}`} disabled={!!attempt || saving || !q} onClick={() => answer(n)} aria-label={`${n}번`}>
+                    {n}
+                  </button>
+                );
+              })}
+            </div>
+            {attempt ? (
+              <button className="btn btn-primary btn-block btn-next" onClick={next}>
+                {remaining === 0 ? (isMock ? '채점하기' : '성적 보기') : '다음 →'}
+              </button>
+            ) : isMock ? (
+              <button className="btn btn-block btn-next btn-unknown" disabled={saving || !q} onClick={() => answer(0)}>
+                모름
+              </button>
+            ) : (
+              <div className="unknown-row">
+                <button className="btn btn-next btn-unknown" disabled={saving || !q} onClick={() => answer(0)}>
+                  모름
+                </button>
+                <button className="btn btn-next btn-easy" disabled={saving || !q} onClick={() => answer(0, true)} data-testid="easy">
+                  쉬움
+                </button>
+              </div>
+            )}
+          </footer>
+        </div>
+      </div>
 
       {goalOpen && today && (
         <div className="modal-back" role="dialog" aria-modal="true" aria-labelledby="goal-title" data-testid="goal-box">
@@ -454,46 +569,6 @@ export function Solve(props: { target: Target; onExit: () => void; onResult: (pe
         </div>
       )}
 
-      <footer className="solve-bottom">
-        <div className="choices" role="group" aria-label="보기 선택">
-          {Array.from({ length: q?.choiceCount ?? 4 }, (_, i) => i + 1).map((n) => {
-            const state = !attempt
-              ? ''
-              : isMock
-                ? n === attempt.chosen
-                  ? ' is-picked'
-                  : ' is-dim'
-                : n === q?.answer || q?.acceptAlso?.includes(n)
-                ? ' is-answer'
-                : n === attempt.chosen
-                  ? ' is-chosen'
-                  : ' is-dim';
-            return (
-              <button key={n} className={`choice${state}`} disabled={!!attempt || saving || !q} onClick={() => answer(n)} aria-label={`${n}번`}>
-                {n}
-              </button>
-            );
-          })}
-        </div>
-        {attempt ? (
-          <button className="btn btn-primary btn-block btn-next" onClick={next}>
-            {remaining === 0 ? (isMock ? '채점하기' : '성적 보기') : '다음 →'}
-          </button>
-        ) : isMock ? (
-          <button className="btn btn-block btn-next btn-unknown" disabled={saving || !q} onClick={() => answer(0)}>
-            모름
-          </button>
-        ) : (
-          <div className="unknown-row">
-            <button className="btn btn-next btn-unknown" disabled={saving || !q} onClick={() => answer(0)}>
-              모름
-            </button>
-            <button className="btn btn-next btn-search" disabled={!q} onClick={webSearch} data-testid="web-search">
-              <Icon name="search-ai" size={20} /> 웹검색
-            </button>
-          </div>
-        )}
-      </footer>
     </div>
   );
 }

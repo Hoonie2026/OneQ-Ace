@@ -258,7 +258,7 @@ export async function recordAnswer(
   q: QuestionRow,
   chosen: number,
   elapsedMs: number,
-  opts: { now?: number; unsure?: boolean } = {},
+  opts: { now?: number; easy?: boolean } = {},
   d: OneQDB = defaultDb,
 ): Promise<{ session: Session; attempt: AttemptRow }> {
   const now = opts.now ?? Date.now();
@@ -268,10 +268,10 @@ export async function recordAnswer(
     qid: q.qid,
     contentHash: q.contentHash,
     ts: now,
-    chosen,
-    correct: isCorrect(q, chosen),
-    // 자신 없이 맞힘: 답하기 전에 웹검색을 했으면(실기기 v0.6.0 — "헷갈림" 단추 대신). FSRS Hard, 첫 풀이 정답률에선 찍은 것으로
-    unsure: !!opts.unsure && isCorrect(q, chosen),
+    // [쉬움](v0.9.2): 보기를 고르지 않고 정답 처리 — 정답 번호를 고른 것으로 적고 easy 표시(FSRS Easy)
+    chosen: opts.easy ? q.answer : chosen,
+    correct: opts.easy ? true : isCorrect(q, chosen),
+    ...(opts.easy ? { easy: true } : {}),
     elapsedMs: Math.max(0, Math.round(elapsedMs)),
     mode,
     sessionId: s.run.sessionId,
@@ -289,8 +289,20 @@ export async function recordAnswer(
   return { session: { ...s, run, answers }, attempt };
 }
 
-export async function setUnsure(uid: string, unsure: boolean, d: OneQDB = defaultDb): Promise<void> {
-  await safeWrite('헷갈림 표시', () => d.attempts.where('uid').equals(uid).modify({ unsure }));
+/** [쉬움]으로 답했지만 정답을 보니 사실 몰랐을 때: 그 기록을 "모름"으로 바꾼다(v0.9.2). 묶음 끝 "틀린 문항 다시"에도 들어간다 */
+export async function easyToUnknown(s: Session, qid: string, d: OneQDB = defaultDb): Promise<Session> {
+  const a = s.answers.get(qid);
+  if (!a?.easy) return s;
+  const next: AttemptRow = { ...a, chosen: 0, correct: false };
+  delete next.easy;
+  await safeWrite('모름으로 바꾸기', async () => {
+    await d.attempts.where('uid').equals(a.uid).modify((row) => {
+      row.chosen = 0;
+      row.correct = false;
+      delete row.easy;
+    });
+  });
+  return { ...s, answers: new Map(s.answers).set(qid, next) };
 }
 
 export async function saveNote(q: QuestionRow, text: string, d: OneQDB = defaultDb): Promise<void> {

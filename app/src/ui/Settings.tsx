@@ -1,6 +1,7 @@
 import Dexie from 'dexie';
 import { useEffect, useState } from 'react';
 import {
+  backupDue,
   buildBackup,
   canShareFiles,
   exportBackup,
@@ -13,14 +14,23 @@ import {
   type Fingerprint,
   type RestoreReport,
 } from '../backup';
-import { db, describeError, getSetting, isStandalone, SETTING, STAGE0_DB_NAME } from '../db';
+import { db, describeError, getSetting, isStandalone, setSetting, SETTING, STAGE0_DB_NAME } from '../db';
 import { deletePacks, wipeAll, wipeCertRecords, wipeRecords } from '../wipe';
-import { deviceSummary, formatBytes, readStorageInfo, type StorageInfo } from '../util';
+import { deviceEnv, deviceSummary, formatBytes, readStorageInfo, storagePlace, type StorageInfo } from '../util';
 import { examLabel } from '../study';
 import { PackPicker } from './PackPicker';
 import { askConfirm, showNotice } from './Dialog';
 import type { PackRow } from '../db';
 import { BackButton, Icon } from './Icon';
+
+/** 3분 전 · 2시간 전 · 5일 전 */
+function ago(ts: number): string {
+  const m = Math.max(0, Math.round((Date.now() - ts) / 60_000));
+  if (m < 60) return m <= 1 ? '방금' : `${m}분 전`;
+  const h = Math.round(m / 60);
+  if (h < 24) return `${h}시간 전`;
+  return `${Math.round(h / 24)}일 전`;
+}
 
 export function Settings(props: {
   version: number;
@@ -36,6 +46,8 @@ export function Settings(props: {
   const [packs, setPacks] = useState<PackRow[]>([]);
   const [fp, setFp] = useState<Fingerprint | null>(null);
   const [lastBackup, setLastBackup] = useState<number | null>(null);
+  const [newSince, setNewSince] = useState(0);
+  const [autoTools, setAutoTools] = useState(true);
   const [pending, setPending] = useState(0);
   const [info, setInfo] = useState<StorageInfo>({});
   const [busy, setBusy] = useState(false);
@@ -51,6 +63,8 @@ export function Settings(props: {
   const load = async () => {
     setFp(await fingerprint());
     setLastBackup(await getSetting<number | null>(SETTING.lastBackupAt, null));
+    setNewSince((await backupDue()).newAttempts);
+    setAutoTools(await getSetting<boolean>(SETTING.autoTools, true));
     setPending(await db.orphans.count());
     setInfo(await readStorageInfo());
     setStage0(await Dexie.exists(STAGE0_DB_NAME).catch(() => false));
@@ -135,7 +149,10 @@ export function Settings(props: {
     }
   };
 
-  const usagePct = info.usage !== undefined && info.quota ? Math.min(100, (info.usage / info.quota) * 100) : 0;
+  const place = storagePlace(deviceEnv(navigator.userAgent, navigator.maxTouchPoints, isStandalone()));
+  const days = lastBackup ? Math.floor((Date.now() - lastBackup) / 86_400_000) : null;
+  // 백업 상태 색: 기록이 없거나 7일·300건 안이면 초록, 그보다 오래면 주황, 기록이 있는데 백업한 적 없으면 빨강
+  const backupTone = fp && fp.attempts === 0 ? 'ok' : days === null ? 'bad' : days <= 7 && newSince < 300 ? 'ok' : 'warn';
 
   return (
     <div className="app">
@@ -144,15 +161,42 @@ export function Settings(props: {
         <h1>백업·설정</h1>
       </header>
 
-      <section className="card">
-        <h2>학습 기록 백업</h2>
-        <p className="fp" data-testid="fingerprint">
-          {fp ? formatFingerprint(fp) : '…'}
-        </p>
-        <p className="hint">
-          마지막 백업: {lastBackup ? new Date(lastBackup).toLocaleString('ko-KR') : '아직 없음'}. 앱을 지우거나 휴대폰을 바꾸면 기록이 사라지므로 주기적으로 저장하세요.
-          문제팩은 백업에 들어가지 않습니다(다시 가져오면 기록이 이어짐).
-        </p>
+      {/* v0.9.2(실사용 의견): 백업과 저장공간은 한 가지 일 — "내 기록이 어디 있고, 언제 지워지고, 어떻게 지키나"를 한 카드에 */}
+      <section className="card data-safety" data-testid="data-safety">
+        <h2>내 학습 기록 지키기</h2>
+        {place.warn && (
+          <p className="safety-warn" data-testid="storage-warn" role="note">
+            <Icon name="alert" size={18} /> {place.warn}
+          </p>
+        )}
+        <ul className="safety-status">
+          <li className={info.persisted ? 'ok' : 'warn'}>
+            <small>영구 저장</small>
+            <b>{info.persisted ? '허용됨' : '미허용'}</b>
+          </li>
+          <li className={backupTone} data-testid="backup-status">
+            <small>마지막 백업</small>
+            <b>{lastBackup ? ago(lastBackup) : '아직 없음'}</b>
+            {newSince > 0 && <small>이후 풀이 {newSince}건</small>}
+          </li>
+        </ul>
+        <dl className="safety-facts">
+          <dt>저장 위치</dt>
+          <dd data-testid="storage-where">{place.where} — 학습 기록과 문제팩 모두</dd>
+          <dt>이럴 때 지워집니다</dt>
+          <dd>
+            <ul>
+              {place.risks.map((r) => (
+                <li key={r}>{r}</li>
+              ))}
+            </ul>
+          </dd>
+          <dt>지키는 방법</dt>
+          <dd>
+            백업 파일을 주기적으로 기기 밖(드라이브·메일·카카오톡 나에게)에 저장하세요. 문제팩은 백업에 들어가지 않고 사내 게시판에서 다시 받으면 기록이 이어집니다.
+            {!info.persisted && ' 영구 저장은 기기 공간이 부족할 때 브라우저가 자동으로 지우는 것만 막습니다.'}
+          </dd>
+        </dl>
         <div className="stack">
           <button className="btn btn-primary btn-block" disabled={busy} onClick={() => doExport('download')}>
             백업 파일 저장(다운로드)
@@ -163,7 +207,7 @@ export function Settings(props: {
             </button>
           )}
           <label className={`btn btn-block${busy ? ' disabled' : ''}`}>
-            백업 파일에서 복원(.json·.txt)
+            백업 파일에서 복원(합치기)
             <input
               type="file"
               accept=".json,.txt,application/json,text/plain"
@@ -177,46 +221,47 @@ export function Settings(props: {
               }}
             />
           </label>
+          {!info.persisted && (
+            <button className="btn btn-block" onClick={requestPersist}>
+              영구 저장 요청
+            </button>
+          )}
         </div>
         {report && (
           <div className={`report ${report.matchesBackup ? 'ok' : 'warn'}`} data-testid="restore-report" role="status">
             <p>
-              <b>{report.matchesBackup ? '✓ 복원 완료 — 백업과 기록 일치' : '! 복원 완료 — 확인 필요'}</b>
+              <b>{report.matchesBackup ? '복원 완료 — 백업과 기록 일치' : '복원 완료 — 확인 필요'}</b>
             </p>
             <p>
               새로 들어간 풀이 {report.added}건 · 이미 있던 풀이 {report.skipped}건 · 메모 {report.notes}건
+              {report.plansUpdated > 0 && ` · 더 최신 학습 계획 ${report.plansUpdated}개 반영`}
             </p>
             <p>지금: {formatFingerprint(report.after)}</p>
             {report.reconcile.pending > 0 && (
               <p>
-                매핑 대기 {report.reconcile.pending}건 — 아래 문제팩을 다시 가져오면 자동으로 이어집니다:
+                매핑 대기 {report.reconcile.pending}건 — 아래 문제팩을 이 기기에도 가져오면 자동으로 이어집니다:
                 <br />
                 {report.missingPacks.map((p) => p.title).join(', ') || '(원래 팩의 내용이 바뀜)'}
               </p>
             )}
           </div>
         )}
-        {pending > 0 && !report && (
-          <p className="hint warn-text">매핑 대기 {pending}건: 해당 문제팩을 다시 가져오면 기록이 이어집니다.</p>
-        )}
-      </section>
+        {pending > 0 && !report && <p className="hint warn-text">매핑 대기 {pending}건: 해당 문제팩을 다시 가져오면 기록이 이어집니다.</p>}
 
-      <section className="card">
-        <h2>저장공간</h2>
-        <div className="meter" aria-label="저장공간 사용량">
-          <div className="meter-bar" style={{ width: `${Math.max(usagePct, 0.5)}%` }} />
-        </div>
-        <p className="meter-text">
-          사용 {formatBytes(info.usage)} / 한도 {formatBytes(info.quota)}
+        <details className="why" data-testid="sync-guide">
+          <summary>다른 기기(태블릿·PC)와 이어서 공부하기</summary>
+          <ol className="sync-steps">
+            <li>다른 기기에도 앱을 설치하고 같은 문제팩을 가져옵니다(사내 게시판).</li>
+            <li>공부를 마친 기기에서 <b>백업 파일 저장</b> 또는 <b>공유로 보내기</b>(카카오톡 나에게·메일·드라이브).</li>
+            <li>이어서 공부할 기기에서 그 파일로 <b>복원(합치기)</b> — 같은 풀이는 한 번만 들어가고, 학습 계획은 더 최근에 바꾼 것으로 맞춰집니다.</li>
+            <li>기기를 바꿀 때마다 같은 방법으로 한 번씩 보내면 두 기기 기록이 같아집니다.</li>
+          </ol>
+          <p className="hint">서버 없이 기기 안에만 저장하는 앱이라 자동 동기화는 하지 않습니다.</p>
+        </details>
+
+        <p className="meter-text usage-line">
+          사용 {formatBytes(info.usage)} / 한도 {formatBytes(info.quota)} · 기록 지문 <span data-testid="fingerprint">{fp ? formatFingerprint(fp) : '…'}</span>
         </p>
-        <p className={info.persisted ? 'ok-text' : 'warn-text'}>
-          영구 저장: {info.persisted ? '허용됨 — 기기 공간이 부족해도 브라우저가 지우지 않습니다' : '미허용 — 기기 공간이 부족하면 지워질 수 있습니다'}
-        </p>
-        {!info.persisted && (
-          <button className="btn btn-small" onClick={requestPersist}>
-            영구 저장 요청
-          </button>
-        )}
         {stage0 && (
           <div className="stack">
             <p className="hint">0단계 실기기 검증에 쓴 시험 데이터(약 30MB)가 남아 있습니다.</p>
@@ -233,6 +278,22 @@ export function Settings(props: {
             </button>
           </div>
         )}
+      </section>
+
+      <section className="card">
+        <h2>풀이 화면</h2>
+        <label className="check-line" data-testid="auto-tools">
+          <input
+            type="checkbox"
+            checked={autoTools}
+            onChange={async (e) => {
+              setAutoTools(e.target.checked);
+              await setSetting(SETTING.autoTools, e.target.checked);
+            }}
+          />
+          <span>계산 문제에서 계산기·메모 저절로 열기</span>
+        </label>
+        <p className="hint">풀이 화면 아래 [계산기] [메모]는 언제든 누를 수 있습니다. PC 키보드: 1~4 보기, M 모름, E 쉬움, Enter 다음, ← 이전.</p>
       </section>
 
       <section className="card" data-testid="pack-section">

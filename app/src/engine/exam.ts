@@ -40,8 +40,8 @@ export function newItemRates(bank: Bank, attempts: EngineAttempt[]): Map<string,
   const all = [...firsts.values()].flatMap((l) => l.slice(-RECENT_FIRST));
   const pool = (f: (a: EngineAttempt) => number, base: number) => (all.reduce((t, a) => t + f(a), 0) + NEW_PSEUDO * base) / (all.length + NEW_PSEUDO);
   const rawOf = (a: EngineAttempt) => (a.correct ? 1 : 0);
-  // 자신 없이 맞힘(답하기 전 웹검색·헷갈림)은 시험에선 찍은 것으로
-  const examOf = (a: EngineAttempt) => (a.correct ? (a.unsure ? GUESS : 1) : a.chosen === 0 ? GUESS : 0);
+  // 모름은 시험에선 찍으므로 25%. 웹검색은 v0.9.2부터 답한 뒤에만 열려 "검색 후 맞힘" 보정이 필요 없다
+  const examOf = (a: EngineAttempt) => (a.correct ? 1 : a.chosen === 0 ? GUESS : 0);
   const poolRaw = pool(rawOf, GUESS);
   const poolExam = pool(examOf, GUESS);
   const out = new Map<string, NewRate>();

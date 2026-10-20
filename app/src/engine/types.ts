@@ -25,7 +25,8 @@ export interface EngineAttempt {
   ts: number;
   correct: boolean;
   chosen: number;
-  unsure: boolean;
+  /** [쉬움]으로 답함(v0.9.2): 보기를 고르지 않고 정답 처리 — FSRS Easy, 풀이 시간 추정에서 뺌 */
+  easy?: boolean;
   elapsedMs: number;
   /** 풀이 방식(round·subject·wrong·today·mock). 모의고사는 정답을 보지 않아 "오늘 학습 끝"으로 치지 않는다 */
   mode?: string;

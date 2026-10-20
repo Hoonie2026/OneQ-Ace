@@ -11,7 +11,7 @@ import { itemExamP, examTime } from './engine/predict';
 import { buildConcepts, curveShares } from './engine/similar';
 import { googleUrl, searchQuery } from './search';
 import { DEFAULT_PLAN_SETTINGS, type EngineQuestion } from './engine/types';
-import { loadSession, recordAnswer, createSetRun } from './study';
+import { loadSession, recordAnswer, createSetRun, easyToUnknown } from './study';
 
 let d: OneQDB;
 let n = 0;
@@ -88,7 +88,7 @@ describe('예상 점수 재검토(ADR 013)', () => {
     const [a, b, c] = ['T-2020-1-001', 'T-2021-1-001', 'T-2021-1-002'].map((q) => bank.itemOf.get(q)!);
     expect(concepts.clusterOf.get(a.key)).toBe(concepts.clusterOf.get(b.key));
     expect(concepts.clusterOf.get(c.key)).not.toBe(concepts.clusterOf.get(a.key));
-    const mem = replay(bank, [{ qid: 'T-2020-1-001', ts: NOW, correct: true, chosen: 1, unsure: false, elapsedMs: 60_000 }]);
+    const mem = replay(bank, [{ qid: 'T-2020-1-001', ts: NOW, correct: true, chosen: 1, elapsedMs: 60_000 }]);
     const T = examTime('2027-01-10');
     const prior = mem.prior.get(a.subjectKey)!;
     expect(itemExamP(b, mem, T, false, concepts)).toBeGreaterThan(prior + 0.2);
@@ -112,7 +112,7 @@ describe('예상 점수 재검토(ADR 013)', () => {
     // 문항 절반을 미리 익힌 상태
     const attempts = ctx.bank.items
       .filter((_, i) => i % 2 === 0)
-      .map((it, i) => ({ qid: it.qids[0], ts: NOW - 86_400_000 * 10 + i, correct: i % 2 === 0, chosen: i % 2 === 0 ? 1 : 2, unsure: false, elapsedMs: 60_000 }));
+      .map((it, i) => ({ qid: it.qids[0], ts: NOW - 86_400_000 * 10 + i, correct: i % 2 === 0, chosen: i % 2 === 0 ? 1 : 2, elapsedMs: 60_000 }));
     const mem = replay(ctx.bank, attempts);
     const base = { ...DEFAULT_PLAN_SETTINGS, examDate: '2027-01-20', dailyMinutes: 3 };
     const plain = passOutlook(ctx.bank, mem, base, NOW);
@@ -121,16 +121,29 @@ describe('예상 점수 재검토(ADR 013)', () => {
     expect(cram.projectedAverage).toBeGreaterThan(plain.projectedAverage + 1);
   });
 
-  it('답하기 전에 웹검색하고 맞힌 풀이는 "자신 없이 맞힘" — 첫 풀이 정답률에선 찍은 것(25%)으로', async () => {
-    await importPackBytes(await makePack({ questions: Array.from({ length: 4 }, (_, i) => ({ hash: `s${i}`, answer: 1 })) }), {}, d);
-    const qids = ['TEST-2022-1-001', 'TEST-2022-1-002'];
+  it('[쉬움](v0.9.2): 보기 없이 정답 기록(FSRS Easy → 다음 복습이 Good보다 길게), 모름으로 바꾸기, 풀이 시간 추정에서 제외', async () => {
+    await importPackBytes(await makePack({ questions: Array.from({ length: 4 }, (_, i) => ({ hash: `s${i}`, answer: 3 })) }), {}, d);
+    const qids = ['TEST-2022-1-001', 'TEST-2022-1-002', 'TEST-2022-1-003'];
     const run = await createSetRun('TEST', 'today', 't', qids, { now: NOW }, d);
     let s = (await loadSession({ kind: 'set', sessionId: run.sessionId }, d))!;
     let a;
-    ({ session: s, attempt: a } = await recordAnswer(s, (await d.questions.get(qids[0]))!, 1, 30_000, { now: NOW, unsure: true }, d));
-    expect(a.unsure).toBe(true);
-    ({ session: s, attempt: a } = await recordAnswer(s, (await d.questions.get(qids[1]))!, 2, 30_000, { now: NOW, unsure: true }, d));
-    expect(a.unsure).toBe(false); // 틀린 답은 그냥 오답
+    ({ session: s, attempt: a } = await recordAnswer(s, (await d.questions.get(qids[0]))!, 0, 20_000, { now: NOW, easy: true }, d));
+    expect([a.chosen, a.correct, a.easy]).toEqual([3, true, true]);
+    ({ session: s, attempt: a } = await recordAnswer(s, (await d.questions.get(qids[1]))!, 3, 40_000, { now: NOW }, d));
+    expect([a.correct, a.easy]).toEqual([true, undefined]);
+    // 쉬움 → 모름으로 바꾸기: 세션과 DB 모두
+    ({ session: s, attempt: a } = await recordAnswer(s, (await d.questions.get(qids[2]))!, 0, 1_500, { now: NOW, easy: true }, d));
+    s = await easyToUnknown(s, qids[2], d);
+    expect([s.answers.get(qids[2])!.chosen, s.answers.get(qids[2])!.correct, s.answers.get(qids[2])!.easy]).toEqual([0, false, undefined]);
+    const row = await d.attempts.where('uid').equals(a.uid).first();
+    expect([row!.chosen, row!.correct, row!.easy]).toEqual([0, false, undefined]);
+
+    const ctx = (await loadEngine('TEST', d))!;
+    const key = (qid: string) => ctx.bank.itemOf.get(qid)!.key;
+    const easyDue = ctx.mem.items.get(key(qids[0]))!.card.due.getTime();
+    const goodDue = ctx.mem.items.get(key(qids[1]))!.card.due.getTime();
+    expect(easyDue).toBeGreaterThan(goodDue);
+    expect(ctx.mem.timingObs).toBe(1); // 쉬움(20초여도)·모름은 풀이 시간 표본이 아님 — 정답 40초 하나만
   });
 });
 

@@ -171,7 +171,8 @@
         "flags": {
           "type": "array",
           "uniqueItems": true,
-          "items": { "enum": ["law", "has-figure", "spans-column", "stem-has-circled-glyph", "needs-review", "subject-reassigned", "ocr"] }
+          "items": { "enum": ["law", "has-figure", "spans-column", "stem-has-circled-glyph", "needs-review", "subject-reassigned", "ocr", "calc", "no-calc"] },
+          "description": "calc·no-calc(v0.10): 계산 문제 판정을 전처리기·검수자가 확정했을 때. 둘 다 없으면 앱이 문항 글자로 추정"
         }
       }
     },

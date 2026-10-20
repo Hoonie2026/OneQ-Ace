@@ -741,11 +741,6 @@ h3 {
   grid-template-columns: 1fr 1fr;
   gap: 8px;
 }
-.btn-search {
-  color: var(--primary);
-  border-color: var(--primary);
-  background: transparent;
-}
 /* 메모 — 정답(초록)·오답(빨강)·출제 횟수(주황)와 구분되는 보라 */
 .memo-badge {
   padding: 3px 10px;
@@ -779,37 +774,7 @@ h3 {
 }
 
 /* 가로 화면: 문항은 왼쪽, 보기·다음은 오른쪽 */
-@media (orientation: landscape) and (max-height: 560px) {
-  .solve {
-    display: grid;
-    grid-template-columns: 1fr minmax(220px, 34%);
-    grid-template-rows: auto auto 1fr auto;
-    max-width: none;
-    padding-left: env(safe-area-inset-left);
-    padding-right: env(safe-area-inset-right);
-  }
-  .solve-top,
-  .solve-progress {
-    grid-column: 1 / -1;
-  }
-  .zoom {
-    grid-column: 1;
-    grid-row: 3 / 5;
-  }
-  .feedback {
-    grid-column: 2;
-    grid-row: 3;
-    border-top: 0;
-    overflow: auto;
-  }
-  .solve-bottom {
-    grid-column: 2;
-    grid-row: 4;
-  }
-  .choice {
-    min-height: 48px;
-  }
-}
+/* 가로 휴대폰 두 단은 v0.10 "넓은 화면" 규칙(파일 끝)으로 옮김 */
 
 .crash {
   border-color: var(--fail);
@@ -2479,8 +2444,7 @@ h3 {
   align-items: center;
   gap: 4px;
 }
-.chip-btn,
-.btn-search {
+.chip-btn {
   display: inline-flex;
   align-items: center;
   gap: 5px;
@@ -2725,10 +2689,12 @@ details.why[open] summary::after {
   background: var(--surface-2);
   color: var(--ink);
 }
-.btn-search {
+/* [쉬움](v0.9.2): 초록 면 단추 — 모름(회색)과 나란히 */
+.btn-easy {
   border-color: transparent;
-  background: color-mix(in srgb, var(--primary) 14%, var(--surface));
-  color: var(--primary);
+  background: color-mix(in srgb, var(--ok) 14%, var(--surface));
+  color: var(--ok);
+  font-weight: 700;
 }
 .freq-badge {
   display: inline-flex;
@@ -2766,5 +2732,395 @@ details.why[open] summary::after {
   }
   .exam-row .exam-dday {
     border-left-color: rgb(255 255 255 / 0.35);
+  }
+}
+
+/* ════ v0.9.2 — 내 학습 기록 지키기(설정) · 쉬움 ════ */
+.safety-warn {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: var(--check-bg);
+  color: var(--ink);
+  font-size: 15px;
+  line-height: 1.55;
+}
+.safety-warn .ico {
+  margin-top: 2px;
+  color: var(--check);
+}
+.safety-status {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin: 0 0 12px;
+  padding: 0;
+  list-style: none;
+}
+.safety-status li {
+  display: grid;
+  gap: 2px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: var(--surface-2);
+}
+.safety-status small {
+  font-size: 13px;
+  color: var(--muted);
+}
+.safety-status b {
+  font-size: 17px;
+}
+.safety-status li.ok b {
+  color: var(--ok);
+}
+.safety-status li.warn b {
+  color: var(--check);
+}
+.safety-status li.bad b {
+  color: var(--fail);
+}
+.safety-facts {
+  margin: 0 0 14px;
+}
+.safety-facts dt {
+  margin-top: 10px;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--muted);
+}
+.safety-facts dd {
+  margin: 2px 0 0;
+  font-size: 15px;
+  line-height: 1.55;
+}
+.safety-facts dd ul {
+  margin: 0;
+  padding-left: 18px;
+}
+.sync-steps {
+  margin: 8px 0;
+  padding-left: 20px;
+  font-size: 15px;
+  line-height: 1.6;
+}
+.usage-line {
+  margin-top: 12px;
+  font-size: 13px;
+}
+
+/* ════ v0.10 — 계산 도구(계산기·손글씨 메모) · 태블릿·PC 넓은 화면 ════ */
+.solve-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.solve-side {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.tool-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.tool-bar .chip-btn {
+  min-height: 36px;
+  padding: 0 14px;
+  border: 0;
+  background: var(--surface-2);
+  color: var(--ink);
+  font: inherit;
+  font-size: 15px;
+  font-weight: 600;
+}
+.tool-bar .chip-btn.on,
+.pad-tools .chip-btn.on {
+  background: color-mix(in srgb, var(--primary) 16%, var(--surface));
+  color: var(--primary);
+}
+.calc-tag {
+  margin-left: auto;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: var(--check-bg);
+  color: var(--check);
+  font-size: 13px;
+  font-weight: 700;
+}
+.tool-panel {
+  flex: none;
+  padding: 8px 10px 4px;
+  border-top: 1px solid var(--line);
+  background: var(--surface);
+  overflow-y: auto;
+  max-height: 56dvh;
+}
+.tool-panel.is-memo {
+  height: 38dvh;
+  overflow: hidden;
+}
+
+/* 계산기 */
+.calc {
+  display: grid;
+  gap: 6px;
+  outline: none;
+}
+.calc-screen {
+  padding: 6px 10px;
+  border-radius: 12px;
+  background: var(--surface-2);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.calc-flags {
+  display: flex;
+  gap: 8px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--muted);
+}
+.calc-flags .on {
+  color: var(--check);
+}
+.calc-expr {
+  min-height: 22px;
+  overflow-x: auto;
+  white-space: nowrap;
+  font-size: 16px;
+  color: var(--muted);
+  direction: ltr;
+}
+.calc-out {
+  min-height: 30px;
+  overflow-x: auto;
+  white-space: nowrap;
+  font-size: 24px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+.calc-out.err {
+  color: var(--fail);
+  font-size: 18px;
+}
+.calc-keys {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 5px;
+}
+.calc-key {
+  display: grid;
+  place-items: center;
+  align-content: center;
+  min-height: clamp(36px, 4.8dvh, 48px);
+  padding: 0;
+  border: 0;
+  border-radius: 10px;
+  background: var(--surface-2);
+  color: var(--ink);
+  font: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.1;
+  cursor: pointer;
+}
+.calc-key small {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--check);
+  white-space: nowrap;
+}
+.calc-key:active {
+  filter: brightness(0.92);
+}
+.calc-key.k-num {
+  background: var(--surface);
+  box-shadow: inset 0 0 0 1px var(--line);
+  font-size: 18px;
+  font-weight: 700;
+}
+.calc-key.k-op {
+  font-size: 19px;
+}
+.calc-key.k-fn {
+  font-size: 13px;
+  color: var(--muted);
+}
+.calc-key.k-del {
+  color: var(--fail);
+}
+.calc-key.k-eq {
+  background: var(--primary);
+  color: var(--primary-ink);
+  font-size: 20px;
+}
+.calc-keys.is-shift .calc-key small {
+  color: var(--primary-ink);
+  background: var(--check);
+  border-radius: 4px;
+  padding: 0 3px;
+}
+.calc-history {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.calc-history button {
+  display: flex;
+  width: 100%;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 4px 6px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+.calc-history b {
+  color: var(--ink);
+  white-space: nowrap;
+}
+@media (max-height: 820px) and (max-width: 899px) {
+  .calc-history {
+    display: none; /* 휴대폰에서는 문제 그림 자리를 남김 */
+  }
+}
+
+/* 손글씨 메모 */
+.pad {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  gap: 6px;
+}
+.pad-tools {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.pad-tools .chip-btn {
+  min-height: 34px;
+  padding: 0 12px;
+  border: 0;
+  background: var(--surface-2);
+  color: var(--ink);
+  font: inherit;
+  font-size: 14px;
+}
+.pad-gap {
+  flex: 1;
+}
+.pad-area {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  border-radius: 12px;
+  background-color: var(--paper);
+  background-image: radial-gradient(circle, color-mix(in srgb, var(--muted) 35%, transparent) 1px, transparent 1.2px);
+  background-size: 20px 20px;
+  overflow: hidden;
+}
+.pad-area canvas {
+  position: absolute;
+  inset: 0;
+  touch-action: none;
+  cursor: crosshair;
+}
+.pad-hint {
+  position: absolute;
+  inset: auto 12px 10px;
+  margin: 0;
+  font-size: 13px;
+  color: var(--muted);
+  pointer-events: none;
+}
+@media (prefers-color-scheme: dark) {
+  .pad-area {
+    background-color: #0f1b2b;
+  }
+}
+
+/* 넓은 화면: 태블릿 가로·PC(폭 900px 이상), 가로로 눕힌 휴대폰 — 왼쪽 문제 그림, 오른쪽 해설·계산 도구·보기 */
+@media (min-width: 900px), (orientation: landscape) and (max-height: 560px) {
+  .solve {
+    max-width: 1440px;
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+  }
+  .solve-body {
+    flex-direction: row;
+  }
+  .solve-body > .zoom {
+    flex: 1;
+    min-width: 0;
+  }
+  .solve-side {
+    width: clamp(320px, 34vw, 440px);
+    border-left: 1px solid var(--line);
+    background: var(--surface);
+    overflow-y: auto;
+  }
+  .solve-side > .feedback {
+    border-top: 0;
+    max-height: none;
+  }
+  .solve-side > .solve-bottom {
+    margin-top: auto;
+    border-top: 0;
+  }
+  .tool-panel {
+    max-height: none;
+    border-top: 0;
+  }
+  .tool-panel.is-memo {
+    flex: 1;
+    height: auto;
+    min-height: 260px;
+  }
+}
+@media (orientation: landscape) and (max-height: 560px) {
+  .choice {
+    min-height: 46px;
+  }
+  .tool-panel.is-memo {
+    min-height: 160px;
+  }
+}
+
+/* 홈: 휴대폰은 한 단(묶음 상자를 투명하게), 폭 960px 이상은 두 단 */
+.home-grid,
+.home-col {
+  display: contents;
+}
+@media (min-width: 960px) {
+  .app:has(.home-grid) {
+    max-width: 1040px;
+  }
+  .home-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0 16px;
+    align-items: start;
+  }
+  .home-col {
+    display: block;
+  }
+}
+@media (min-width: 900px) {
+  .app {
+    max-width: 760px;
   }
 }

@@ -170,7 +170,7 @@ export function ForecastView(props: { coach: Coach }) {
                 <span className="lv warn">+ 가정값</span>
               </dt>
               <dd>
-                지금: 최근 처음 푼 문항 30개의 정답률(모름·검색 후 정답 = 찍기 25%, 기록 없으면 25점)
+                지금: 최근 처음 푼 문항 30개의 정답률(모름 = 찍기 25%, 쉬움 = 정답, 기록 없으면 25점)
                 <br />
                 시험일: 기출을 익힐수록 남은 여지의 최대 {pct(TRANSFER)} 상승(전이 — 메타분석 Pan & Rickard 2018 근거, 크기는 가정값)
               </dd>

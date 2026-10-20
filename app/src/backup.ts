@@ -22,6 +22,7 @@ import { reconcile, type ReconcileReport } from './pack/import';
 import { deviceSummary, downloadBlob, sha256Hex, yyyymmdd } from './util';
 
 export const BACKUP_FORMAT = 'oneq-backup';
+const PLAN_PREFIX = 'plan:';
 export const BACKUP_VERSION = 1;
 
 export interface BackupFile {
@@ -57,7 +58,7 @@ export async function fingerprint(d: OneQDB = defaultDb): Promise<Fingerprint> {
     ...(await d.orphans.where('kind').equals('note').toArray()).map((o) => o.data as NoteRow),
   ];
   const lines = [
-    ...atts.map((a) => `a|${a.uid}|${a.qid}|${a.ts}|${a.chosen}|${a.correct ? 1 : 0}|${a.unsure ? 1 : 0}|${a.elapsedMs}`),
+    ...atts.map((a) => `a|${a.uid}|${a.qid}|${a.ts}|${a.chosen}|${a.correct ? 1 : 0}|${a.unsure ? 1 : 0}|${a.elapsedMs}${a.easy ? '|e' : ''}`), // 쉬움(v0.9.2)은 있을 때만 붙여 이전 백업과 지문이 같게
     ...notes.map((n) => `n|${n.qid}|${n.updatedAt}|${n.text}`),
   ].sort();
   const hash = (await sha256Hex(new TextEncoder().encode(lines.join('\n')))).slice(0, 8);
@@ -147,6 +148,8 @@ export interface RestoreReport {
   /** 백업할 때의 지문과 복원 후 지문이 같은가(빈 기기에 복원했을 때 100% 일치 판정) */
   matchesBackup: boolean;
   missingPacks: { packId: string; title: string }[];
+  /** 더 최신 학습 계획으로 바꾼 종목 수 */
+  plansUpdated: number;
 }
 
 export async function restoreBackup(b: BackupFile, d: OneQDB = defaultDb): Promise<RestoreReport> {
@@ -154,6 +157,7 @@ export async function restoreBackup(b: BackupFile, d: OneQDB = defaultDb): Promi
   let added = 0;
   let skipped = 0;
   let notes = 0;
+  let plansUpdated = 0;
   await safeWrite('백업 복원', () =>
     d.transaction('rw', [d.attempts, d.notes, d.cards, d.runs, d.orphans, d.settings], async () => {
       const known = new Set<string>([
@@ -203,7 +207,13 @@ export async function restoreBackup(b: BackupFile, d: OneQDB = defaultDb): Promi
         if (!cur || cur.updatedAt < r.updatedAt) await d.runs.put(r);
       }
       for (const s of b.settings) {
-        if (!(await d.settings.get(s.key))) await d.settings.put(s);
+        const cur = await d.settings.get(s.key);
+        if (!cur) await d.settings.put(s);
+        // 학습 계획은 기기 간에 맞춘다: 더 최신이면 바꿈(v0.9.2). 마지막 백업 시각·고른 종목 같은 기기별 값은 그대로
+        else if (s.key.startsWith(PLAN_PREFIX) && (s.updatedAt ?? 0) > (cur.updatedAt ?? 0)) {
+          await d.settings.put(s);
+          plansUpdated++;
+        }
       }
     }),
   );
@@ -227,6 +237,7 @@ export async function restoreBackup(b: BackupFile, d: OneQDB = defaultDb): Promi
     // 빈 기기에 복원: 지문이 백업 때와 같아야 100% 일치. 기록이 있던 기기: 백업의 풀이가 모두 들어왔는지
     matchesBackup: wasEmpty ? after.hash === b.fingerprint.hash : allPresent,
     missingPacks: b.packs.filter((p) => !installed.has(p.packId)).map((p) => ({ packId: p.packId, title: p.title })),
+    plansUpdated,
   };
 }
 

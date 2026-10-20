@@ -239,7 +239,7 @@ export function simulate(learner: Learner, days: number, opts: SimOptions = {}):
     const solve = (qid: string) => {
       const ok = world.answer(qid, t);
       const jitter = 0.7 + 0.6 * world.rand();
-      attempts.push({ qid, ts: t, correct: ok, chosen: ok ? 1 : 2, unsure: false, elapsedMs: Math.round(learner.secPerQ * 1000 * jitter) });
+      attempts.push({ qid, ts: t, correct: ok, chosen: ok ? 1 : 2, elapsedMs: Math.round(learner.secPerQ * 1000 * jitter) });
       t += learner.secPerQ * 1000;
       return ok;
     };

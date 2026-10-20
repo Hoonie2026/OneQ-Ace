@@ -92,7 +92,7 @@ function median(xs: number[]): number | null {
 
 export function gradeOf(a: EngineAttempt, subjectMedianMs: number | null): Grade {
   if (!a.correct) return Rating.Again;
-  if (a.unsure) return Rating.Hard;
+  if (a.easy) return Rating.Easy;
   if (subjectMedianMs != null && a.elapsedMs >= subjectMedianMs * 1.5) return Rating.Hard;
   return Rating.Good;
 }
@@ -105,7 +105,8 @@ export function replay(bank: Bank, attempts: EngineAttempt[]): MemoryState {
   const times = new Map<string, number[]>();
   for (const a of rows) {
     // 모름·5초 미만(읽지 않고 누름)·10분 초과(자리 비움)는 풀이 시간으로 보지 않는다
-    if (a.chosen === 0 || a.elapsedMs < MIN_ELAPSED_MS || a.elapsedMs > 600_000) continue;
+    // [쉬움]은 읽자마자 누르므로 풀이 시간이 아니다(넣으면 문항당 시간이 짧게 잡혀 하루 문항 수가 부풀려진다)
+    if (a.chosen === 0 || a.easy || a.elapsedMs < MIN_ELAPSED_MS || a.elapsedMs > 600_000) continue;
     const sk = bank.itemOf.get(a.qid)!.subjectKey;
     (times.get(sk) ?? times.set(sk, []).get(sk)!).push(a.elapsedMs);
   }
@@ -128,8 +129,7 @@ export function replay(bank: Bank, attempts: EngineAttempt[]): MemoryState {
     if (!m) {
       const f = firstCorrect.get(item.subjectKey) ?? { n: 0, c: 0 };
       f.n++;
-      // 자신 없이 맞힌 것(검색 후·헷갈림)은 찍은 것과 같게 센다 — 처음 보는 문항 실력을 부풀리지 않게
-      if (a.correct) f.c += a.unsure ? GUESS : 1;
+      if (a.correct) f.c += 1;
       firstCorrect.set(item.subjectKey, f);
       m = { card: createEmptyCard(new Date(a.ts)), firstTs: day, lastTs: a.ts, lastCorrect: a.correct, everWrong: false, attempts: 0 };
       items.set(item.key, m);
