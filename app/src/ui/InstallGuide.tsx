@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import { canPromptInstall, externalOpenUrl, justInstalled, onInstallChange, promptInstall } from '../install';
+import { appInstalledOnDevice, canPromptInstall, externalOpenUrl, forgetInstalled, installedAt, justInstalled, onInstallChange, promptInstall } from '../install';
 import { deviceEnv, deviceNoun, type DeviceEnv } from '../util';
 
 /**
@@ -117,10 +117,38 @@ export function InstallGuide(props: { url: string; onCopy: () => void; compact?:
   });
   // 설치 직후 PC Chrome·Edge는 지금 탭을 그대로 앱 창으로 옮긴다(새로 불러오지 않음) → 표시 방식이 바뀌면 카드를 숨긴다(실기기 Z5)
   const [installedNow, setInstalledNow] = useState(false);
+  // 휴대폰·태블릿(v0.10.3, 실기기): 설치를 눌러도 브라우저 화면은 그대로 남고 앱 아이콘은 1~2분 뒤에 생긴다 →
+  // 카드를 숨기지 말고 "설치 중 → 설치 완료, 이 브라우저 화면은 닫고 앱 아이콘으로 여세요"로 바꾼다
+  const [mobileInstall, setMobileInstall] = useState<'none' | 'pending' | 'done'>(() => (installedAt() ? 'pending' : 'none'));
+  useEffect(() => {
+    if (env.kind === 'pc' || env.standalone || mobileInstall === 'none' || mobileInstall === 'done') return;
+    let alive = true;
+    let tries = 0;
+    const check = async () => {
+      const ok = await appInstalledOnDevice();
+      if (!alive) return;
+      if (ok) return setMobileInstall('done');
+      // 설치 뒤 5분이 지나도 확인이 안 되면(앱을 지웠거나 설치 실패, 확인 기능이 없는 브라우저) 다시 설치 안내로
+      const since = Date.now() - (installedAt() ?? Date.now());
+      if (since > 5 * 60_000) {
+        forgetInstalled();
+        return setMobileInstall('none');
+      }
+      if (++tries < 40) timer = window.setTimeout(check, 7_500);
+    };
+    let timer = window.setTimeout(check, 1_500);
+    return () => {
+      alive = false;
+      window.clearTimeout(timer);
+    };
+  }, [mobileInstall]);
   useEffect(() => {
     const off = onInstallChange(() => {
       setCanPrompt(canPromptInstall());
-      if (justInstalled()) setInstalledNow(true);
+      if (justInstalled()) {
+        if (env.kind === 'pc') setInstalledNow(true); // PC는 지금 탭이 앱 창으로 옮겨짐
+        else setMobileInstall('pending');
+      }
     });
     const mq = window.matchMedia?.('(display-mode: standalone)');
     const onMode = () => mq?.matches && setInstalledNow(true);
@@ -144,6 +172,24 @@ export function InstallGuide(props: { url: string; onCopy: () => void; compact?:
   }, []);
 
   if (env.standalone || installedNow) return null;
+  if (env.kind !== 'pc' && mobileInstall !== 'none') {
+    return (
+      <section className={`card guide install-guide install-done${props.compact ? '' : ' plain'}`} data-testid={props.testId ?? 'install-guide'} role="status">
+        <h2>{mobileInstall === 'done' ? '설치 완료 — 앱 아이콘으로 여세요' : '설치하고 있습니다(1~2분)'}</h2>
+        <p className="hint">
+          {mobileInstall === 'done'
+            ? `${deviceNoun(env)}의 앱 목록에 원큐합격이 생겼습니다. 지금 이 화면은 앱이 아니라 브라우저입니다.`
+            : '앱 목록에 원큐합격 아이콘이 생기기까지 1~2분 걸릴 수 있습니다. 지금 이 화면은 앱이 아니라 브라우저입니다.'}
+        </p>
+        <ol className="install-steps">
+          <li>이 브라우저 화면을 닫습니다(뒤로 가기, 또는 최근 앱 목록에서 위로 밀기)</li>
+          <li>앱 목록(또는 홈 화면)에서 <b>원큐합격</b> 아이콘을 누릅니다</li>
+          <li>홈 화면에 없으면 앱 목록에서 아이콘을 길게 눌러 「홈 화면에 추가」</li>
+        </ol>
+        <p className="hint">아이콘이 3분이 지나도 안 보이면 이 화면을 새로 고쳐 다시 설치하세요. 브라우저에서 공부해도 기록은 앱과 같은 곳에 저장됩니다.</p>
+      </section>
+    );
+  }
   const g = guideFor(env, canPrompt, props.url, props.onCopy, () => void promptInstall());
   if (props.compact && hidden && g.dismissible) return null;
 

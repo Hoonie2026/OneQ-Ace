@@ -11,6 +11,7 @@ interface InstallPromptEvent extends Event {
 }
 
 let deferred: InstallPromptEvent | null = null;
+const INSTALLED_KEY = 'oneq-installed-at';
 let installed = false;
 const listeners = new Set<() => void>();
 const notify = () => listeners.forEach((f) => f());
@@ -23,6 +24,11 @@ if (typeof window !== 'undefined') {
   });
   window.addEventListener('appinstalled', () => {
     installed = true;
+    try {
+      localStorage.setItem(INSTALLED_KEY, String(Date.now()));
+    } catch {
+      /* 기록 못 해도 이번 화면에서는 안내 */
+    }
     deferred = null;
     notify();
   });
@@ -60,4 +66,36 @@ export function externalOpenUrl(inApp: 'kakao' | 'naver' | 'other', os: string, 
     return `intent://${u.host}${u.pathname}${u.search}#Intent;scheme=https;package=com.android.chrome;end`;
   }
   return null; // 아이폰의 다른 앱 안 브라우저는 주소로 열 수 없음 → 안내
+}
+
+/** 이 브라우저에서 설치를 누른 적이 있으면 그 시각(안드로이드는 앱 아이콘이 생기기까지 1~2분 — 실기기 Z4b) */
+export function installedAt(): number | null {
+  try {
+    const v = Number(localStorage.getItem(INSTALLED_KEY) ?? 0);
+    return v > 0 ? v : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * 이 기기에 앱이 실제로 설치됐는지(안드로이드 Chrome: manifest의 related_applications "webapp" + getInstalledRelatedApps).
+ * 지원하지 않는 브라우저는 null
+ */
+export async function appInstalledOnDevice(): Promise<boolean | null> {
+  const nav = navigator as Navigator & { getInstalledRelatedApps?: () => Promise<unknown[]> };
+  if (!nav.getInstalledRelatedApps) return null;
+  try {
+    return (await nav.getInstalledRelatedApps()).length > 0;
+  } catch {
+    return null;
+  }
+}
+
+export function forgetInstalled(): void {
+  try {
+    localStorage.removeItem(INSTALLED_KEY);
+  } catch {
+    /* 무시 */
+  }
 }

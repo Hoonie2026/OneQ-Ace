@@ -29,6 +29,8 @@ export default defineConfig({
         scope: BASE,
         display: 'standalone',
         orientation: 'any',
+        // 이 기기에 앱이 설치됐는지 브라우저 화면에서 알기 위해(getInstalledRelatedApps, 안드로이드 Chrome — v0.10.3)
+        related_applications: [{ platform: 'webapp', url: `https://hoonie2026.github.io${BASE}manifest.webmanifest` }],
         background_color: '#0f1d2e',
         theme_color: '#0f1d2e',
         icons: [
