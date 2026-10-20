@@ -49,6 +49,7 @@
               "no": { "type": "integer", "minimum": 1 },
               "name": { "type": "string", "minLength": 1 },
               "count": { "type": "integer", "minimum": 1 },
+              "examCount": { "type": "integer", "minimum": 1, "description": "현행 출제기준의 실제 시험 과목 문항 수 — count와 다를 때만 쓴다(옛 기준 두 과목을 하나로 합친 경우 등, ADR 016). 앱은 모의고사·예상 점수에 이 값을 쓴다" },
               "isLaw": { "type": "boolean", "description": "과목 전체가 법규인지. 일부 문항만 법규이면 문항 flags의 'law'로 표시" }
             }
           }

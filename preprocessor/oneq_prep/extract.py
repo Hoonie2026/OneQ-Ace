@@ -174,6 +174,69 @@ def _labels_in_line(line: Line, hl: list | None = None) -> tuple[list[Label], li
     return labels, stem
 
 
+def _circled_in_line(line: Line, hl: list | None = None) -> list[tuple[Label, bool]]:
+    """줄 안의 모든 원문자 (Label, 줄 첫 글자인지). 간격과 상관없이 — 배치로 보기를 고를 때 쓴다."""
+    out = []
+    first = True
+    for ch in line.chars:
+        t = ch["text"]
+        if t in SPACES:
+            continue
+        if t in FILLED or t in PLAIN:
+            bbox = (ch["x0"], ch["top"], ch["x1"], ch["bottom"])
+            out.append((Label(FILLED.get(t) or PLAIN[t], t in FILLED, line.page, bbox, ch["size"],
+                              highlight=any(_overlaps(bbox, h) for h in (hl or []))), first))
+        first = False
+    return out
+
+
+def _labels_by_layout(q: "Question", hl: dict, n: int = 4) -> list[Label] | None:
+    """보기 번호 순서가 어긋난 문항에서, 보기 배치 모양으로 1..n을 다시 고른다(건설안전 기출 ADR 016).
+
+    보기 안 원문자 참조("① ① 1 ② 1❷ ① 1 ② 6")나 앞 글에 붙은 번호("공구② 낙하") 때문에 간격 규칙이 틀리는 경우.
+    허용하는 배치: 한 줄에 하나씩(4줄, 같은 x) · 2×2(①②/③④, ①③·②④ 같은 x) · 한 줄에 넷.
+    ①·③(또는 모든 줄)은 줄 첫 글자여야 한다. 맞는 조합이 정확히 하나일 때만 쓰고, 정답 표시가 든 조합을 우선한다.
+    """
+    rows = []
+    for ln in q.lines:
+        c = _circled_in_line(ln, hl.get(ln.page))
+        if c:
+            rows.append(c)
+    if not rows:
+        return None
+    TOL = 4.0   # 같은 열로 보는 x 차이(pt). 원문자 폭 ≈ 9pt, 보기 안 참조와는 13pt 이상 떨어짐
+    same_x = lambda a, b: abs(a.bbox[0] - b.bbox[0]) <= TOL   # noqa: E731
+    found: list[list[Label]] = []
+    # 한 줄에 하나씩: 연속한 n줄의 첫 글자 원문자가 1..n
+    for i in range(len(rows) - n + 1):
+        firsts = [rows[i + k][0] for k in range(n)]
+        if all(f[1] and f[0].digit == k + 1 for k, f in enumerate(firsts)) and all(same_x(firsts[0][0], f[0]) for f in firsts):
+            found.append([f[0] for f in firsts])
+    # 2×2
+    if n == 4:
+        for i in range(len(rows) - 1):
+            a, b = rows[i], rows[i + 1]
+            if not (a[0][1] and b[0][1] and a[0][0].digit == 1 and b[0][0].digit == 3 and same_x(a[0][0], b[0][0])):
+                continue
+            for two in (l for l, _ in a[1:] if l.digit == 2):
+                for four in (l for l, _ in b[1:] if l.digit == 4):
+                    if same_x(two, four):
+                        found.append([a[0][0], two, b[0][0], four])
+    # 한 줄에 넷: 첫 글자 ① 뒤로 ②③④가 차례로(가장 멀리 떨어진 것 하나씩은 판단 불가 → 후보가 하나일 때만)
+    for r in rows:
+        if r[0][1] and r[0][0].digit == 1:
+            seqs = [[r[0][0]]]
+            for d in range(2, n + 1):
+                seqs = [s + [l] for s in seqs for l, _ in r if l.digit == d and l.bbox[0] > s[-1].bbox[0]]
+            found += seqs
+    if not found:
+        return None
+    marked = [f for f in found if sum(l.marked for l in f) == 1]
+    pick = marked if marked else found
+    uniq = {tuple(id(l) for l in f): f for f in pick}
+    return next(iter(uniq.values())) if len(uniq) == 1 else None
+
+
 def parse_answer_table(pdf) -> dict[int, int]:
     """문서 끝의 정답표(번호 10개 행 + 원문자 10개 행)를 읽는다."""
     res: dict[int, int] = {}
@@ -336,6 +399,11 @@ def _scan(all_lines, col_left, titles, hl, expected: int | None, ocr: bool = Fal
             if expected and q.no == expected and len(q.labels) >= 4 and (not same or ln.top - seg.bottom > 20):
                 stop = True
                 continue
+            # 보기가 다 나온 뒤 단 왼쪽 끝에서 시작하는 글줄(보기 줄은 들여 씀) = 광고문·정답표 — 간격이 좁아도 끊는다
+            if expected and q.no == expected and len(q.labels) >= 4 and at_left and not ocr \
+                    and not _labels_in_line(ln, hl.get(ln.page))[0]:
+                stop = True
+                continue
             if not same:
                 q.segments.append(Segment(ln.page, ln.col, ln.top, ln.bottom))
         q.lines.append(ln)
@@ -412,6 +480,16 @@ def analyze(path: str | Path, expected: int | None = None, ocr_pages=None) -> La
         digits = [l.digit for l in q.labels]
         # 지문 속 원문자가 보기 번호로 잡히는 경우: 마지막 1..n 연속열만 보기로 인정
         n = max(digits) if digits else 0
+        # 순서가 어긋났거나 4지선다인데 보기가 모자라면(앞 글에 붙은 "…)❹" 등) 배치 모양으로 다시 고른다
+        if ((digits[-n:] != list(range(1, n + 1)) if n else True) or n < 4) and ocr_pages is None \
+                and (alt := _labels_by_layout(q, hl)) is not None:
+            # 간격 규칙으로 고른 보기 번호가 어긋남 → 배치 모양으로 다시 고름. 고르지 않은 채운 원문자는 지문 속 표시
+            q.stem_filled = [l for row in q.lines for l, _ in _circled_in_line(row, hl.get(row.page))
+                             if l.filled and not any(l.bbox == c.bbox and l.page == c.page for c in alt)]
+            q.labels = alt
+            digits = [l.digit for l in alt]
+            n = len(alt)
+            q.warnings.append("info:보기 번호를 배치로 고름")
         if digits[-n:] != list(range(1, n + 1)) if n else True:
             q.warnings.append(f"보기 번호 순서 이상: {digits}")
         else:

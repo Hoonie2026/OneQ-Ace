@@ -18,7 +18,7 @@ export interface PackManifest {
   packVersion: number;
   cert: { code: string; name: string; grade: string };
   exam: { year: number; round: number; roundLabel?: string; date: string };
-  subjects: { no: number; name: string; count: number; isLaw: boolean }[];
+  subjects: { no: number; name: string; count: number; examCount?: number; isLaw: boolean }[];
   passRule: { subjectMin: number; avgMin: number };
   questionCount: number;
   source: { type: 'public-pbt' | 'recalled' | 'other'; origin?: string; note?: string };

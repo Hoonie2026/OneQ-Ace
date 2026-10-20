@@ -51,7 +51,8 @@ export async function loadEngine(certCode: string, d: OneQDB = defaultDb): Promi
     text: q.text ?? '',
     clusterId: q.clusterId ?? null,
   }));
-  const bank = buildBank(questions, latest.manifest.subjects.map((s) => ({ name: s.name, count: s.count })));
+  // 모의고사·예상 점수는 실제 시험의 과목 문항 수로 — 옛 기준 두 과목을 합친 팩은 examCount가 따로 있다(ADR 016)
+  const bank = buildBank(questions, latest.manifest.subjects.map((s) => ({ name: s.name, count: s.examCount ?? s.count })));
   const sig = packs.map((p) => `${p.packId}:${p.manifest.packVersion}`).sort().join('|') + `#${bank.items.length}`;
   Object.assign(bank, await conceptsFor(certCode, sig, bank, questions, d));
   // 모의고사 풀이는 학습 엔진(기억·점수·추천)에 넣지 않는다 — 모의고사는 모의고사 이력에서만(실기기 v0.5.0, ADR 011)

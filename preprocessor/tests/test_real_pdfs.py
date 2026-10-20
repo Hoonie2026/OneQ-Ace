@@ -16,6 +16,10 @@ from oneq_prep.validate import validate_zip  # noqa: E402
 
 CIVIL = ROOT / "source_pdf" / "civil_경향문제" / "토목기사_2024_3회_경향문제(한솔).pdf"
 SURVEY = ROOT / "source_pdf" / "survey_기출_2011_2022" / "측량및지형공간정보기사20190303(교사용).pdf"
+SAFETY_DIR = ROOT / "source_pdf" / "safety_기출_2003_2022"
+SAFETY_GLUED = SAFETY_DIR / "건설안전기사20070513(교사용).pdf"      # 20번 "공구② 낙하" — 보기 번호가 앞 글에 붙음
+SAFETY_REF = SAFETY_DIR / "건설안전기사20040905(교사용).pdf"        # 102번 "① ① 1 ② 1❷ ① 1 ② 6" — 보기 안 원문자 참조
+SAFETY_TAIL = SAFETY_DIR / "건설안전기사20120915(교사용).pdf"       # 120번 바로 아래(15pt) comcbt 안내문
 
 
 @pytest.mark.skipif(not CIVIL.exists(), reason="토목 경향문제 PDF 없음")
@@ -65,3 +69,48 @@ def test_review_file_answers_and_exclude(tmp_path):
     assert qs[9]["acceptAlso"] == [other(base[9])]
     assert m["reviewedAt"] is not None
     assert validate_zip(z) == []
+
+
+@pytest.mark.skipif(not SAFETY_GLUED.exists(), reason="건설안전 기출 PDF 없음")
+def test_safety_glued_choice_label():
+    """간격 규칙으로는 ②④를 놓침 → 2×2 배치(②④ 같은 x)로 다시 고른다."""
+    lay = analyze(SAFETY_GLUED)
+    q = lay.questions[19]
+    assert [l.digit for l in q.labels] == [1, 2, 3, 4] and q.inline_answer == 3 == lay.answer_table[20]
+    assert "info:보기 번호를 배치로 고름" in q.warnings
+
+
+@pytest.mark.skipif(not SAFETY_REF.exists(), reason="건설안전 기출 PDF 없음")
+def test_safety_circled_refs_inside_choices_stay_stem():
+    lay = analyze(SAFETY_REF)
+    q = lay.questions[101]
+    assert [l.digit for l in q.labels] == [1, 2, 3, 4] and q.inline_answer == 2 == lay.answer_table[102]
+    assert [round(l.bbox[0]) for l in q.labels][1] == round(q.labels[3].bbox[0])   # ❷ = ④ 열
+
+
+@pytest.mark.skipif(not SAFETY_TAIL.exists(), reason="건설안전 기출 PDF 없음")
+def test_safety_merged_pack(tmp_path):
+    """마지막 문항 뒤 안내문을 잘라 내고, 옛 6과목 → 2026 기준 5과목(1과목 40문항, examCount 20)으로 팩을 만든다."""
+    lay = analyze(SAFETY_TAIL)
+    assert len(lay.questions) == 120 and [l.digit for l in lay.questions[-1].labels] == [1, 2, 3, 4]
+    assert len(lay.answer_table) == 120
+    p = prepare(SAFETY_TAIL, S.load("SAFETY"), tmp_path)
+    assert not p.issues
+    z, m = write_pack(p, tmp_path, "test")
+    subj = {s["name"]: s for s in m["subjects"]}
+    assert list(subj) == ["산업재해 예방 및 안전보건교육", "인간공학 및 위험성 평가·관리", "건설재료", "건설시공", "건설공사 안전관리"]
+    assert subj["산업재해 예방 및 안전보건교육"]["count"] == 40 and subj["산업재해 예방 및 안전보건교육"]["examCount"] == 20
+    assert all("examCount" not in s for n, s in subj.items() if n != "산업재해 예방 및 안전보건교육")
+    assert "산업안전관리론 → 산업재해 예방 및 안전보건교육" in m["standard"]["renamed"]
+    assert m["questionCount"] == 120 and validate_zip(z, deep=True) == []
+
+
+@pytest.mark.parametrize("date,no", [("20161001", 66), ("20160306", 104), ("20100509", 62)])
+def test_safety_short_or_shifted_choice_labels(date, no):
+    """보기 ④가 앞 글자 ")"에 붙어 3개만 찾던 문항, ②·④ 열이 2pt 넘게 어긋난 문항도 4개를 찾고 정답표와 맞는다."""
+    pdf = SAFETY_DIR / f"건설안전기사{date}(교사용).pdf"
+    if not pdf.exists():
+        pytest.skip("건설안전 기출 PDF 없음")
+    lay = analyze(pdf)
+    q = lay.questions[no - 1]
+    assert [l.digit for l in q.labels] == [1, 2, 3, 4] and q.inline_answer == lay.answer_table[no]

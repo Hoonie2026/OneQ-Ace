@@ -1,9 +1,9 @@
 # oneq-prep (기출 PDF 전처리기)
 
 기출 PDF를 원큐합격 문제팩(`.zip`, 포맷 `oqp/1`)으로 바꾼다. 포맷은 `shared/pack-schema.json`, 결정 이유는
-`docs/ADR/001-pack-format-oqp1.md`, `005-subject-standard-in-preprocessor.md`, `012-preprocessor-mvp.md`.
+`docs/ADR/001-pack-format-oqp1.md`, `005-subject-standard-in-preprocessor.md`, `012-preprocessor-mvp.md`, `016-safety-2026-merged-subjects.md`.
 
-## 현재 상태 — 2단계 MVP (명령줄 + HTML 검수 보고서)
+## 현재 상태 — 2단계 MVP v0.2.1 (명령줄 + HTML 검수 보고서)
 
 ```
 pip install -r preprocessor/requirements.txt
@@ -11,6 +11,9 @@ cd preprocessor
 
 # 팩 만들기 + 검수 보고서 (여러 PDF를 한 번에 넣으면 같은 해 시행일 순서로 회차를 정함)
 python -m oneq_prep ../source_pdf/survey_기출_2011_2022/*.pdf ../packs --cert SURVEY --prepared-by 이름 --origin "출처"
+
+# 건설안전기사 59회차(옛 6과목 → 2026 기준 5과목으로 합침, ADR 016)
+python -m oneq_prep ../source_pdf/safety_기출_2003_2022/*.pdf ../packs --cert SAFETY --prepared-by 이름 --origin "comcbt.com"
 
 # 시행일이 파일명에 없는 PDF(예: 토목기사_2024_3회_경향문제.pdf)
 python -m oneq_prep ../source_pdf/civil_경향문제/*.pdf ../packs --cert CIVIL --prepared-by 이름 --source-type other --date 2024-07-05
@@ -37,7 +40,7 @@ Windows PowerShell은 `*.pdf`를 풀어 주지 않으므로 `(Get-ChildItem ..\s
 
 | 형식 | 정답 출처 | 정답 표시 제거 | 상태 |
 |---|---|---|---|
-| comcbt 교사용(채운 원문자 ❶~❹ + 문서 끝 정답표) | 보기 표시 ↔ 정답표 교차 검증 | 같은 페이지 일반 원문자 픽셀로 교체 | 측량 34회차 검증 |
+| comcbt 교사용(채운 원문자 ❶~❹ + 문서 끝 정답표) | 보기 표시 ↔ 정답표 교차 검증 | 같은 페이지 일반 원문자 픽셀로 교체 | 측량 34회차 · 건설안전 59회차 검증 |
 | 형광펜 표시형(노란 사각형, 과목마다 번호 1부터) | 형광 표시 | PDF 객체 단계에서 노란 사각형 삭제 | 토목 2024-3 경향문제 검증 |
 | 스캔본(텍스트층 없음) | 진하게 칠한 보기 번호 또는 검수 파일 | 지우고 글꼴로 원문자 다시 그림 | **시험용 모의 스캔만** — 실제 스캔본으로 보정 필요 |
 
@@ -52,6 +55,8 @@ PATH에 없으면 환경변수 `ONEQ_TESSERACT=C:\Program Files\Tesseract-OCR\te
   "subjects": [ { "name": "응용역학", "count": 20 }, ... ],      // 현행 과목(순서 = 팩 과목 번호)
   "aliases":  { "옛 과목명": "표준 과목명" },
   "excluded": [ "건설재료" ],                                     // 현행에 없는 과목 → 팩에서 뺌(manifest.excluded)
+                                                                  // 옛 두 과목을 같은 표준 이름에 별칭으로 걸면 한 과목으로 합쳐짐 →
+                                                                  // 팩 과목에 examCount(실제 시험 문항 수)가 붙음(ADR 016)
   "legacy":   { "before": "2012-01-01", "action": "reassign" }   // 이 날짜 전 회차는 문항별 과목 재배정
 }
 ```
@@ -60,13 +65,14 @@ PATH에 없으면 환경변수 `ONEQ_TESSERACT=C:\Program Files\Tesseract-OCR\te
 |---|---|
 | `SURVEY` 측량및지형공간정보기사 | 확정(2012~ 5과목, 2011은 재배정) |
 | `CIVIL` 토목기사 | 6과목(한솔 경향문제 제목줄 기준) — 큐넷 출제기준 표기와 다르면 aliases로 |
+| `SAFETY` 건설안전기사 | 확정(2026 기준 5과목 100문항). 2025년까지의 6과목 기출은 산업안전관리론·산업심리 및 교육을 한 과목(회차당 40문항, examCount 20)으로 합침 |
 | `RAILCIVIL` 철도토목기사 | **초안**(`draft`) — 현행 과목명·문항 수 확인 후 채우기 |
 
 ## 모듈
 
 | 모듈 | 하는 일 |
 |---|---|
-| `extract.py` | 단 구분·페이지별 본문 영역, 문항 경계(연속 번호 / 과목마다 1부터), 과목 머리말·제목줄, 보기 번호, 정답 표시(채운 원문자·형광), 정답표, 되풀이 안내문 제거 |
+| `extract.py` | 단 구분·페이지별 본문 영역, 문항 경계(연속 번호 / 과목마다 1부터, 마지막 문항 뒤 안내문 끊기), 과목 머리말·제목줄, 보기 번호(어긋나면 배치 모양으로 다시 고름), 정답 표시(채운 원문자·형광), 정답표, 되풀이 안내문 제거 |
 | `ocr.py` | 스캔본 판정, Tesseract로 글자 좌표 생성(보기 번호 자리표) |
 | `render.py` | 288dpi 렌더링, 정답 표시 제거(원문자 교체·형광 삭제·스캔 칠한 번호)·잔존 검사, 문항 크롭, 1080px WebP |
 | `standards.py` | 출제기준 프로필 읽기, 과목명 정규화·별칭·제외 판정 |

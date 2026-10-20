@@ -22,7 +22,7 @@ const WEBP_1PX = Uint8Array.from(
   (c) => c.charCodeAt(0),
 );
 
-export async function makePack(opts: { code?: string; year?: number; round?: number; version?: number; questions: FakeQ[] }): Promise<Uint8Array> {
+export async function makePack(opts: { code?: string; year?: number; round?: number; version?: number; questions: FakeQ[]; examCount?: Record<number, number> }): Promise<Uint8Array> {
   const code = opts.code ?? 'TEST';
   const year = opts.year ?? 2022;
   const round = opts.round ?? 1;
@@ -62,7 +62,7 @@ export async function makePack(opts: { code?: string; year?: number; round?: num
     packVersion: opts.version ?? 1,
     cert: { code, name: '시험용 종목', grade: '기사' },
     exam: { year, round, date: `${year}-03-05` },
-    subjects: subjectsUsed.map((no) => ({ no, name: `과목${no}`, count: counters.get(no)!, isLaw: false })),
+    subjects: subjectsUsed.map((no) => ({ no, name: `과목${no}`, count: counters.get(no)!, ...(opts.examCount?.[no] ? { examCount: opts.examCount[no] } : {}), isLaw: false })),
     passRule: { subjectMin: 40, avgMin: 60 },
     questionCount: questions.length,
     source: { type: 'other', note: 'test' },

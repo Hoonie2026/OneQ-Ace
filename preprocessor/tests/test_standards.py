@@ -33,3 +33,15 @@ def test_survey_profile_legacy():
     p = S.load("SURVEY")
     assert [s["name"] for s in p.subjects][-1] == "측량학"
     assert p.is_legacy("2011-03-20")
+
+
+def test_safety_profile_merges_old_subjects():
+    """건설안전기사 2026 기준(ADR 016): 2025년까지의 6과목을 과목명으로 5과목에 맞춘다 — 두 과목이 한 과목으로 합쳐짐."""
+    p = S.load("SAFETY")
+    assert not p.draft and len(p.subjects) == 5 and sum(s["count"] for s in p.subjects) == 100
+    assert p.resolve("산업안전관리론") == ("std", 1, "산업재해 예방 및 안전보건교육")
+    assert p.resolve("산업심리 및 교육") == ("std", 1, "산업재해 예방 및 안전보건교육")
+    assert p.resolve("인간공학 및 시스템안전공학")[1] == 2
+    assert p.resolve("건설재료학") == ("std", 3, "건설재료")
+    assert p.resolve("건설시공학") == ("std", 4, "건설시공")
+    assert p.resolve("건설안전기술") == ("std", 5, "건설공사 안전관리")

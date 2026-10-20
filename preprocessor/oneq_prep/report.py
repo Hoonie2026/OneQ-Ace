@@ -86,6 +86,11 @@ document.getElementById('save').addEventListener('click', () => {
 CIRCLED = "①②③④⑤"
 
 
+def _circ(k: int) -> str:
+    """보기 번호 표시 — 보기 수를 잘못 읽어 6개 이상이 되어도 보고서는 만든다(검수로 고치도록)."""
+    return CIRCLED[k - 1] if 1 <= k <= len(CIRCLED) else f"({k})"
+
+
 def _e(s) -> str:
     return html.escape(str(s), quote=True)
 
@@ -127,7 +132,7 @@ def write_detail(p, out: Path) -> Path:
             tags.append("re")
         if sug and sug.confidence < 0.6:
             tags.append("low")
-        opts_a = "".join(f'<option value="{k}"{" selected" if it.answer == k else ""}>{CIRCLED[k-1]}</option>'
+        opts_a = "".join(f'<option value="{k}"{" selected" if it.answer == k else ""}>{_circ(k)}</option>'
                          for k in range(1, it.choice_count + 1))
         if it.answer is None:
             opts_a = '<option value="" selected>?</option>' + opts_a
@@ -145,7 +150,7 @@ def write_detail(p, out: Path) -> Path:
         cards.append(
             f'<div class="card {" ".join(tags)}" data-no="{it.no}" data-tags="{" ".join(tags)}">'
             f'<div class="hd"><span><b>{it.no}번</b> <span class="mut">{_e(it.pdf_subject)}{local}</span></span>'
-            f'<span class="ans">정답 {CIRCLED[it.answer-1] if it.answer else "?"} <span class="mut" style="font-weight:400;font-size:12px">{_src_label(it)}</span></span></div>'
+            f'<span class="ans">정답 {_circ(it.answer) if it.answer else "?"} <span class="mut" style="font-weight:400;font-size:12px">{_src_label(it)}</span></span></div>'
             f'<img loading="lazy" src="{p.pack_id}/{it.no:03d}.webp" width="{it.img_size[0]}" height="{it.img_size[1]}" alt="{it.no}번">'
             f'{warn}{sug_html}<div>{flags}</div>'
             f'<div class="ctl"><label>정답 <select class="a">{opts_a}</select></label>'

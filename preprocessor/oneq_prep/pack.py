@@ -262,6 +262,9 @@ def prepare(pdf_path: Path, profile: S.Profile, out_dir: Path, all_dates: list[s
         else:
             warn.append("정답을 찾지 못함")
 
+        n_choice = 4 if layout.ocr else (len(q.labels) or 4)
+        if ans is not None and not 1 <= ans <= n_choice:
+            warn.append(f"정답 {ans}번이 보기 수({n_choice}개)를 벗어남 — 보기 번호를 못 찾았을 수 있음")
         img = crop_question(pages, layout, regions[q.no])
         buf = io.BytesIO()
         img.save(buf, "WEBP", quality=image_quality, method=6)
@@ -277,7 +280,7 @@ def prepare(pdf_path: Path, profile: S.Profile, out_dir: Path, all_dates: list[s
         if layout.ocr:
             flags += ["ocr", "needs-review"]
         it = Item(q.no, q.local_no, raw, std, ans, src, check, accept.get(q.no, []),
-                  4 if layout.ocr else (len(q.labels) or 4),
+                  n_choice,
                   buf.getvalue(), (img.width, img.height), q.text(), flags, warn)
         if std is None:
             it.excluded = f"현행 출제기준에 없는 과목({raw})"
@@ -355,7 +358,14 @@ def write_pack(p: Prepared, out_dir: Path, prepared_by: str, source_type: str = 
         questions.append(q)
 
     law = {s["name"] for s in prof.subjects if s.get("isLaw")}
-    subjects = [{"no": sno[n], "name": n, "count": counter[sno[n]], "isLaw": n in law} for n in used]
+    exam_count = {s["name"]: s["count"] for s in prof.subjects}
+    subjects = []
+    for n in used:
+        s = {"no": sno[n], "name": n, "count": counter[sno[n]], "isLaw": n in law}
+        # 실제 시험 문항 수와 다르면(옛 기준 과목 합침·제외 문항) 함께 적는다 — 같으면 쓰지 않아 이전 팩과 같은 모양(ADR 016)
+        if n in exam_count and exam_count[n] != s["count"]:
+            s["examCount"] = exam_count[n]
+        subjects.append(s)
     excluded: dict[tuple[str, str], list[int]] = {}
     for it in p.items:
         if it.excluded:
