@@ -49,12 +49,27 @@ export interface DeviceEnv {
   kind: 'phone' | 'tablet' | 'pc';
   browser: string;
   standalone: boolean;
+  /** 앱 안 브라우저(v0.10.1): 카카오톡·네이버 앱 등에서 링크를 누르면 그 앱 안에서 열린다 — 설치가 안 되고 기록도 따로 */
+  inApp: 'kakao' | 'naver' | 'other' | null;
 }
 
-export function deviceEnv(ua = navigator.userAgent, touch = navigator.maxTouchPoints ?? 0, standalone = false): DeviceEnv {
+/** 홈 화면·설치 앱으로 열렸는지(db.isStandalone과 같음 — util은 db를 가져오지 않음) */
+function standaloneNow(): boolean {
+  if (typeof window === 'undefined') return false;
+  return (navigator as Navigator & { standalone?: boolean }).standalone === true || window.matchMedia?.('(display-mode: standalone)').matches === true;
+}
+
+export function deviceEnv(ua = navigator.userAgent, touch = navigator.maxTouchPoints ?? 0, standalone = standaloneNow()): DeviceEnv {
   const ipadDesktop = /Macintosh/.test(ua) && touch > 1;
   const os: DeviceEnv['os'] = /Android/.test(ua) ? 'android' : /iPhone|iPad|iPod/.test(ua) || ipadDesktop ? 'ios' : /Windows/.test(ua) ? 'windows' : /Mac OS X/.test(ua) ? 'mac' : 'other';
   const kind: DeviceEnv['kind'] = /iPad/.test(ua) || ipadDesktop || (os === 'android' && !/Mobile/.test(ua)) ? 'tablet' : os === 'android' || os === 'ios' ? 'phone' : 'pc';
+  const inApp: DeviceEnv['inApp'] = /KAKAOTALK/i.test(ua)
+    ? 'kakao'
+    : /NAVER\(inapp|NAVER\//.test(ua)
+      ? 'naver'
+      : /Instagram|FBAN|FBAV|Line\/|DaumApps|everytimeApp|BAND\/|; wv\)/.test(ua) || (os === 'ios' && !/Safari\//.test(ua) && !standalone)
+        ? 'other'
+        : null;
   const browser = /SamsungBrowser/.test(ua)
     ? '삼성 인터넷'
     : /Edg(A|iOS)?\//.test(ua)
@@ -68,32 +83,38 @@ export function deviceEnv(ua = navigator.userAgent, touch = navigator.maxTouchPo
             : /Safari/.test(ua)
               ? 'Safari'
               : '브라우저';
-  return { os, kind, browser, standalone };
+  return { os, kind, browser, standalone, inApp };
+}
+
+/** 이 휴대폰 · 이 태블릿 · 이 아이폰 · 이 아이패드 · 이 PC */
+export function deviceNoun(env: DeviceEnv): string {
+  return env.kind === 'pc' ? '이 PC' : env.os === 'ios' ? (env.kind === 'tablet' ? '이 아이패드' : '이 아이폰') : env.kind === 'tablet' ? '이 태블릿' : '이 휴대폰';
 }
 
 /**
  * 학습 기록·문제팩이 어디에 저장되고 언제 지워지는지(v0.9.2 — 실사용 의견: 영구 저장이 아이폰에서는? 사용자가 저장 위치를 알아야).
+ * v0.10.1(실기기 Y1·Y2): "사이트 데이터·전용 저장소" 같은 말은 처음 쓰는 사람이 모른다 → "○○ 안에 저장"처럼 짧게.
  * 근거: Android Chrome 설치 앱은 브라우저 사이트 데이터를 같이 씀. iOS 홈 화면 앱은 Safari와 저장소가 따로이고(WebKit 버그 181849)
  * Safari의 7일 미사용 삭제 규칙을 받지 않음(WebKit 해명). "인터넷 사용 기록 삭제"는 영구 저장이어도 지운다
  */
 export function storagePlace(env: DeviceEnv): { where: string; risks: string[]; warn?: string } {
-  const dev = env.kind === 'pc' ? '이 PC' : env.os === 'ios' ? (env.kind === 'tablet' ? '이 아이패드' : '이 아이폰') : env.kind === 'tablet' ? '이 태블릿' : '이 휴대폰';
-  const reset = env.kind === 'pc' ? 'PC 교체·운영체제 재설치' : '기기 초기화·교체';
+  const dev = deviceNoun(env);
+  const reset = env.kind === 'pc' ? 'PC를 바꾸거나 윈도우를 다시 설치할 때' : '휴대폰을 초기화하거나 바꿀 때';
   if (env.os === 'ios' && env.standalone)
     return {
-      where: `${dev}의 「원큐합격」 홈 화면 앱 전용 저장소(Safari와 따로 저장)`,
-      risks: ['홈 화면에서 앱 아이콘을 삭제할 때(앱 데이터도 함께 지워짐)', 'Safari 설정에서 방문 기록·웹 사이트 데이터를 지울 때(함께 지워질 수 있음)', reset],
+      where: `${dev}의 원큐합격 앱 안(Safari와 별도)`,
+      risks: ['홈 화면에서 원큐합격 아이콘을 삭제할 때', 'Safari의 방문 기록·웹 사이트 데이터를 지울 때(함께 지워질 수 있음)', reset],
     };
   if (env.os === 'ios')
     return {
-      where: `${dev} ${env.browser}의 웹 사이트 데이터`,
-      risks: [`${env.browser}에서 방문 기록·웹 사이트 데이터를 지울 때`, '7일 넘게 이 탭에서 쓰지 않을 때(Safari가 지울 수 있음)', reset],
-      warn: '지금 브라우저 탭에서 열었습니다. 아이폰·아이패드는 홈 화면 앱과 브라우저 탭의 기록이 따로 저장됩니다. 공유 → 홈 화면에 추가한 앱에서 학습하세요.',
+      where: `${dev}의 ${env.browser} 안(홈 화면 앱과 별도)`,
+      risks: [`${env.browser}의 방문 기록·웹 사이트 데이터를 지울 때`, '7일 넘게 이 화면에서 쓰지 않을 때', reset],
+      warn: '지금 브라우저 화면에서 열었습니다. 아이폰·아이패드는 홈 화면에 추가한 앱과 기록이 따로 저장됩니다. 홈 화면의 원큐합격 아이콘으로 학습하세요.',
     };
-  const where = env.kind === 'pc' ? `${dev} ${env.browser}(지금 로그인한 사용자·프로필)의 사이트 데이터` : `${dev} ${env.browser} 안의 이 앱 사이트 데이터(홈 화면 앱도 같은 곳)`;
+  const where = env.kind === 'pc' ? `${dev}의 ${env.browser} 안(지금 쓰는 사용자 프로필)` : `${dev}의 ${env.browser} 앱 안`;
   const risks = [`${env.browser}에서 인터넷 사용 기록 삭제 → 「쿠키 및 사이트 데이터」를 지울 때(영구 저장이어도 지워짐)`];
   if (env.kind === 'pc') risks.push('다른 브라우저·다른 프로필·시크릿 창에서는 보이지 않음');
-  else risks.push('앱 아이콘만 지우면 기록은 브라우저에 남지만, 브라우저 앱 데이터를 지우면 함께 지워짐');
+  else risks.push(`${env.browser} 앱의 데이터를 지울 때(원큐합격 아이콘만 지우면 그대로)`);
   risks.push(reset);
   return { where, risks };
 }

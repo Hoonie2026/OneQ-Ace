@@ -32,14 +32,21 @@ describe('저장 위치 안내(v0.9.2)', () => {
     expect(deviceEnv(UA.iphone, 5, true)).toMatchObject({ os: 'ios', kind: 'phone', browser: 'Safari', standalone: true });
     expect(deviceEnv(UA.ipadDesktop, 5)).toMatchObject({ os: 'ios', kind: 'tablet' });
     expect(deviceEnv(UA.ipadDesktop, 0)).toMatchObject({ os: 'mac', kind: 'pc' });
-    expect(deviceEnv(UA.edge, 0)).toMatchObject({ os: 'windows', kind: 'pc', browser: 'Edge' });
+    expect(deviceEnv(UA.edge, 0)).toMatchObject({ os: 'windows', kind: 'pc', browser: 'Edge', inApp: null });
+    // 앱 안 브라우저(v0.10.1): 카카오톡·네이버 앱·안드로이드 웹뷰·아이폰의 Safari 표시 없는 화면
+    expect(deviceEnv(UA.galaxy.replace('Mobile Safari/537.36', 'Mobile Safari/537.36 KAKAOTALK 25.8.0'), 5).inApp).toBe('kakao');
+    expect(deviceEnv(UA.iphone.replace('Safari/604.1', 'NAVER(inapp; search; 2000; 12.9.1)'), 5).inApp).toBe('naver');
+    expect(deviceEnv(UA.galaxy.replace('(Linux; Android 14; SM-S918N)', '(Linux; Android 14; SM-S918N; wv)'), 5).inApp).toBe('other');
+    expect(deviceEnv(UA.iphone.replace(' Safari/604.1', ''), 5, true).inApp).toBeNull(); // 홈 화면 앱은 Safari 표시가 없어도 앱 안 브라우저가 아님
+    expect(deviceEnv(UA.iphone.replace(' Safari/604.1', ''), 5, false).inApp).toBe('other');
   });
 
   it('아이폰: 홈 화면 앱은 Safari와 따로, 브라우저 탭이면 경고', () => {
     const app = storagePlace(deviceEnv(UA.iphone, 5, true));
-    expect(app.where).toContain('홈 화면 앱 전용');
+    expect(app.where).toBe('이 아이폰의 원큐합격 앱 안(Safari와 별도)');
     expect(app.warn).toBeUndefined();
     expect(app.risks.join(' ')).toContain('아이콘을 삭제');
+    expect(storagePlace(deviceEnv(UA.galaxy, 5)).where).toBe('이 휴대폰의 Chrome 앱 안');
     const tab = storagePlace(deviceEnv(UA.iphone, 5, false));
     expect(tab.warn).toContain('따로 저장');
     expect(tab.risks.join(' ')).toContain('7일');
@@ -48,7 +55,7 @@ describe('저장 위치 안내(v0.9.2)', () => {
   it('안드로이드·PC: 사이트 데이터 삭제는 영구 저장이어도 지움', () => {
     expect(storagePlace(deviceEnv(UA.galaxy, 5)).risks[0]).toContain('영구 저장이어도');
     const pc = storagePlace(deviceEnv(UA.edge, 0));
-    expect(pc.where).toContain('이 PC Edge');
+    expect(pc.where).toContain('이 PC의 Edge 안');
     expect(pc.risks.join(' ')).toContain('다른 브라우저');
   });
 });
@@ -89,5 +96,15 @@ describe('계산 문제 판정(v0.10)', () => {
     // 전처리기·검수자가 확정한 표시가 우선
     expect(isCalcQuestion({ text: '18. 축척계수는?\n① 0.9996② 0.9999③ 1.0000④ 1.1001', flags: ['no-calc'] })).toBe(false);
     expect(isCalcQuestion({ text: '설명으로 옳은 것은?', flags: ['calc'] })).toBe(true);
+  });
+});
+
+describe('설치 안내(v0.10.1)', () => {
+  it('앱 안 브라우저에서 바깥 브라우저로 여는 주소', async () => {
+    const { externalOpenUrl } = await import('./install');
+    const url = 'https://hoonie2026.github.io/OneQ-Ace/';
+    expect(externalOpenUrl('kakao', 'ios', url)).toBe('kakaotalk://web/openExternal?url=https%3A%2F%2Fhoonie2026.github.io%2FOneQ-Ace%2F');
+    expect(externalOpenUrl('naver', 'android', url)).toBe('intent://hoonie2026.github.io/OneQ-Ace/#Intent;scheme=https;package=com.android.chrome;end');
+    expect(externalOpenUrl('naver', 'ios', url)).toBeNull();
   });
 });

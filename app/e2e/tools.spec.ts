@@ -44,12 +44,25 @@ for (const [name, w, h] of [['phone', 0, 0], ['pc', 1366, 768]] as const) {
     for (let i = 0; i < 20; i++) await page.mouse.move(b.x + 30 + i * 8, b.y + 40 + Math.sin(i / 3) * 20);
     await page.mouse.up();
     await expect(c).toHaveAttribute('data-strokes', '1');
+    // v0.10.1(Y5): 같은 문항에서는 계산기 ↔ 메모를 오가도, 닫았다 열어도 그대로
+    await page.getByTestId('tool-calc').click();
+    await expect(page.getByTestId('calc-out')).toHaveText('51°20′15″');
+    await expect(page.getByTestId('calc-expr')).toHaveText('50°20′15″+1');
+    await page.getByTestId('tool-memo').click();
+    await expect(c).toHaveAttribute('data-strokes', '1');
+    await page.getByTestId('tool-memo').click(); // 닫기
+    await expect(page.getByTestId('tool-panel')).toBeHidden();
+    await page.getByTestId('tool-memo').click(); // 다시 열기
+    await expect(c).toHaveAttribute('data-strokes', '1');
     // 키보드(PC): 2 → 답, Enter → 다음 문항에서 메모가 지워짐
     await page.locator('body').click({ position: { x: 5, y: 5 } }).catch(() => undefined);
     await page.keyboard.press('2');
     await expect(page.getByTestId('feedback')).toBeVisible();
     await page.keyboard.press('Enter');
     await expect(page.getByTestId('feedback')).toBeHidden();
+    // 다음 문항이면 메모는 새 장
+    if (!(await page.getByTestId('tool-panel').isVisible()) || !(await page.getByTestId('scratchpad').isVisible())) await page.getByTestId('tool-memo').click();
+    await expect(page.getByTestId('pad-canvas')).toHaveAttribute('data-strokes', '0');
     expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(0);
   });
 }

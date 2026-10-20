@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { loadCoach, mockHistory, startMock, startSubject, startToday, type Coach } from '../coach';
 import { RecommendView } from './RecommendView';
-import { db, describeError, getSetting, isStandalone, setSetting, SETTING, type PackRow } from '../db';
+import { db, describeError, getSetting, setSetting, SETTING, type PackRow } from '../db';
 import type { Target } from '../study';
 import { CoachCard } from './CoachCard';
 import { MockPanel } from './MockPanel';
@@ -10,7 +10,8 @@ import { SubjectList } from './SubjectList';
 import { ForecastView } from './ForecastView';
 import { Principles } from './Principles';
 import { computeInsight, type Insight } from '../insight';
-import { deviceEnv, resetPageZoom } from '../util';
+import { resetPageZoom } from '../util';
+import { InstallGuide } from './InstallGuide';
 import { BackButton, BrandLogo, Icon } from './Icon';
 
 /** 홈 안의 보기: 홈 / 과목 골라서 / 모의고사(ADR 010 — 홈에는 오늘 학습만, 나머지는 한 번 더 들어가서) */
@@ -126,6 +127,12 @@ export function Home(props: {
   };
 
   const inSub = view !== 'home' && !!coach && !!cert && !!packs && packs.length > 0;
+  const appUrl = new URL(import.meta.env.BASE_URL, window.location.origin).href;
+  const copyUrl = () =>
+    navigator.clipboard
+      .writeText(appUrl)
+      .then(() => props.toast('주소를 복사했습니다. Safari 주소창에 붙여넣으세요'))
+      .catch(() => props.toast(appUrl));
 
   return (
     <div className="app">
@@ -158,20 +165,8 @@ export function Home(props: {
             </label>
           )}
 
-          {!isStandalone() && (
-            <section className="card guide">
-              <h2>홈 화면에 설치해서 쓰세요</h2>
-              <p className="hint">
-                설치한 앱에서만 기록이 오래 보존됩니다. Android Chrome: ⋮ → <b>앱 설치</b> / iPhone Safari: 공유 → <b>홈 화면에 추가</b>
-                {deviceEnv().os === 'ios' && (
-                  <>
-                    <br />
-                    아이폰·아이패드는 브라우저 탭과 홈 화면 앱의 기록이 <b>따로 저장</b>됩니다. 설치한 앱에서 문제팩을 가져와 학습하세요.
-                  </>
-                )}
-              </p>
-            </section>
-          )}
+          {/* v0.10.1: 기기별 설치 안내(앱 안 브라우저 → 바깥 브라우저, 안드로이드·PC [앱 설치] 단추, 아이폰 홈 화면에 추가) */}
+          <InstallGuide compact url={appUrl} onCopy={copyUrl} />
         </>
       )}
 
@@ -179,7 +174,7 @@ export function Home(props: {
         <section className="card empty">
           <h2>문제팩을 가져오세요</h2>
           <p>
-            사내 게시판에서 받은 <b>oneq-종목-연도-회차.zip</b> 파일을 고릅니다. 여러 회차를 한 번에 골라도 됩니다(5~10년치를 권장).
+            받은 문제팩 파일(<b>oneq-종목-연도-회차.zip</b>)을 고릅니다 — 다운로드 폴더·구글 드라이브·PC 등 보관한 곳에서. 여러 회차를 한 번에 골라도 됩니다(5~10년치를 권장).
           </p>
           <PackPicker busy={props.busy} onFiles={props.onImport} primary />
         </section>

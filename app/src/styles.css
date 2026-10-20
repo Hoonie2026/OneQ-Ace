@@ -3124,3 +3124,67 @@ details.why[open] summary::after {
     max-width: 760px;
   }
 }
+
+/* ════ v0.10.1 — 실기기 Y1·Y5·Y6 ════ */
+.tool-panel[hidden],
+.tool-panel [hidden] {
+  display: none !important;
+}
+.tool-panel .tool-memo {
+  height: 100%;
+}
+/* 접기 머리(왜 이렇게·다른 기기와 이어서·설치 방법): 다크 모드에서 흐릿했다 → 연한 파랑 면 + 밝은 글자 */
+details.why summary {
+  background: color-mix(in srgb, var(--primary) 12%, var(--surface));
+  color: var(--primary);
+}
+@media (prefers-color-scheme: dark) {
+  details.why summary {
+    background: color-mix(in srgb, var(--primary) 22%, var(--surface));
+    color: #c9dcff;
+  }
+}
+.safety-facts dd ul ul,
+.sync-steps ul {
+  margin: 4px 0;
+  padding-left: 18px;
+}
+.install-guide h2 {
+  margin-bottom: 6px;
+}
+.install-guide .btn {
+  margin: 8px 0 4px;
+}
+.install-steps {
+  margin: 8px 0 4px;
+  padding-left: 22px;
+  font-size: 15px;
+  line-height: 1.6;
+}
+.install-steps li + li {
+  margin-top: 2px;
+}
+.install-later {
+  display: inline-flex;
+  margin-top: 4px;
+  font-size: 14px;
+  color: var(--muted);
+}
+.install-guide.plain {
+  margin: 10px 0 0;
+  padding: 0;
+  border: 0;
+  box-shadow: none;
+  background: transparent;
+}
+.tool-panel.is-memo {
+  display: flex;
+  flex-direction: column;
+}
+.tool-panel.is-memo .tool-memo {
+  flex: 1;
+  min-height: 0;
+}
+.check-line[data-testid='auto-tools'] input {
+  accent-color: var(--primary);
+}

@@ -468,11 +468,16 @@ export function Solve(props: { target: Target; onExit: () => void; onResult: (pe
             </section>
           )}
 
-          {tool && (
-            <div className={`tool-panel is-${tool}`} data-testid="tool-panel">
-              {tool === 'calc' ? <Calculator /> : <Scratchpad key={qid} />}
+          {/* v0.10.1(실기기 Y5): 계산기 ↔ 메모를 오가도, 닫았다 열어도 같은 문항에서는 그대로 — 둘 다 그려 두고 보이기만 바꾼다.
+              메모는 문항이 바뀌면 새 장(key), 계산기 식·기록은 계속 */}
+          <div className={`tool-panel is-${tool ?? 'none'}`} hidden={!tool} data-testid="tool-panel">
+            <div hidden={tool !== 'calc'}>
+              <Calculator />
             </div>
-          )}
+            <div className="tool-memo" hidden={tool !== 'memo'}>
+              <Scratchpad key={qid} />
+            </div>
+          </div>
           <footer className="solve-bottom">
             <div className="tool-bar" role="toolbar" aria-label="계산 도구">
               <button type="button" className={`chip-btn${tool === 'calc' ? ' on' : ''}`} onClick={() => pickTool('calc')} aria-pressed={tool === 'calc'} data-testid="tool-calc">

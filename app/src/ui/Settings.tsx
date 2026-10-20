@@ -16,12 +16,13 @@ import {
 } from '../backup';
 import { db, describeError, getSetting, isStandalone, setSetting, SETTING, STAGE0_DB_NAME } from '../db';
 import { deletePacks, wipeAll, wipeCertRecords, wipeRecords } from '../wipe';
-import { deviceEnv, deviceSummary, formatBytes, readStorageInfo, storagePlace, type StorageInfo } from '../util';
+import { deviceEnv, deviceNoun, deviceSummary, formatBytes, readStorageInfo, storagePlace, type StorageInfo } from '../util';
 import { examLabel } from '../study';
 import { PackPicker } from './PackPicker';
 import { askConfirm, showNotice } from './Dialog';
 import type { PackRow } from '../db';
 import { BackButton, Icon } from './Icon';
+import { InstallGuide } from './InstallGuide';
 
 /** 3분 전 · 2시간 전 · 5일 전 */
 function ago(ts: number): string {
@@ -149,7 +150,9 @@ export function Settings(props: {
     }
   };
 
-  const place = storagePlace(deviceEnv(navigator.userAgent, navigator.maxTouchPoints, isStandalone()));
+  const env = deviceEnv(navigator.userAgent, navigator.maxTouchPoints, isStandalone());
+  const place = storagePlace(env);
+  const downloadsPlace = env.os === 'ios' ? '파일 앱의 「다운로드」 폴더' : env.kind === 'pc' ? 'PC의 「다운로드」 폴더' : `${deviceNoun(env)}의 「다운로드」 폴더`;
   const days = lastBackup ? Math.floor((Date.now() - lastBackup) / 86_400_000) : null;
   // 백업 상태 색: 기록이 없거나 7일·300건 안이면 초록, 그보다 오래면 주황, 기록이 있는데 백업한 적 없으면 빨강
   const backupTone = fp && fp.attempts === 0 ? 'ok' : days === null ? 'bad' : days <= 7 && newSince < 300 ? 'ok' : 'warn';
@@ -182,7 +185,9 @@ export function Settings(props: {
         </ul>
         <dl className="safety-facts">
           <dt>저장 위치</dt>
-          <dd data-testid="storage-where">{place.where} — 학습 기록과 문제팩 모두</dd>
+          <dd data-testid="storage-where">
+            <b>{place.where}</b>에 학습 기록과 문제팩이 저장됩니다.
+          </dd>
           <dt>이럴 때 지워집니다</dt>
           <dd>
             <ul>
@@ -193,17 +198,25 @@ export function Settings(props: {
           </dd>
           <dt>지키는 방법</dt>
           <dd>
-            백업 파일을 주기적으로 기기 밖(드라이브·메일·카카오톡 나에게)에 저장하세요. 문제팩은 백업에 들어가지 않고 사내 게시판에서 다시 받으면 기록이 이어집니다.
-            {!info.persisted && ' 영구 저장은 기기 공간이 부족할 때 브라우저가 자동으로 지우는 것만 막습니다.'}
+            {/* v0.10.1(실기기 Y1): 평소에는 다운로드 폴더면 충분 — 기기 밖으로 옮기는 것은 기기를 바꾸거나 초기화할 때만 */}
+            <ul>
+              <li>
+                <b>일주일에 한 번쯤 [백업 파일 저장]</b> — {downloadsPlace}에 저장되어, 브라우저 기록을 지워도 남습니다(복원으로 되살림).
+              </li>
+              <li>{env.kind === 'pc' ? 'PC를 바꾸거나 윈도우를 다시 설치할 때' : '휴대폰을 바꾸거나 초기화할 때'}만 백업 파일을 PC·구글 드라이브·메일로 옮겨 두세요.</li>
+              <li>문제팩(zip)은 백업에 들어가지 않습니다. 받은 문제팩 파일을 PC·구글 드라이브·{env.kind === 'pc' ? '외장 저장소' : '휴대폰 저장소'} 중 한 곳에 보관해 두면, 다시 가져올 때 기록이 그대로 이어집니다.</li>
+              {!info.persisted && <li>영구 저장은 기기 공간이 부족할 때 브라우저가 자동으로 지우는 것만 막습니다.</li>}
+            </ul>
           </dd>
         </dl>
         <div className="stack">
           <button className="btn btn-primary btn-block" disabled={busy} onClick={() => doExport('download')}>
             백업 파일 저장(다운로드)
           </button>
-          {canShareFiles() && (
+          {/* PC의 공유 창은 앱 목록이 제한적이고 카카오톡은 파일이 붙지 않음 → PC는 저장 후 끌어다 놓기로 안내(v0.10.1, Y7) */}
+          {canShareFiles() && env.kind !== 'pc' && (
             <button className="btn btn-block" disabled={busy} onClick={() => doExport('share')}>
-              공유로 보내기(드라이브·메신저)
+              공유로 보내기(메일·텔레그램·구글 드라이브)
             </button>
           )}
           <label className={`btn btn-block${busy ? ' disabled' : ''}`}>
@@ -251,8 +264,17 @@ export function Settings(props: {
         <details className="why" data-testid="sync-guide">
           <summary>다른 기기(태블릿·PC)와 이어서 공부하기</summary>
           <ol className="sync-steps">
-            <li>다른 기기에도 앱을 설치하고 같은 문제팩을 가져옵니다(사내 게시판).</li>
-            <li>공부를 마친 기기에서 <b>백업 파일 저장</b> 또는 <b>공유로 보내기</b>(카카오톡 나에게·메일·드라이브).</li>
+            <li>다른 기기에도 앱을 설치하고, 공부하던 문제팩(zip)을 가져옵니다 — PC·구글 드라이브·휴대폰 저장소에 보관한 파일.</li>
+            <li>
+              공부를 마친 기기에서 백업 파일을 보냅니다.
+              <ul>
+                <li>휴대폰·태블릿: <b>공유로 보내기</b> → 메일·텔레그램·구글 드라이브</li>
+                <li>
+                  카카오톡: 공유로는 파일이 붙지 않습니다 → <b>백업 파일 저장</b> 후 카카오톡 채팅방의 <b>+ → 파일</b>에서 다운로드 폴더의 백업 파일(oneq-backup-날짜.json)을 보냅니다
+                </li>
+                <li>PC: <b>백업 파일 저장</b> 후 다운로드 폴더의 파일을 메일·텔레그램·카카오톡 PC 창에 끌어다 놓습니다</li>
+              </ul>
+            </li>
             <li>이어서 공부할 기기에서 그 파일로 <b>복원(합치기)</b> — 같은 풀이는 한 번만 들어가고, 학습 계획은 더 최근에 바꾼 것으로 맞춰집니다.</li>
             <li>기기를 바꿀 때마다 같은 방법으로 한 번씩 보내면 두 기기 기록이 같아집니다.</li>
           </ol>
@@ -519,9 +541,12 @@ export function Settings(props: {
       </section>
 
       <section className="card address">
-        <h2>앱 주소</h2>
+        <h2>앱 주소 · 설치 안내</h2>
         <p className="url">{appUrl}</p>
-        <p className="hint">다른 휴대폰에서는 Chrome(iPhone은 Safari) 주소창에 이 주소를 입력하고 설치하세요.</p>
+        <p className="hint">
+          이 주소를 카카오톡·메일·게시판으로 보내면 받은 사람은 링크를 눌러 열고, 첫 화면 안내대로 설치합니다. 권장: 안드로이드는 <b>Chrome</b>, 아이폰·아이패드는 <b>Safari</b>, PC는{' '}
+          <b>Chrome·Edge</b>. 카카오톡·네이버 앱 안에서 열리면 첫 화면이 바깥 브라우저로 여는 단추를 보여 줍니다.
+        </p>
         <div className="test-actions">
           <button className="btn btn-small" onClick={() => copy(appUrl, '주소를 복사했습니다')}>
             주소 복사
@@ -532,6 +557,11 @@ export function Settings(props: {
             </button>
           )}
         </div>
+        <details className="why" data-testid="install-how">
+          <summary>이 기기에 설치하는 방법</summary>
+          <InstallGuide url={appUrl} onCopy={() => copy(appUrl, '주소를 복사했습니다')} testId="install-guide-settings" />
+          {isStandalone() && <p className="hint">이 기기에는 이미 설치되어 있습니다(설치한 앱으로 열림).</p>}
+        </details>
       </section>
     </div>
   );
