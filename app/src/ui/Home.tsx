@@ -39,6 +39,7 @@ export function Home(props: {
   version: number;
   busy: boolean;
   onImport: (files: File[], pickMs: number | null) => void;
+  onPickFailed: () => void;
   onSolve: (t: Target) => void;
   onResult: (t: Target) => void;
   onPack: (packId: string) => void;
@@ -176,7 +177,7 @@ export function Home(props: {
           <p>
             받은 문제팩 파일(<b>oneq-종목-연도-회차.zip</b>)을 고릅니다 — 다운로드 폴더·구글 드라이브·PC 등 보관한 곳에서. 여러 회차를 한 번에 골라도 됩니다(5~10년치를 권장).
           </p>
-          <PackPicker busy={props.busy} onFiles={props.onImport} primary />
+          <PackPicker busy={props.busy} onFiles={props.onImport} onPickFailed={props.onPickFailed} primary />
         </section>
       )}
 

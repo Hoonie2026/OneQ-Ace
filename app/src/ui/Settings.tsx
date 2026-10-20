@@ -42,6 +42,7 @@ export function Settings(props: {
   toast: (m: string) => void;
   busy: boolean;
   onImport: (files: File[], pickMs: number | null) => void;
+  onPickFailed: () => void;
   onPack: (packId: string) => void;
 }) {
   const [packs, setPacks] = useState<PackRow[]>([]);
@@ -311,7 +312,7 @@ export function Settings(props: {
       <section className="card" data-testid="pack-section">
         <div className="section-head">
           <h2>문제팩 {packs.length}회차</h2>
-          <PackPicker busy={props.busy} onFiles={props.onImport} small />
+          <PackPicker busy={props.busy} onFiles={props.onImport} onPickFailed={props.onPickFailed} small />
         </div>
         <p className="hint">가져온 문제팩 현황입니다. 회차를 누르면 정보를 봅니다. 지우기는 아래 <b>이 기기 데이터 지우기 → 문제팩 지우기</b>에서 합니다.</p>
         <ul className="pack-lines">

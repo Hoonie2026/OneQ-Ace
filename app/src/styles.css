@@ -3311,3 +3311,34 @@ details.why summary {
 .imp-slow p {
   margin: 4px 0 0;
 }
+
+/* 확인 창이 화면보다 길어도 단추가 보이게(v0.10.8 — 35개 가져오기 결과 창에서 [확인]이 화면 밖으로 밀려 멈춤) */
+.dlg {
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100dvh - 32px);
+}
+.dlg-msg {
+  flex: 0 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.dlg h2,
+.dlg-copy,
+.dlg-actions,
+.dlg-choices {
+  flex-shrink: 0;
+}
+/* 기기가 클라우드 파일을 받는 동안: 진행률을 알 수 없어 움직이는 막대(v0.10.8) */
+.imp-bar-wait > span {
+  width: 30%;
+  animation: imp-wait 1.4s ease-in-out infinite;
+}
+@keyframes imp-wait {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(340%); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .imp-bar-wait > span { animation: none; width: 100%; opacity: 0.4; }
+}

@@ -95,3 +95,41 @@ export const INTERRUPTED_MESSAGE =
   '이미 가져온 팩은 남아 있습니다. 설정 → 문제팩에서 확인하세요.';
 
 export const SLOW_PICK_TIP = '파일을 받는 데 시간이 걸렸습니다. 클라우드 파일은 기기에 먼저 내려받은 뒤 가져오면 빠릅니다.';
+
+/** 선택기를 이보다 오래 열어 둔 뒤 파일 없이 돌아오면 "받지 못함"으로 본다(바로 닫으면 사용자의 취소) */
+export const PICK_FAIL_MS = 8_000;
+
+export const PICK_FAILED_MESSAGE =
+  '고른 문제팩을 받지 못했습니다.\n\n' +
+  '구글 드라이브 같은 클라우드에서 여러 파일을 한꺼번에 고르면, 기기가 파일을 내려받지 못하고 앱에 아무것도 넘겨주지 않을 때가 있습니다.\n\n' +
+  '• 여러 회차를 하나로 묶은 묶음 파일(oneq-…-bundle-….zip) 하나를 가져오거나\n' +
+  '• 드라이브에서 파일을 기기(다운로드 폴더)에 먼저 내려받은 뒤 가져오거나\n' +
+  '• 한 번에 10개 이하로 나눠 고르세요.';
+
+export interface ImportedSummary {
+  cert: string;
+  label: string;
+  date: string;
+  questions: number;
+  bytes: number;
+}
+
+/** 가져온 팩이 많으면 종목별 한 줄로 줄인다(결과 창이 화면을 넘지 않게) */
+export function summarizeImported(list: ImportedSummary[], fmtBytes: (n: number) => string, max = 6): string[] {
+  if (list.length <= max) return list.map((x) => `${x.label} ${x.questions}문항 (${fmtBytes(x.bytes)})`);
+  const by = new Map<string, ImportedSummary[]>();
+  for (const x of list) (by.get(x.cert) ?? by.set(x.cert, []).get(x.cert)!).push(x);
+  return [...by].map(([cert, xs]) => {
+    const s = [...xs].sort((a, b) => (a.date < b.date ? -1 : 1));
+    const q = s.reduce((n, x) => n + x.questions, 0);
+    const b = s.reduce((n, x) => n + x.bytes, 0);
+    return `${cert} ${s.length}개 회차 · ${s[0].label} ~ ${s[s.length - 1].label} · ${q.toLocaleString('ko-KR')}문항 · ${fmtBytes(b)}`;
+  });
+}
+
+/** 선택기에서 돌아온 뒤 이 시간 안에 파일이 오지 않으면 "기기가 내려받는 중" 안내를 띄운다(PC는 바로 오므로 안 뜸) */
+export const PICK_WAIT_SHOW_MS = 1_500;
+
+export const PICK_WAIT_NOTE =
+  '구글 드라이브 같은 클라우드에서 고르면 기기가 파일을 모두 내려받은 뒤에 앱으로 넘겨줍니다. 여러 개면 몇 분에서 십여 분 걸릴 수 있습니다. 다 받으면 가져오기가 자동으로 시작됩니다.';
+export const PICK_WAIT_TIP = '다음부터는 드라이브에서 기기(다운로드 폴더)로 먼저 내려받아 두면 바로 가져옵니다.';

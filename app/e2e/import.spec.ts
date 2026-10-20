@@ -72,3 +72,41 @@ test('파일 선택기를 연 채로 앱이 다시 시작되면 중단 안내', 
   await page.reload();
   await expect(page.getByTestId('dialog')).toHaveCount(0); // 한 번만
 });
+
+test('v0.10.8: 35개 결과 창은 요약되고 [확인]이 화면 안에 있어 누를 수 있다', async ({ page }) => {
+  await page.goto('./');
+  await page.getByTestId('pack-input').first().setInputFiles(await packFiles(35));
+  const dlg = page.getByTestId('dialog');
+  await expect(dlg).toContainText('35개를 새로 가져왔습니다', { timeout: 60_000 });
+  await expect(dlg).toContainText('35개 회차');
+  await expect(page.getByTestId('dialog-ok')).toBeInViewport();
+  await page.getByTestId('dialog-ok').click();
+  await expect(dlg).toHaveCount(0);
+});
+
+test('v0.10.8: 선택기에서 돌아왔는데 파일이 아직 안 오면 "기기가 받는 중" 안내 → 파일이 오면 사라지고 가져오기', async ({ page }) => {
+  await page.goto('./');
+  const files = await packFiles(2);
+  const chooser = page.waitForEvent('filechooser');
+  await page.getByText('문제팩 가져오기').first().click();
+  const fc = await chooser;
+  await page.evaluate(() => window.dispatchEvent(new Event('focus')));   // 앱 화면으로 돌아옴(기기는 아직 내려받는 중)
+  await expect(page.getByTestId('pick-wait')).toContainText('고른 파일을 기기가 받는 중', { timeout: 5_000 });
+  await fc.setFiles(files);
+  await expect(page.getByTestId('pick-wait')).toHaveCount(0);
+  await expect(page.getByText(/2022년 1회|2010년 1회/).first()).toBeVisible({ timeout: 30_000 });
+});
+
+test('v0.10.8: 묶음 파일 하나(oneq-…-bundle-….zip)로 여러 팩 가져오기', async ({ page }) => {
+  const { zipSync } = await import('fflate');
+  const { readFileSync } = await import('node:fs');
+  const packs = await packFiles(4);
+  const entries: Record<string, Uint8Array> = {};
+  for (const p of packs) entries[p.split(/[\\/]/).pop()!] = new Uint8Array(readFileSync(p));
+  const dir = mkdtempSync(join(tmpdir(), 'oneq-bdl-'));
+  const bundle = join(dir, 'oneq-IMP-bundle-2010-2013.zip');
+  writeFileSync(bundle, zipSync(entries, { level: 0 }));
+  await page.goto('./');
+  await page.getByTestId('pack-input').first().setInputFiles(bundle);
+  await expect(page.getByTestId('dialog')).toContainText('4개를 새로 가져왔습니다', { timeout: 30_000 });
+});

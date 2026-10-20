@@ -49,3 +49,17 @@ describe('v0.10.7 문제팩 가져오기 진행·중단 안내', () => {
     expect(interruptedPick()).toBe(false);
   });
 });
+
+describe('v0.10.8 결과 요약', () => {
+  const fmt = (n: number) => `${n}B`;
+  const mk = (k: number) => ({ cert: '건설안전기사', label: `${2011 + k}년 1회`, date: `${2011 + k}-03-01`, questions: 120, bytes: 10 });
+  it('6개 이하는 한 줄씩', async () => {
+    const { summarizeImported } = await import('./importFlow');
+    expect(summarizeImported([mk(0), mk(1)], fmt)).toEqual(['2011년 1회 120문항 (10B)', '2012년 1회 120문항 (10B)']);
+  });
+  it('많으면 종목별 한 줄(첫·끝 회차, 문항·용량 합)', async () => {
+    const { summarizeImported } = await import('./importFlow');
+    const list = Array.from({ length: 35 }, (_, k) => mk(34 - k));
+    expect(summarizeImported(list, fmt)).toEqual(['건설안전기사 35개 회차 · 2011년 1회 ~ 2045년 1회 · 4,200문항 · 350B']);
+  });
+});

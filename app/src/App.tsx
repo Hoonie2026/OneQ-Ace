@@ -15,7 +15,8 @@ import { Settings } from './ui/Settings';
 import { Solve } from './ui/Solve';
 import { askConfirm, DialogHost, showNotice } from './ui/Dialog';
 import { ImportProgressView } from './ui/ImportProgressView';
-import { clearPick, INTERRUPTED_MESSAGE, interruptedPick, markPickStart, SLOW_PICK_MS, SLOW_PICK_TIP, type ImportProgress } from './importFlow';
+import { clearPick, INTERRUPTED_MESSAGE, interruptedPick, markPickStart, PICK_FAILED_MESSAGE, SLOW_PICK_MS, SLOW_PICK_TIP, summarizeImported, type ImportedSummary, type ImportProgress } from './importFlow';
+import { unbundle } from './pack/bundle';
 
 type Screen =
   | { name: 'home' }
@@ -72,7 +73,7 @@ export default function App() {
     window.scrollTo(0, 0);
   }, [screen]);
 
-  const importFiles = async (files: File[], pickMs: number | null = null) => {
+  const importFiles = async (picked: File[], pickMs: number | null = null) => {
     setBusy(true);
     stopRef.current = false;
     markPickStart(); // 처리 도중 앱이 다시 시작돼도 다음 시작 때 안내되도록(끝나면 지움)
@@ -81,9 +82,11 @@ export default function App() {
     let identical = 0;
     let stoppedAt: number | null = null;
     const startedAt = Date.now();
+    const imported_: ImportedSummary[] = [];
+    let total = picked.length;
     const step = (done: number, name: string, phase: ImportProgress['phase']) =>
       setProgress((cur) => ({
-        total: files.length,
+        total,
         done,
         name,
         phase,
@@ -93,7 +96,27 @@ export default function App() {
       }));
     // 진행 창이 먼저 그려지도록 한 번 양보한다(큰 파일을 읽기 시작하면 화면이 한동안 멈출 수 있음)
     const yieldUi = () => new Promise<void>((r) => window.setTimeout(r, 0));
+    // 묶음 파일(oneq-…-bundle-….zip)은 안의 팩들로 펼친다(v0.10.8). 보통 팩을 두 번 읽지 않도록 이름·크기로 먼저 거른다
+    const files: { name: string; blob: Blob }[] = [];
     try {
+      for (const [i, f] of picked.entries()) {
+        if (/bundle|묶음/i.test(f.name) || f.size > 15 * 1024 * 1024) {
+          step(i, f.name, 'read');
+          await yieldUi();
+          try {
+            const inner = unbundle(new Uint8Array(await f.arrayBuffer()));
+            if (inner?.length) {
+              files.push(...inner);
+              continue;
+            }
+          } catch (err) {
+            lines.push(`${f.name}: ${describeError(err)}`);
+            continue;
+          }
+        }
+        files.push({ name: f.name, blob: f });
+      }
+      total = files.length;
       for (const [i, f] of files.entries()) {
         if (stopRef.current) {
           stoppedAt = i;
@@ -103,7 +126,7 @@ export default function App() {
         await yieldUi();
         const onPhase = (ph: ImportProgress['phase']) => step(i, f.name, ph);
         try {
-          let r = await importPackFile(f, { onPhase });
+          let r = await importPackFile(f.blob, { onPhase });
           if (r.status === 'same') {
             // 내용까지 같은 팩은 조용히 건너뛴다(여러 회차를 한꺼번에 다시 고른 경우). 학습 기록은 그대로
             if (r.identical) {
@@ -111,7 +134,7 @@ export default function App() {
               continue;
             }
             if (await askConfirm(`${f.name}: 같은 버전(v${r.installedVersion})인데 내용이 다른 팩입니다. 새 것으로 바꿀까요? 학습 기록은 이어집니다`, { okText: '바꾸기' })) {
-              r = await importPackFile(f, { force: true, onPhase });
+              r = await importPackFile(f.blob, { force: true, onPhase });
             } else continue;
           }
           if (r.status === 'imported') {
@@ -123,7 +146,8 @@ export default function App() {
               rec.moved ? `번호 바뀐 기록 ${rec.moved}건 옮김` : '',
               rec.pending ? `매핑 대기 ${rec.pending}건` : '',
             ].filter(Boolean);
-            lines.push(`${examLabel(r.manifest)} ${r.manifest.questionCount}문항 (${formatBytes(r.bytes)})${extra.length ? ' · ' + extra.join(' · ') : ''}`);
+            imported_.push({ cert: r.manifest.cert.name, label: examLabel(r.manifest), date: r.manifest.exam.date, questions: r.manifest.questionCount, bytes: r.bytes });
+            if (extra.length) lines.push(`${examLabel(r.manifest)}: ${extra.join(' · ')}`);
           } else if (r.status === 'older') {
             lines.push(`${f.name}: 이미 더 새 버전(v${r.installedVersion})이 있어 건너뜀`);
           } else if (r.status === 'invalid') {
@@ -133,6 +157,7 @@ export default function App() {
           lines.push(`${f.name}: ${describeError(err)}`);
         }
       }
+      lines.unshift(...summarizeImported(imported_, formatBytes));
       if (identical) lines.push(`이미 있는 같은 팩 ${identical}개는 건너뜀(학습 기록 그대로)`);
       if (stoppedAt !== null) lines.push(`그만 가져오기: ${files.length}개 중 ${stoppedAt}개까지 처리, 나머지 ${files.length - stoppedAt}개는 가져오지 않음`);
       if (pickMs !== null && pickMs >= SLOW_PICK_MS) lines.push(SLOW_PICK_TIP);
@@ -147,11 +172,14 @@ export default function App() {
       setBusy(false);
       bump();
       // 여러 개를 가져왔거나 멈췄으면 결과를 창으로(알림은 4.5초 뒤 사라져 놓치기 쉬움)
-      if (files.length > 3 || stoppedAt !== null) {
+      if (files.length > 3 || picked.length > 3 || stoppedAt !== null) {
         if (lines.length) void showNotice(`${imported}개를 새로 가져왔습니다.\n\n${lines.join('\n')}`, { title: '문제팩 가져오기 결과' });
       } else if (lines.length) flash(lines.join('\n'));
     }
   };
+
+  // 선택기에서 파일을 받지 못하고 돌아옴(클라우드 여러 개) → 안내(v0.10.8)
+  const pickFailed = () => void showNotice(PICK_FAILED_MESSAGE, { title: '문제팩을 받지 못했습니다' });
 
   const go = (s: Screen) => {
     if (s.name === 'solve') setToast(null); // 알림이 풀이 화면 위쪽(진행·성적)을 가리지 않게
@@ -195,6 +223,7 @@ export default function App() {
           version={version}
           busy={busy}
           onImport={importFiles}
+          onPickFailed={pickFailed}
           onSolve={(target) => go({ name: 'solve', target })}
           onResult={(target) => go({ name: 'result', target })}
           onPack={(packId) => go({ name: 'pack', packId })}
@@ -227,6 +256,7 @@ export default function App() {
           toast={flash}
           busy={busy}
           onImport={importFiles}
+          onPickFailed={pickFailed}
           onPack={(packId) => go({ name: 'pack', packId })}
         />
       )}
