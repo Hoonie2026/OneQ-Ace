@@ -1,4 +1,4 @@
-# oneq-prep 1단계 프로토타입 의존성 (모두 MIT/Apache/BSD)
+# oneq-prep 2단계 MVP 의존성(스캔본 OCR은 Tesseract 별도 선택 설치 — README) (모두 MIT/Apache/BSD)
 pypdfium2>=4
 pdfplumber>=0.11
 pillow>=10

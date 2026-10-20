@@ -11,12 +11,6 @@ export function formatBytes(n: number | undefined): string {
   return `${v.toFixed(v < 10 ? 2 : 1)} ${units[i]}`;
 }
 
-export function formatTime(ts: number): string {
-  const d = new Date(ts);
-  const p = (x: number) => String(x).padStart(2, '0');
-  return `${d.getMonth() + 1}/${d.getDate()} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
-}
-
 export function yyyymmdd(d = new Date()): string {
   const p = (x: number) => String(x).padStart(2, '0');
   return `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}`;

@@ -118,18 +118,6 @@ body {
   align-items: center;
   gap: 12px;
 }
-.logo {
-  display: grid;
-  place-items: center;
-  width: 44px;
-  height: 44px;
-  border-radius: 12px;
-  background: var(--brand);
-  color: #fff;
-  font-weight: 800;
-  letter-spacing: -0.5px;
-  box-shadow: inset 0 -5px 0 var(--accent);
-}
 h1 {
   margin: 0;
   font-size: 22px;
@@ -183,10 +171,6 @@ h3 {
 .guide p {
   margin: 0 0 8px;
 }
-.steps {
-  margin: 0 0 8px;
-  padding-left: 18px;
-}
 .hint {
   font-size: 13px;
   color: var(--muted);
@@ -223,11 +207,6 @@ h3 {
   background: var(--primary);
   border-color: var(--primary);
   color: var(--primary-ink);
-}
-.btn-ok {
-  background: var(--ok-bg);
-  border-color: var(--ok);
-  color: var(--ok);
 }
 .btn-danger {
   color: var(--fail);
@@ -354,15 +333,6 @@ h3 {
 }
 
 /* ── 홈 ── */
-.resume {
-  border-color: var(--primary);
-}
-.resume p {
-  margin: 0;
-}
-.resume .btn {
-  margin-top: 10px;
-}
 .empty p {
   margin: 0 0 12px;
 }
@@ -379,61 +349,6 @@ h3 {
   list-style: none;
   margin: 0;
   padding: 0;
-}
-.pack-title {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  width: 100%;
-  min-height: 44px;
-  margin: -4px 0 8px;
-  padding: 0;
-  border: 0;
-  background: none;
-  color: inherit;
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
-}
-.pack-title b {
-  display: block;
-  font-size: 18px;
-}
-.pack-title small {
-  font-size: 13px;
-}
-.pack-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 12px;
-}
-.pack-actions .btn {
-  flex: 1 1 auto;
-}
-.sheet-back {
-  position: fixed;
-  inset: 0;
-  z-index: 40;
-  display: flex;
-  align-items: flex-end;
-  justify-content: center;
-  background: rgb(0 0 0 / 0.4);
-}
-.sheet {
-  width: 100%;
-  max-width: 560px;
-  max-height: 85dvh;
-  overflow: auto;
-  padding: 18px 16px calc(env(safe-area-inset-bottom) + 16px);
-  border-radius: 18px 18px 0 0;
-  background: var(--surface);
-  display: grid;
-  gap: 8px;
-}
-.sheet-item {
-  justify-content: space-between;
-  text-align: left;
 }
 
 /* ── 문제팩 상세·설정 ── */
@@ -1016,12 +931,6 @@ h3 {
 .coach h2 {
   margin: 0;
 }
-.coach-top {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 12px;
-}
 .dday {
   margin: 0;
   font-size: 30px;
@@ -1038,67 +947,6 @@ h3 {
   font-size: 14px;
   text-align: left;
   cursor: pointer;
-}
-.avg-badge {
-  flex: none;
-  display: grid;
-  justify-items: center;
-  min-width: 76px;
-  padding: 6px 10px;
-  border-radius: 12px;
-  background: var(--ok-bg);
-  color: var(--ok);
-  line-height: 1.15;
-}
-.avg-badge b {
-  font-size: 26px;
-  font-variant-numeric: tabular-nums;
-}
-.avg-badge small {
-  font-size: 13px;
-}
-.avg-badge.warn {
-  background: var(--check-bg);
-  color: var(--check);
-}
-.avg-badge.bad {
-  background: var(--fail-bg);
-  color: var(--fail);
-}
-.mini-bars {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: grid;
-  gap: 6px;
-}
-.mini-bars li {
-  display: grid;
-  grid-template-columns: minmax(0, 7.5em) 1fr 2.2em;
-  align-items: center;
-  gap: 8px;
-  font-size: 13px;
-}
-.mini-name {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: var(--muted);
-}
-.mini-bars .bar {
-  display: block;
-  height: 8px;
-  margin: 0;
-}
-.mini-bars .bar-fill {
-  display: block;
-}
-.mini-bars b {
-  text-align: right;
-  font-variant-numeric: tabular-nums;
-}
-.mini-bars b.bad {
-  color: var(--fail);
 }
 .coach .hint {
   margin: -4px 0 0;
@@ -1120,10 +968,6 @@ h3 {
   color: inherit;
   opacity: 0.85;
 }
-.outlook-head {
-  font-weight: 700;
-  font-size: 15px;
-}
 .outlook.warn {
   background: var(--check-bg);
   color: var(--check);
@@ -1132,23 +976,11 @@ h3 {
   background: var(--fail-bg);
   color: var(--fail);
 }
-.outlook.idle {
-  background: var(--bg);
-  color: var(--muted);
-}
 .outlook .btn {
   justify-self: start;
 }
 .week .meter-text {
   margin-bottom: 0;
-}
-.tabs {
-  display: flex;
-  gap: 4px;
-  margin: 4px 0 12px;
-  padding: 4px;
-  border-radius: 12px;
-  background: var(--line);
 }
 .tab {
   flex: 1;
@@ -1248,12 +1080,6 @@ h3 {
   font-size: 22px;
   color: var(--muted);
 }
-.outlook-title {
-  font-size: 13px;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  opacity: 0.8;
-}
 .subjects {
   list-style: none;
   margin: 0;
@@ -1265,23 +1091,11 @@ h3 {
   display: grid;
   gap: 6px;
 }
-.subject.is-rec {
-  border: 2px solid var(--primary);
-}
 .subject-head {
   display: flex;
   justify-content: space-between;
   align-items: center;
   gap: 8px;
-}
-.rec-badge {
-  flex: none;
-  padding: 2px 8px;
-  border-radius: 999px;
-  background: var(--primary);
-  color: var(--primary-ink);
-  font-size: 13px;
-  font-weight: 700;
 }
 .bar.dual {
   display: block;
@@ -1293,13 +1107,6 @@ h3 {
   top: 0;
   display: block;
 }
-.bar-fill.ghost {
-  background: var(--ok);
-  opacity: 0.3;
-}
-.bar-fill.ghost.bad {
-  background: var(--fail);
-}
 .subject-score {
   margin: 0;
   font-size: 14px;
@@ -1309,9 +1116,6 @@ h3 {
 }
 .subject .meter-text {
   margin: 0;
-}
-.packs-section {
-  margin-top: 18px;
 }
 .pack-lines {
   list-style: none;
@@ -1418,27 +1222,6 @@ h3 {
 .exam-dday b {
   font-size: 30px;
 }
-.btn-sub {
-  display: block;
-  font-size: 13px;
-  font-weight: 500;
-  opacity: 0.85;
-}
-.btn-big:has(.btn-sub) {
-  flex-direction: column;
-  gap: 0;
-}
-.today-line {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 8px;
-  font-size: 14px;
-}
-.today-line .link-btn {
-  color: var(--primary);
-  font-weight: 700;
-}
 .subject-head .subject-score {
   flex: none;
   font-size: 14px;
@@ -1470,10 +1253,6 @@ h3 {
 .day-verdict {
   margin: 0;
   font-size: 15px;
-}
-.hint.center {
-  text-align: center;
-  margin: 0;
 }
 
 /* ── 홈 구역 나누기(ADR 010) ── */
@@ -1514,19 +1293,6 @@ h3 {
 .score-box.bad b {
   color: var(--fail);
 }
-.warn-badge {
-  justify-self: start;
-  margin-top: 4px;
-  padding: 3px 10px;
-  border: 0;
-  border-radius: 999px;
-  background: var(--fail-bg);
-  color: var(--fail);
-  font: inherit;
-  font-size: 13px;
-  font-weight: 700;
-  cursor: pointer;
-}
 .link-btn.small {
   font-size: 13px;
   color: var(--primary);
@@ -1552,14 +1318,6 @@ h3 {
   display: grid;
   gap: 2px;
   font-size: 15px;
-}
-.other-ways {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 8px;
-  margin: 4px 0 8px;
-  font-size: 14px;
 }
 /* 홈으로 돌아가기(v0.7.1 — "‹"보다 잘 보이게) */
 .back-btn {
@@ -1818,9 +1576,6 @@ h3 {
 .bar-fill.warn {
   background: #e0a400;
 }
-.bar.dual .bar-fill.ghost {
-  opacity: 0.28;
-}
 /* 시험일 예상 = 굵은 세로 실선 */
 .bar-mark {
   position: absolute;
@@ -1903,11 +1658,6 @@ h3 {
   gap: 4px;
   font-size: 15px;
   line-height: 1.45;
-}
-.insight-actions {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
 }
 .principles-btn {
   display: flex;
@@ -2034,22 +1784,6 @@ details.why ul {
 }
 .s-fresh {
   background: var(--idle);
-}
-.legend {
-  list-style: none;
-  padding: 0;
-  margin: 8px 0;
-  display: grid;
-  gap: 4px;
-  font-size: 15px;
-}
-.legend i {
-  display: inline-block;
-  width: 12px;
-  height: 12px;
-  border-radius: 3px;
-  margin-right: 6px;
-  vertical-align: -1px;
 }
 .formula {
   margin: 8px 0;
@@ -2371,13 +2105,6 @@ details.why summary {
 details.why summary::-webkit-details-marker {
   display: none;
 }
-details.why summary::after {
-  content: '▾';
-  font-size: 16px;
-}
-details.why[open] summary::after {
-  content: '▴';
-}
 /* 10. 모의고사 이력 행 */
 .history th,
 .history td {
@@ -2386,11 +2113,6 @@ details.why[open] summary::after {
 }
 .history th {
   font-size: 13px;
-}
-.history tr.clickable td:last-child::after {
-  content: ' ›';
-  color: var(--muted);
-  font-weight: 700;
 }
 .history tr.clickable:active {
   background: var(--bg);
@@ -2851,12 +2573,12 @@ body {
 .today-card {
   border: 1px solid color-mix(in srgb, var(--primary) 22%, transparent);
 }
-.card .btn:where(:not(.btn-primary, .btn-danger, .btn-ghost, .btn-ok)),
+.card .btn:where(:not(.btn-primary, .btn-danger, .btn-ghost)),
 .dlg .btn:where(:not(.btn-primary, .btn-danger-solid)) {
   border-color: transparent;
   background: var(--surface-2);
 }
-.card .btn:where(:not(.btn-primary, .btn-danger, .btn-ghost, .btn-ok)):active,
+.card .btn:where(:not(.btn-primary, .btn-danger, .btn-ghost)):active,
 .dlg .btn:where(:not(.btn-primary, .btn-danger-solid)):active {
   background: color-mix(in srgb, var(--ink) 9%, var(--surface-2));
 }
@@ -2935,8 +2657,7 @@ details.why summary {
   padding: 0 14px;
   background: var(--surface-2);
 }
-details.why summary::after,
-details.why[open] summary::after {
+details.why summary::after {
   content: '';
   flex: none;
   width: 20px;

@@ -2,8 +2,8 @@
  * 실제 시험 기준 점수(ADR 008). 실기기 v0.2.0에서 "보유 기출 기준" 예상이 1회차 100문항만 있을 때 85점(합격권)으로 나와
  * 과장이 드러났다 — 실제 시험은 대부분 처음 보는 문항이다.
  *
- * 시험 점수 ≈ ρ × (보유 기출 기준 점수) + (1 − ρ) × (처음 보는 문항 정답률)
- * - ρ = 반복 출제 비율: 보유 회차에서, 앞선 회차에 같은 문항이 있었던 문항의 비율. 회차가 적으면 측량기사 34회차 실측(약 10%) 쪽으로 당긴다
+ * 시험 점수 = 같은 기출 몫 × 보유 기출 기준 점수 + 변형 몫 × (…) + 신규 몫 × 처음 보는 문항 정답률 — examScoreMix(ADR 013).
+ *   (ADR 008의 첫 식 ρ × 기출 + (1 − ρ) × 신규는 ADR 013에서 같은·변형·신규 세 몫으로 바뀌어 v0.9.1에서 코드 삭제)
  * - 처음 보는 문항 정답률 = 과목별 **최근** 첫 풀이의 정답률(공부할수록 오르는 힘을 반영). 시험에서는 모르는 문항도 찍으므로
  *   "모름"은 4지선다 추측 확률(25%)로 센다. 틀린 답은 이미 찍은 것이라 그대로 0
  *
@@ -14,38 +14,9 @@ import type { Bank } from './items';
 import { VARIANT_TRANSFER, type ExamShares } from './similar';
 import type { EngineAttempt } from './types';
 
-/** 반복 출제 비율 기본값(측량및지형공간정보기사 2011~2022 34회차 실측: 3,400문항 중 311문항이 앞 회차와 같은 문항) */
-export const DEFAULT_REPEAT_SHARE = 0.1;
-/** 기본값 쪽으로 당기는 가상 문항 수(회차가 많을수록 실측을 따른다) */
-export const REPEAT_PSEUDO = 500;
 /** 처음 보는 문항 정답률에 쓰는 최근 첫 풀이 수(과목별) */
 export const RECENT_FIRST = 30;
 const NEW_PSEUDO = 5;
-
-export interface RepeatShare {
-  rho: number;
-  /** 실측: 맨 처음 회차를 뺀 문항 수와 그중 앞 회차에 같은 문항이 있던 수 */
-  questions: number;
-  repeats: number;
-}
-
-export function repeatShare(bank: Bank): RepeatShare {
-  const dates = [...new Set(bank.examDateOf.values())].sort();
-  let questions = 0;
-  let repeats = 0;
-  if (dates.length > 1) {
-    const first = dates[0];
-    for (const it of bank.items) {
-      const ds = it.qids.map((q) => bank.examDateOf.get(q) ?? '').sort();
-      for (const [i, d] of ds.entries()) {
-        if (d === first) continue;
-        questions++;
-        if (i > 0 && ds[0] < d) repeats++;
-      }
-    }
-  }
-  return { rho: (repeats + REPEAT_PSEUDO * DEFAULT_REPEAT_SHARE) / (questions + REPEAT_PSEUDO), questions, repeats };
-}
 
 export interface NewRate {
   /** 기록 그대로의 정답률(모름 0) */
@@ -105,11 +76,6 @@ export function recordedScores(bank: Bank, attempts: EngineAttempt[]): Map<strin
     acc.set(it.subjectKey, a);
   }
   return new Map([...acc].map(([k, a]) => [k, Math.round((1000 * a.sum) / Math.max(1, a.n)) / 10]));
-}
-
-/** 실제 시험 기준 점수(ADR 008 원식 — 동일 문항만 반복 출제로 본 식. 시험·비교용으로 남김) */
-export function examScore(bankScore: number, rate: NewRate, rho: number): number {
-  return Math.round((rho * bankScore + (1 - rho) * 100 * rate.exam) * 10) / 10;
 }
 
 /**

@@ -8,8 +8,9 @@
 
 | 폴더 | 내용 | 상태 |
 |---|---|---|
-| `app/` | 스마트폰 학습앱 — 정적 PWA (Vite + React + TypeScript) | v0.1(3단계): 팩 가져오기·풀이·채점·백업/복원. `src/engine/`: 4단계 학습 엔진(화면 연결은 5단계) |
-| `preprocessor/` | PC 기출 PDF 전처리기 `oneq-prep` (Python) | 1단계 프로토타입, 2단계에서 MVP |
+| `app/` | 스마트폰 학습앱 — 정적 PWA (Vite + React + TypeScript) | **v0.9.1**(5단계 마무리): 학습 계획·시스템 추천·과목별 학습·모의고사·시험일 예상 점수(계산 보기)·학습 원리, 백업/복원. `src/engine/` 학습 엔진(FSRS) |
+| `preprocessor/` | PC 기출 PDF 전처리기 `oneq-prep` (Python) | v0.2.0 2단계 MVP: 명령줄 + HTML 검수 보고서(ADR 012) — **다음 개발 대상** |
+| `shared/` | 팩 포맷 스키마(`pack-schema.json`)·두 검증기 공용 시험 사례 | oqp/1 |
 | `docs/` | 세션 기록, 실기기 결과표, 결정 기록(ADR), 사용 안내 초안(`USER-GUIDE.md`) | |
 
 - 서버·DB·외부 API 없음. 모든 학습 기록은 기기 안에만 저장됩니다.
@@ -24,7 +25,7 @@ npm run dev        # http://localhost:5173/OneQ-Ace/
 npm run build      # dist/ 생성
 npm test           # 단위 시험(vitest)
 npm run e2e        # 모바일 에뮬레이션 게이트 시험(Playwright, 처음 한 번 `npx playwright install chromium`)
-npm run gate       # 4단계 학습 엔진 시뮬레이션(가상 학습자 3종 × 60·30·14일 × 시드 3, 약 35초)
+npm run gate       # 학습 엔진 게이트(가상 학습자 × 기간 × 시드, 화면의 시스템 추천 기준 — ADR 014)
 ```
 
 `main` 브랜치에 푸시하면 GitHub Actions가 `app/`을 빌드해 GitHub Pages에 배포합니다.
