@@ -458,50 +458,31 @@ def main(argv=None):
     ap.add_argument("--round", type=int, dest="round_no", help="회차 강제 지정(PDF 1개)")
     ap.add_argument("--pack-version", type=int, default=1)
     ap.add_argument("--report-only", action="store_true", help="팩은 쓰지 않고 보고서만")
+    ap.add_argument("--workers", type=int, default=None, help="동시에 처리할 회차 수(기본: CPU 코어 수 - 1, 최대 4)")
     a = ap.parse_args(argv)
 
-    prof = S.load(a.cert)
-    if prof.draft:
-        sys.exit(f"출제기준 프로필 {a.cert}은 초안(draft)입니다. standards/{a.cert}.json의 과목을 확정하고 draft를 지우세요.")
-    dates = ["-".join(m.groups()) for p in a.pdf if (m := re.search(r"(20\d{2})(\d{2})(\d{2})", p.name))]
-    pdfs = sorted(a.pdf, key=lambda p: p.name)
+    ap_workers = a.workers
+    from .batch import STATUS_TEXT, BatchSpec, run_batch
 
-    prepared: list[Prepared] = []
-    legacy_later: list[Path] = []
-    for p in pdfs:
-        try:
-            ex = exam_from_filename(p, dates, a.date, a.round_no)
-        except ValueError as e:
-            sys.exit(str(e))
-        if prof.is_legacy(ex["date"]):
-            legacy_later.append(p)
-            continue
-        print(f"· {p.name}")
-        prepared.append(prepare(p, prof, a.out, dates, a.date, a.round_no))
-    if legacy_later:
-        ref = reference_from(prepared, a.out, prof.code)
-        for p in legacy_later:
-            print(f"· {p.name} (구기준 회차)")
-            prepared.append(prepare(p, prof, a.out, dates, a.date, a.round_no, reference=ref))
+    def show(ev):
+        r = ev.result
+        if ev.kind == "start":
+            print(f"· {r.pdf.name}", flush=True)
+        elif ev.kind == "done" and r is not None:
+            mark = {"packed": "✓", "review": "✗", "error": "✗"}.get(r.status, "·")
+            what = r.zip_path.name if r.zip_path else (r.pack_id or r.pdf.name)
+            extra = f" → {r.review_file}" if r.review_file else ""
+            print(f"  {mark} {what}: {STATUS_TEXT[r.status]} — {r.message}{extra}", flush=True)
 
-    ok = 0
-    for p in prepared:
-        if p.issues or a.report_only:
-            if p.issues:
-                p.review_file = write_review_skeleton(a.out, p.pack_id, p.pdf.name, p.review,
-                                                      [it.suggestion for it in p.items if it.suggestion])
-            continue
-        p.zip_path, m = write_pack(p, a.out, a.prepared_by, a.source_type, a.origin, a.pack_version)
-        ok += 1
-        size = p.zip_path.stat().st_size
-        print(f"  ✓ {p.zip_path.name}: {m['questionCount']}문항, 정답 표시 {p.masked}개 제거, {size/1e6:.2f}MB")
-
-    from .report import write_report
-    rpt = write_report(prepared, a.out / REVIEW_DIR / "report.html")
-    bad = [p for p in prepared if p.issues]
-    for p in bad:
-        print(f"  ✗ {p.pack_id}: 검수 필요 {len(p.issues)}건 → {p.review_file}")
-    print(f"\n팩 {ok}개 / 검수 필요 {len(bad)}개. 보고서: {rpt}")
+    spec = BatchSpec(list(a.pdf), a.cert, a.out, a.prepared_by, a.origin, a.source_type, a.date, a.round_no,
+                     a.pack_version, a.report_only, ap_workers)
+    try:
+        rows = run_batch(spec, show)
+    except ValueError as e:
+        sys.exit(str(e))
+    ok = sum(r.status == "packed" for r in rows)
+    bad = sum(r.status in ("review", "error") for r in rows)
+    print(f"\n팩 {ok}개 / 검수 필요·오류 {bad}개. 보고서: {a.out / REVIEW_DIR / 'report.html'}")
     sys.exit(1 if bad else 0)
 
 

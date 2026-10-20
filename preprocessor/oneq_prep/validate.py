@@ -17,7 +17,16 @@ from pathlib import Path
 
 from jsonschema import Draft202012Validator
 
-SCHEMA_PATH = Path(__file__).resolve().parents[2] / "shared" / "pack-schema.json"
+
+def _schema_path() -> Path:
+    """저장소에서는 shared/pack-schema.json, 실행파일(PyInstaller)에서는 함께 묶은 shared/ 폴더."""
+    frozen = getattr(sys, "_MEIPASS", None)
+    if frozen:
+        return Path(frozen) / "shared" / "pack-schema.json"
+    return Path(__file__).resolve().parents[2] / "shared" / "pack-schema.json"
+
+
+SCHEMA_PATH = _schema_path()
 
 
 @dataclass

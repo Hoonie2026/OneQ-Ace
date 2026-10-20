@@ -5,44 +5,47 @@ v0.9.1 마무리 때 지난 세션 요약을 줄였다 — 자세한 기록은 g
 
 ## 현재 위치
 
-- **전처리기(2단계)**: **v0.2.1**(세션 #9) — 세 번째 종목 **건설안전기사** 추가(ADR 016). 59회차 → 팩 59개, 검수 필요 0. 2026 출제기준 5과목으로 합침(1과목 회차당 40문항, `examCount` 20). 측량 2012~2022 31회차·토목 2024-3 팩은 그대로(표본 7개 바이트 비교). 팩은 PC `packs/`(커밋 안 함)
-- **앱**: **v0.10.6** — 모의고사·예상 점수가 팩의 `examCount`(실제 시험 과목 문항 수)를 따름(ADR 016). 그 밖은 v0.10.5 그대로(5단계 마무리 — ADR 008~015)
-- **학습 엔진(4단계)**: 게이트 대상 = 화면의 시스템 추천(19/19, 앱 75% · 회차순 40% · 계획 엔진 51%, 망각형 60일 예상 +8점은 알려진 한계) — `docs/engine-gate.md`, ADR 007·014
-- **3단계** 완료(앱 v0.1.3) · **1단계** 완료(팩 포맷 oqp/1) · **0단계** Android 조건부 통과
-- 시험(2026-10-20 세션 #9): 전처리기 pytest 42건(클라우드) · vitest 117건(PC) · 게이트 19/19 · 빌드 · **e2e 10 통과·2 건너뜀(PC, 건너뜀은 PC 전용 시험의 아이폰 크기)**. 클라우드 e2e의 gate 실패 2건은 실제 팩 없는 환경 탓으로 확인. PC 팩 생성: 건설안전 59개·7,080문항, 검수 필요 0
+- **전처리기**: **v0.3.0 창 프로그램**(세션 #9, ADR 018) — PySide6, 여러 회차 동시 처리(코어−1, 최대 4), 처리 전 시행일·팩 이름 미리 보기, 진행률·멈추기, 회차 두 번 누르면 **검수 창**(정답·과목·제외 → 저장하고 그 회차 다시 만들기). Windows 실행파일은 `packaging/build_exe.ps1`(폴더형 + zip + Defender 검사). 동료용 안내 `docs/PREP-GUIDE.md`. 명령줄도 그대로(`--workers` 추가)
+- 종목: 측량(2012~2022 31회차)·토목 2024-3·**건설안전 59회차(2026 기준 5과목, ADR 016)** — 팩은 PC `packs/`(커밋 안 함)
+- **앱**: **v0.10.7** — 문제팩 가져오기 진행 창(n/전체·막대·단계), 20초 넘으면 안내, [그만 가져오기], 결과 창, 클라우드 선택 중 앱이 다시 시작되면 중단 안내(ADR 017). v0.10.6 `examCount`(ADR 016)
+- **학습 엔진(4단계)**: 게이트 19/19(ADR 007·014) · 3단계·1단계 완료 · 0단계 Android 조건부 통과
+- 시험(세션 #9): 전처리기 pytest **48건**(클라우드, 창 프로그램 화면 없이 포함) · vitest **122건** · 게이트 19/19 · 빌드 · e2e: PC v0.10.6 10통과·2건너뜀 / 클라우드 v0.10.7 16통과(새 가져오기 6건 포함)·2건너뜀·gate 2건(클라우드 환경 탓, PC 통과) — **v0.10.7 e2e는 PC에서 다시**
 
 ## 다음 세션
 
 시작 문구 예: "원큐합격 이어서. 저장소는 C:\Users\dohwa\Downloads\OneQ-Ace, docs/SESSION.md부터 확인해 줘."
 
-### 사용자가 PC에서 할 일(세션 #9 결과 반영)
-1. `cd preprocessor` → `python -m pytest -q tests`(42건, `source_pdf/`가 있어 실제 PDF 시험 포함)
-2. 건설안전 팩 만들기(PowerShell):
-   `python -m oneq_prep (Get-ChildItem ..\source_pdf\safety_기출_2003_2022\*.pdf).FullName ..\packs --cert SAFETY --prepared-by 이름 --origin "comcbt.com"`
-   → `packs/review/report.html` 확인(배치로 고른 10문항은 카드에 표시) → 팩 59개
-3. `cd ..\app` → (npm ci·test·e2e 완료) `npm run build` → v0.10.6 배포 → **그 뒤에** 건설안전 팩 게시(`examCount`가 든 팩은 v0.10.6 이상에서만 열림)
-4. (전부터) 2011 측량 3회차 재배정 검수
+### 사용자가 PC에서 할 일
+1. 앱: `cd app` → `npm test` · `npm run e2e` · `npm run build` → 커밋·푸시(v0.10.7 배포) → 태블릿 `docs/device-tests.md` **P1~P5**(가져오기 진행 창·중단 안내) · 건설안전 팩 확인 후 게시
+2. 전처리기 창: `cd preprocessor` → `py -3 -m pip install -r requirements-gui.txt` → `py -3 -m oneq_prep.gui`로 써 보기
+3. 실행파일: `powershell -ExecutionPolicy Bypass -File packaging\build_exe.ps1` → 결과(크기·Defender·점검) 알려 주기 → `dist\OneQ-Prep-0.3.0-win64.zip`을 **파이썬 없는 동료 PC**에서 풀어 실행
+4. (전부터) 2011 측량 3회차 재배정 검수 — 이제 창에서: 2011 PDF 3개를 넣고 [팩 만들기] → 회차 두 번 눌러 재배정 제안 확인 → 검수 완료 체크 → 저장하고 다시 만들기
 
-### 무엇부터 할지 — 남은 갈래(우선순위는 사용자)
+### 무엇부터 할지 — 남은 갈래
 | 갈래 | 내용 | 열린 질문 |
 |---|---|---|
-| A. 종목 넓히기(이어서) | 건설안전: 큐넷 2026 출제기준 원문과 세부 항목 대조(옛 "시스템안전공학" 범위 밖 문항?). 철도토목기사 프로필 확정, 토목 과목명 큐넷 대조 | 출품 시연 종목 수 |
-| B. 스캔본 OCR | 실제 스캔 PDF(③)로 경계·보기 번호 보정 | Tesseract 유지 vs PaddleOCR 한국어 PP-OCRv5 등 — 실제 스캔본 확보가 먼저 |
-| C. 창 프로그램·exe | HTML 검수 흐름을 창으로 감싸기 | D8(PySide6 + PyInstaller) vs `pyside6-deploy`(Nuitka) vs HTML 보고서 + 로컬 실행 유지 — 사내 PC 배포 조건 |
-| D. 6단계 유사 문항 군집 | 같은·변형 문항 군집을 전처리에서 | 지금 앱 `engine/similar.ts`로 충분한지. 옮기면 oqp/2 |
-| E. 팩 포맷 oqp/2 | contentHash에서 문항 번호 빼기, noInSubject 표시 | 배포된 팩·기록 호환(ADR 002) |
+| C'. 창 프로그램 다듬기 | PC 실측 결과 반영, BACKLOG 전처리기 ①~⑥ | 회사 백신 결과에 따라 Nuitka 전환 여부 |
+| A. 종목 넓히기 | 건설안전 큐넷 원문 대조, 철도토목 프로필, 토목 과목명 | 출품 시연 종목 수 |
+| B. 스캔본 OCR | 실제 스캔 PDF로 보정 | Tesseract vs PaddleOCR — 스캔본 확보가 먼저 |
+| D·E. 유사 문항 군집·oqp/2 | | 이득·호환 |
+| 출품 준비(8단계) | 설명 자료(이름 유래 OneQ-Ace 포함), 설치 안내·QR, 시연 시나리오 | 출품 일정 |
 
-- 근거 문서: `preprocessor/README.md`, ADR 001·005·012·016, `docs/BACKLOG.md` "전처리기" 절
-- **하지 않기로 한 것**: 계산 문제 자동 분류(ADR 015 9절). 건설안전 옛 6과목 그대로·옛/새 두 벌 팩(ADR 016 대안)
-- 외부 자료(갈래 B·C 검토용): [오픈소스 OCR 비교 2026](https://imagetotable.ai/ko/blog/best-open-source-ocr-tools-2026), [PaddleOCR 한국어 인식 모델](https://huggingface.co/PaddlePaddle/korean_PP-OCRv5_mobile_rec), [Nuitka vs PyInstaller](https://beatsyncpro.ai/blog/nuitka-vs-pyinstaller)
+- 근거 문서: ADR 012·016·017·018, `preprocessor/README.md`, `docs/BACKLOG.md`
 
 ### 앱 쪽 남은 일(급하지 않음)
-- v0.10.4 확인(틈날 때): `docs/device-tests.md` Z4b, Z5b, Z7, Z9. Y2의 "아이폰 아이콘 삭제 시 데이터 삭제"도 확인되면 문구 확정
+- v0.10.4 확인: `docs/device-tests.md` Z4b, Z5b, Z7, Z9 · v0.10.7 P1~P5
 - 7단계(실사용) 때 가정값 보정 — BACKLOG "앱" 절
 
 ---
 
-## 직전 세션 요약 — 2026-10-20 (세션 #9, 전처리기 갈래 A: 건설안전기사)
+## 직전 세션 요약 — 2026-10-20 (세션 #9 이어서, 앱 v0.10.7 + 전처리기 창 프로그램 v0.3.0)
+
+- 사용자 의견(태블릿): 드라이브에서 팩 30여 개 → 안내 없이 홈으로, 10여 개도 아무 표시 없다가 갑자기 완료 → **앱 v0.10.7**(ADR 017). 원인: OS 선택기가 클라우드 파일을 다 내려받기 전엔 앱이 손댈 수 없고, 많으면 브라우저가 탭을 다시 시작. 진행 창·지연 안내(요청 문구, 창 안 노란 상자)·그만 가져오기·결과 창·중단 안내(sessionStorage 표시)
+- 사용자 결정: 전처리기 **PC 전용 · 방식 A(창) · 동료에게 배포(경진대회 출품)** → **v0.3.0**(ADR 018): batch(동시 처리)·review(검수 규칙) 분리, PySide6 창, PyInstaller 폴더형(백신 오탐·LGPL), 실행파일 `--cli`, 아이콘(앱과 같은 1Q)·파일 속성, THIRD-PARTY-NOTICES
+- 고친 버그: 처리 오류 알림을 작업 스레드에서 띄우면 프로그램이 죽음 → 화면 스레드로(람다 연결 금지)
+- PC 확인(세션 #9 앞부분): 건설안전 59팩·7,080문항 검수 필요 0, `npm ci` 후 vitest 117·e2e 10통과 — `node_modules`에 pretendard 없던 것은 `npm ci`로 해결, Playwright 브라우저는 `npx playwright install chromium`
+
+## 그 전 — 2026-10-20 (세션 #9, 전처리기 갈래 A: 건설안전기사)
 
 - 사용자 결정: 갈래 A(건설안전기사) 먼저 → **2026 출제기준 5과목으로 합치기**(옛 6과목 그대로·두 벌 대신) — ADR 016
 - 확인: PDF는 60개가 아니라 **59개**(2003-1 ~ 2022-2), 모두 comcbt 교사용·같은 6과목. 2026-01-01부터 5과목 100문항(관리론 + 심리·교육 → 산업재해 예방 및 안전보건교육, 나머지 이름 변경)

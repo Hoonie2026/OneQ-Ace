@@ -30,9 +30,10 @@ export const packIdOf = (qid: string) => qid.replace(/-\d{3}$/, '');
  */
 export async function importPackBytes(
   data: Uint8Array,
-  opts: { force?: boolean } = {},
+  opts: { force?: boolean; onPhase?: (phase: 'check' | 'save') => void } = {},
   d: OneQDB = defaultDb,
 ): Promise<ImportResult> {
+  opts.onPhase?.('check');
   const v = await validatePackZip(data);
   if (!v.ok) return { status: 'invalid', issues: v.issues };
   const { manifest, questions, files } = v;
@@ -57,6 +58,7 @@ export async function importPackBytes(
   }));
   const bytes = imgRows.reduce((s, r) => s + r.data.size, 0);
 
+  opts.onPhase?.('save');
   await safeWrite('문제팩 저장', () =>
     d.transaction('rw', [d.packs, d.questions, d.images, d.runs], async () => {
       // 번호가 바뀐 재전처리 팩: 진행 중 풀이(runs)의 문항 목록을 contentHash로 옮긴다
@@ -95,7 +97,12 @@ export async function importPackBytes(
   return { status: 'imported', manifest, replacedVersion: existing?.packVersion ?? null, bytes, reconcile: report };
 }
 
-export async function importPackFile(file: Blob, opts: { force?: boolean } = {}, d: OneQDB = defaultDb) {
+export async function importPackFile(
+  file: Blob,
+  opts: { force?: boolean; onPhase?: (phase: 'read' | 'check' | 'save') => void } = {},
+  d: OneQDB = defaultDb,
+) {
+  opts.onPhase?.('read');
   return importPackBytes(new Uint8Array(await file.arrayBuffer()), opts, d);
 }
 

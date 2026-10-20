@@ -41,7 +41,7 @@ export function Settings(props: {
   onChanged: () => void;
   toast: (m: string) => void;
   busy: boolean;
-  onImport: (files: File[]) => void;
+  onImport: (files: File[], pickMs: number | null) => void;
   onPack: (packId: string) => void;
 }) {
   const [packs, setPacks] = useState<PackRow[]>([]);

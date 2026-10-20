@@ -3,7 +3,19 @@
 기출 PDF를 원큐합격 문제팩(`.zip`, 포맷 `oqp/1`)으로 바꾼다. 포맷은 `shared/pack-schema.json`, 결정 이유는
 `docs/ADR/001-pack-format-oqp1.md`, `005-subject-standard-in-preprocessor.md`, `012-preprocessor-mvp.md`, `016-safety-2026-merged-subjects.md`.
 
-## 현재 상태 — 2단계 MVP v0.2.1 (명령줄 + HTML 검수 보고서)
+## 창 프로그램 v0.3.0 (ADR 018) — 동료에게 나눠 주는 방식
+
+```
+pip install -r preprocessor/requirements-gui.txt
+cd preprocessor
+python -m oneq_prep.gui                                   # 창 프로그램
+powershell -ExecutionPolicy Bypass -File packaging\build_exe.ps1   # Windows 실행파일(dist\OneQ-Prep\OneQ-Prep.exe + zip)
+```
+
+- 사용 안내(동료용): `docs/PREP-GUIDE.md`. 실행파일로도 명령줄 처리: `OneQ-Prep.exe --cli <PDF…> <출력폴더> --cert …`(기록은 `oneq-prep-cli.log`)
+- 처리 규칙은 `batch.py`(일괄·동시 처리)·`review.py`(검수 파일)에 있고 명령줄과 창이 함께 쓴다. 화면은 `oneq_prep/gui/`.
+
+## 명령줄 (2단계 MVP + v0.3.0 동시 처리 `--workers`)
 
 ```
 pip install -r preprocessor/requirements.txt
@@ -78,13 +90,16 @@ PATH에 없으면 환경변수 `ONEQ_TESSERACT=C:\Program Files\Tesseract-OCR\te
 | `standards.py` | 출제기준 프로필 읽기, 과목명 정규화·별칭·제외 판정 |
 | `reassign.py` | 구기준 회차 과목 재배정 제안(글자 2-gram 유사도 투표) |
 | `pack.py` | 준비(검사) → 검수 파일 반영 → 팩 쓰기, 명령줄 |
+| `batch.py` | 여러 PDF 일괄 처리 — 회차별 독립, CPU 코어 나눠 동시 처리(spawn), 진행 이벤트·멈추기 |
+| `review.py` | 검수 파일 만들기 규칙(HTML 보고서와 같은 결과) |
+| `gui/` | PySide6 창 프로그램(목록·진행·검수 창) |
 | `report.py` | 검수 보고서 HTML |
 | `validate.py` | 스키마 + 정합성 검사. 학습앱 `app/src/pack/validate.ts`와 같은 오류 코드 |
 
 ## 확정된 기술 선택 (개발기준서 D8~D11)
 
 - Python 3.11, PDF: pypdfium2(렌더링·형광 객체 삭제) + pdfplumber(문자 좌표)
-- PySide6 창 프로그램 + PyInstaller 단일 실행파일 — HTML 검수 흐름을 굳힌 뒤(ADR 012)
+- PySide6(Essentials) 창 프로그램 + PyInstaller **폴더형** 실행파일(ADR 018 — 단일 파일 대신: 기동 속도·백신 오탐·Qt LGPL)
 - 텍스트 분석: kiwipiepy + scikit-learn TF-IDF — 6단계
 - OCR(스캔본만): Tesseract(kor) 선택 설치
 

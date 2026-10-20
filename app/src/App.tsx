@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRegisterSW } from 'virtual:pwa-register/react';
 import { backupDue } from './backup';
 import { describeError, STORAGE_ERROR_EVENT } from './db';
@@ -13,7 +13,9 @@ import { DaySummary } from './ui/DaySummary';
 import { Result } from './ui/Result';
 import { Settings } from './ui/Settings';
 import { Solve } from './ui/Solve';
-import { askConfirm, DialogHost } from './ui/Dialog';
+import { askConfirm, DialogHost, showNotice } from './ui/Dialog';
+import { ImportProgressView } from './ui/ImportProgressView';
+import { clearPick, INTERRUPTED_MESSAGE, interruptedPick, markPickStart, SLOW_PICK_MS, SLOW_PICK_TIP, type ImportProgress } from './importFlow';
 
 type Screen =
   | { name: 'home' }
@@ -33,6 +35,8 @@ export default function App() {
   const [toast, setToast] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [backupBanner, setBackupBanner] = useState(false);
+  const [progress, setProgress] = useState<ImportProgress | null>(null);
+  const stopRef = useRef(false);
 
   const {
     offlineReady: [offlineReady],
@@ -44,6 +48,11 @@ export default function App() {
   const flash = useCallback((msg: string) => {
     setToast(msg);
     window.setTimeout(() => setToast((cur) => (cur === msg ? null : cur)), 4500);
+  }, []);
+
+  // 파일 선택기를 연 채로 앱이 다시 시작됨(클라우드 파일 여러 개를 내려받다 중단) → 안내(v0.10.7)
+  useEffect(() => {
+    if (interruptedPick()) void showNotice(INTERRUPTED_MESSAGE, { title: '문제팩 가져오기가 중단됨' });
   }, []);
 
   useEffect(() => {
@@ -63,15 +72,38 @@ export default function App() {
     window.scrollTo(0, 0);
   }, [screen]);
 
-  const importFiles = async (files: File[]) => {
+  const importFiles = async (files: File[], pickMs: number | null = null) => {
     setBusy(true);
+    stopRef.current = false;
+    markPickStart(); // 처리 도중 앱이 다시 시작돼도 다음 시작 때 안내되도록(끝나면 지움)
     const lines: string[] = [];
     let imported = 0;
     let identical = 0;
+    let stoppedAt: number | null = null;
+    const startedAt = Date.now();
+    const step = (done: number, name: string, phase: ImportProgress['phase']) =>
+      setProgress((cur) => ({
+        total: files.length,
+        done,
+        name,
+        phase,
+        startedAt,
+        fileStartedAt: cur && cur.done === done && cur.name === name ? cur.fileStartedAt : Date.now(),
+        stopping: stopRef.current,
+      }));
+    // 진행 창이 먼저 그려지도록 한 번 양보한다(큰 파일을 읽기 시작하면 화면이 한동안 멈출 수 있음)
+    const yieldUi = () => new Promise<void>((r) => window.setTimeout(r, 0));
     try {
-      for (const f of files) {
+      for (const [i, f] of files.entries()) {
+        if (stopRef.current) {
+          stoppedAt = i;
+          break;
+        }
+        step(i, f.name, 'read');
+        await yieldUi();
+        const onPhase = (ph: ImportProgress['phase']) => step(i, f.name, ph);
         try {
-          let r = await importPackFile(f);
+          let r = await importPackFile(f, { onPhase });
           if (r.status === 'same') {
             // 내용까지 같은 팩은 조용히 건너뛴다(여러 회차를 한꺼번에 다시 고른 경우). 학습 기록은 그대로
             if (r.identical) {
@@ -79,7 +111,7 @@ export default function App() {
               continue;
             }
             if (await askConfirm(`${f.name}: 같은 버전(v${r.installedVersion})인데 내용이 다른 팩입니다. 새 것으로 바꿀까요? 학습 기록은 이어집니다`, { okText: '바꾸기' })) {
-              r = await importPackFile(f, { force: true });
+              r = await importPackFile(f, { force: true, onPhase });
             } else continue;
           }
           if (r.status === 'imported') {
@@ -102,15 +134,22 @@ export default function App() {
         }
       }
       if (identical) lines.push(`이미 있는 같은 팩 ${identical}개는 건너뜀(학습 기록 그대로)`);
+      if (stoppedAt !== null) lines.push(`그만 가져오기: ${files.length}개 중 ${stoppedAt}개까지 처리, 나머지 ${files.length - stoppedAt}개는 가져오지 않음`);
+      if (pickMs !== null && pickMs >= SLOW_PICK_MS) lines.push(SLOW_PICK_TIP);
       if (imported && navigator.storage?.persist) {
         // 첫 팩을 저장한 시점에 영구 저장을 요청한다(C3)
         const persisted = await navigator.storage.persisted();
         if (!persisted) await navigator.storage.persist().catch(() => false);
       }
     } finally {
+      clearPick();
+      setProgress(null);
       setBusy(false);
       bump();
-      if (lines.length) flash(lines.join('\n'));
+      // 여러 개를 가져왔거나 멈췄으면 결과를 창으로(알림은 4.5초 뒤 사라져 놓치기 쉬움)
+      if (files.length > 3 || stoppedAt !== null) {
+        if (lines.length) void showNotice(`${imported}개를 새로 가져왔습니다.\n\n${lines.join('\n')}`, { title: '문제팩 가져오기 결과' });
+      } else if (lines.length) flash(lines.join('\n'));
     }
   };
 
@@ -193,6 +232,15 @@ export default function App() {
       )}
       </ErrorBoundary>
 
+      {progress && (
+        <ImportProgressView
+          p={progress}
+          onStop={() => {
+            stopRef.current = true;
+            setProgress((cur) => (cur ? { ...cur, stopping: true } : cur));
+          }}
+        />
+      )}
       <DialogHost />
       {toast && (
         <div className="toast" role="status" onClick={() => setToast(null)}>

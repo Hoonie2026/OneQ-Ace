@@ -1,0 +1,20 @@
+원큐합격 전처리기 — 함께 배포하는 오픈소스와 라이선스
+
+이 프로그램은 아래 오픈소스를 사용합니다. 각 라이선스 원문은 같은 폴더의 _internal 안 각 패키지 폴더
+(…-dist-info/LICENSE 등)에 들어 있습니다.
+
+■ Qt for Python (PySide6) / Qt 6 — GNU LGPL v3
+  - 이 프로그램은 Qt 라이브러리를 수정하지 않고 동적으로 사용합니다. Qt 라이브러리 파일(Qt6*.dll, PySide6 폴더)은
+    실행파일과 별도 파일로 들어 있어, 같은 버전의 다른 Qt/PySide6 라이브러리로 바꿔 쓸 수 있습니다.
+  - 소스 코드: https://code.qt.io/cgit/pyside/pyside-setup.git/ , https://download.qt.io/official_releases/QtForPython/
+    (사용한 버전은 _internal/PySide6 폴더 이름·버전 정보 참고). 요청하면 이 배포본에 쓴 버전의 소스를 같은 방법으로 제공합니다.
+  - LGPL v3 원문: https://www.gnu.org/licenses/lgpl-3.0.html
+
+■ pypdfium2 (Apache-2.0 또는 BSD-3-Clause), PDFium (BSD-3-Clause 등)
+■ pdfplumber (MIT), pdfminer.six (MIT)
+■ Pillow (MIT-CMU / HPND)
+■ NumPy (BSD-3-Clause)
+■ jsonschema (MIT), referencing·jsonschema-specifications·rpds-py (MIT)
+■ Python (PSF License)
+
+■ (선택 설치, 함께 배포하지 않음) Tesseract OCR — Apache-2.0. 스캔본 PDF를 처리할 때만 따로 설치합니다.

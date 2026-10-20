@@ -3256,3 +3256,58 @@ details.why summary {
     display: inline;
   }
 }
+
+/* 문제팩 가져오기 진행 창(v0.10.7) */
+.imp-back {
+  z-index: 55;
+}
+.imp h2 {
+  margin-bottom: 8px;
+}
+.imp-count {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin: 0 0 8px;
+  font-size: 18px;
+  font-variant-numeric: tabular-nums;
+}
+.imp-time {
+  font-size: 14px;
+  color: var(--muted);
+}
+.imp-bar {
+  height: 10px;
+  border-radius: 5px;
+  background: var(--line);
+  overflow: hidden;
+}
+.imp-bar > span {
+  display: block;
+  height: 100%;
+  background: var(--primary);
+  transition: width 0.3s ease;
+}
+.imp-file {
+  margin: 12px 0;
+  word-break: break-all;
+  font-size: 14px;
+}
+.imp-phase {
+  color: var(--muted);
+}
+.imp-note {
+  font-size: 14px;
+  color: var(--muted);
+  margin: 0 0 12px;
+}
+.imp-slow {
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--accent) 18%, var(--surface));
+  font-size: 14px;
+}
+.imp-slow p {
+  margin: 4px 0 0;
+}

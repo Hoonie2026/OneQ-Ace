@@ -38,7 +38,7 @@ interface Cert {
 export function Home(props: {
   version: number;
   busy: boolean;
-  onImport: (files: File[]) => void;
+  onImport: (files: File[], pickMs: number | null) => void;
   onSolve: (t: Target) => void;
   onResult: (t: Target) => void;
   onPack: (packId: string) => void;
