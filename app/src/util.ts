@@ -61,8 +61,10 @@ function standaloneNow(): boolean {
 
 export function deviceEnv(ua = navigator.userAgent, touch = navigator.maxTouchPoints ?? 0, standalone = standaloneNow()): DeviceEnv {
   const ipadDesktop = /Macintosh/.test(ua) && touch > 1;
-  const os: DeviceEnv['os'] = /Android/.test(ua) ? 'android' : /iPhone|iPad|iPod/.test(ua) || ipadDesktop ? 'ios' : /Windows/.test(ua) ? 'windows' : /Mac OS X/.test(ua) ? 'mac' : 'other';
-  const kind: DeviceEnv['kind'] = /iPad/.test(ua) || ipadDesktop || (os === 'android' && !/Mobile/.test(ua)) ? 'tablet' : os === 'android' || os === 'ios' ? 'phone' : 'pc';
+  // 안드로이드 태블릿의 "데스크톱 사이트" 모드(Firefox·Chrome 태블릿 기본값일 때가 있음, 실기기 Z4): Android 대신 Linux x86_64를 보낸다 → 터치 화면이면 태블릿으로
+  const androidDesktop = !/Android/.test(ua) && /Linux|X11/.test(ua) && touch > 1;
+  const os: DeviceEnv['os'] = /Android/.test(ua) || androidDesktop ? 'android' : /iPhone|iPad|iPod/.test(ua) || ipadDesktop ? 'ios' : /Windows/.test(ua) ? 'windows' : /Mac OS X/.test(ua) ? 'mac' : 'other';
+  const kind: DeviceEnv['kind'] = /iPad/.test(ua) || ipadDesktop || androidDesktop || (os === 'android' && !/Mobile/.test(ua)) ? 'tablet' : os === 'android' || os === 'ios' ? 'phone' : 'pc';
   const inApp: DeviceEnv['inApp'] = /KAKAOTALK/i.test(ua)
     ? 'kakao'
     : /NAVER\(inapp|NAVER\//.test(ua)

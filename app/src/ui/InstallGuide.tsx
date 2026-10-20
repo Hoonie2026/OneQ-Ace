@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import { canPromptInstall, externalOpenUrl, onInstallChange, promptInstall } from '../install';
+import { canPromptInstall, externalOpenUrl, justInstalled, onInstallChange, promptInstall } from '../install';
 import { deviceEnv, deviceNoun, type DeviceEnv } from '../util';
 
 /**
@@ -68,7 +68,22 @@ function guideFor(env: DeviceEnv, canPrompt: boolean, url: string, copy: () => v
             : ['Chrome 또는 Edge로 이 주소를 엽니다', '주소창 오른쪽의 설치 아이콘을 누릅니다'],
       dismissible: true,
     };
-  // 안드로이드 휴대폰·태블릿
+  // 안드로이드에서 Chrome이 아닌 브라우저(Firefox·Edge·웨일 등 — 기본 브라우저면 메일·메신저 링크가 여기로 열림, 실기기 Z4)
+  if (env.browser !== 'Chrome' && !(canPrompt && env.browser === '삼성 인터넷')) {
+    const ext = externalOpenUrl('other', 'android', url);
+    return {
+      title: `${dev}에서는 Chrome으로 설치하세요`,
+      lead: `지금은 ${env.browser}에서 열렸습니다. 브라우저마다 기록이 따로 저장되므로 설치와 학습은 Chrome 한 곳에서 하세요.`,
+      action: ext ? { label: 'Chrome으로 열기', run: () => (window.location.href = ext), testId: 'open-chrome' } : undefined,
+      steps: [
+        '[Chrome으로 열기]를 누릅니다(안 되면 Chrome을 열고 주소창에 이 주소를 입력)',
+        'Chrome 화면의 [원큐합격 앱 설치] 또는 ⋮ → 「앱 설치」·「설치 및 바로가기 만들기 → 설치」',
+        `${env.browser}에서 계속 쓰려면: 메뉴(⋮) → 「설치」 또는 「홈 화면에 추가」`,
+      ],
+      dismissible: true,
+    };
+  }
+  // 안드로이드 휴대폰·태블릿(Chrome·삼성 인터넷)
   return {
     title: `${dev}에 앱으로 설치하세요`,
     lead: '설치하면 인터넷 없이도 열리고 기록이 오래 보존됩니다.',
@@ -100,7 +115,21 @@ export function InstallGuide(props: { url: string; onCopy: () => void; compact?:
       return false;
     }
   });
-  useEffect(() => onInstallChange(() => setCanPrompt(canPromptInstall())), []);
+  // 설치 직후 PC Chrome·Edge는 지금 탭을 그대로 앱 창으로 옮긴다(새로 불러오지 않음) → 표시 방식이 바뀌면 카드를 숨긴다(실기기 Z5)
+  const [installedNow, setInstalledNow] = useState(false);
+  useEffect(() => {
+    const off = onInstallChange(() => {
+      setCanPrompt(canPromptInstall());
+      if (justInstalled()) setInstalledNow(true);
+    });
+    const mq = window.matchMedia?.('(display-mode: standalone)');
+    const onMode = () => mq?.matches && setInstalledNow(true);
+    mq?.addEventListener?.('change', onMode);
+    return () => {
+      off();
+      mq?.removeEventListener?.('change', onMode);
+    };
+  }, []);
   // 카카오톡 안에서 처음 열리면 바로 바깥 브라우저로(카카오톡이 제공하는 주소). 실패하면 이 카드의 단추·안내
   useEffect(() => {
     if (!props.compact || env.inApp !== 'kakao') return;
@@ -114,7 +143,7 @@ export function InstallGuide(props: { url: string; onCopy: () => void; compact?:
     if (ext) window.location.href = ext;
   }, []);
 
-  if (env.standalone) return null;
+  if (env.standalone || installedNow) return null;
   const g = guideFor(env, canPrompt, props.url, props.onCopy, () => void promptInstall());
   if (props.compact && hidden && g.dismissible) return null;
 

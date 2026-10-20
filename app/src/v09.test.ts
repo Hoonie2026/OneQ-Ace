@@ -108,3 +108,11 @@ describe('설치 안내(v0.10.1)', () => {
     expect(externalOpenUrl('naver', 'ios', url)).toBeNull();
   });
 });
+
+describe('안드로이드 태블릿 데스크톱 모드(v0.10.2, 실기기 Z4)', () => {
+  it('Linux x86_64 + 터치면 안드로이드 태블릿, 터치가 없으면 PC', () => {
+    const ff = 'Mozilla/5.0 (X11; Linux x86_64; rv:144.0) Gecko/20100101 Firefox/144.0';
+    expect(deviceEnv(ff, 5)).toMatchObject({ os: 'android', kind: 'tablet', browser: 'Firefox' });
+    expect(deviceEnv(ff, 0)).toMatchObject({ kind: 'pc' });
+  });
+});
