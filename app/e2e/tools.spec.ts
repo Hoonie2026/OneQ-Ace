@@ -1,34 +1,38 @@
 /**
- * v0.10 계산 도구: 계산 문제(문항 글자로 판정)면 계산기가 저절로 열리고, 도·분·초 계산·도분초 표시,
- * 손글씨 메모(다음 문항이면 지워짐), PC 키보드(2 → 답, Enter → 다음). 휴대폰 크기 + PC 크기(1366×768, 두 단 화면)
+ * 계산 도구(v0.10~v0.10.4): 모든 문항에서 보기 위 [계산기] [메모] — 처음에는 닫혀 있고 누르면 열림(v0.10.4: 계산 문제 자동 판정 없앰).
+ * 도·분·초 계산·도분초 표시, 손글씨 메모, 같은 문항에서 오가도 그대로, 다음 문항에서도 도구는 열린 채(메모만 새 장),
+ * PC 키보드(2 → 답, Enter → 다음). 휴대폰 크기 + PC 크기(1366×768, 두 단 화면)
  */
-import { expect, test, type Page } from '@playwright/test';
-import { existsSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { expect, test } from '@playwright/test';
+import { existsSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join, resolve } from 'node:path';
+import { makePack } from '../src/test/makePack';
+
 const SAMPLE = resolve(import.meta.dirname, '../../packs/oneq-SURVEY-2022-1.zip');
-async function toCalc(page: Page) {
-  await page.getByTestId('go-subjects').click();
-  await page.getByTestId('subject-study').first().click();
-  for (let k = 0; k < 20; k++) {
-    await page.getByRole('button', { name: '1번' }).waitFor();
-    await page.waitForTimeout(150);
-    if (await page.getByTestId('calc-tag').isVisible()) return;
-    await page.getByRole('button', { name: '모름' }).click();
-    await page.getByRole('button', { name: /^(다음 →|성적 보기)$/ }).click();
-  }
-  throw new Error('no calc question');
+async function packFile(): Promise<string> {
+  if (existsSync(SAMPLE)) return SAMPLE;
+  const dir = mkdtempSync(join(tmpdir(), 'oneq-tools-'));
+  const path = join(dir, 'oneq-TEST-2022-1.zip');
+  writeFileSync(path, await makePack({ questions: Array.from({ length: 40 }, (_, i) => ({ hash: `t${i}`, answer: (i % 4) + 1, subjectNo: Math.floor(i / 20) + 1 })) }));
+  return path;
 }
+
 for (const [name, w, h] of [['phone', 0, 0], ['pc', 1366, 768]] as const) {
-  test(`계산 도구(v0.10) ${name}: 계산 문제면 계산기 자동, 도분초 계산, 손글씨 메모, PC 키보드`, async ({ page }, info) => {
+  test(`계산 도구 ${name}: [계산기]·[메모] 단추, 도분초 계산, 손글씨 메모, 상태 유지, PC 키보드`, async ({ page }, info) => {
     test.skip(name === 'pc' && info.project.name !== 'pixel', 'PC 크기는 한 번만');
-    test.skip(!existsSync(SAMPLE), '실제 팩(packs/oneq-SURVEY-2022-1.zip)이 있어야 계산 문제가 나옴');
     test.setTimeout(120_000);
     if (w) await page.setViewportSize({ width: w, height: h });
     await page.goto('./');
-    await page.getByTestId('pack-input').first().setInputFiles(SAMPLE);
+    await page.getByTestId('pack-input').first().setInputFiles(await packFile());
     await expect(page.getByTestId('go-recommend')).toBeVisible({ timeout: 30_000 });
-    await page.waitForTimeout(2500);
-    await toCalc(page);
+    await page.getByTestId('go-subjects').click();
+    await page.getByTestId('subject-study').first().click();
+    await page.getByRole('button', { name: '1번' }).waitFor();
+    // 처음에는 닫혀 있고, 단추로 연다
+    await expect(page.getByTestId('tool-panel')).toBeHidden();
+    await expect(page.getByTestId('tool-calc')).toContainText('계산기');
+    await page.getByTestId('tool-calc').click();
     await expect(page.getByTestId('calculator')).toBeVisible();
     for (const k of ['5', '0', '°′″', '2', '0', '°′″', '1', '5', '°′″', '+', '1', '=']) await page.locator('.calc-key[data-key="' + k + '"]').click();
     await expect(page.getByTestId('calc-out')).toHaveText(/51\.3375/);
@@ -60,8 +64,8 @@ for (const [name, w, h] of [['phone', 0, 0], ['pc', 1366, 768]] as const) {
     await expect(page.getByTestId('feedback')).toBeVisible();
     await page.keyboard.press('Enter');
     await expect(page.getByTestId('feedback')).toBeHidden();
-    // 다음 문항이면 메모는 새 장
-    if (!(await page.getByTestId('tool-panel').isVisible()) || !(await page.getByTestId('scratchpad').isVisible())) await page.getByTestId('tool-memo').click();
+    // 다음 문항: 열어 둔 메모는 그대로 열려 있고 내용만 새 장
+    await expect(page.getByTestId('scratchpad')).toBeVisible();
     await expect(page.getByTestId('pad-canvas')).toHaveAttribute('data-strokes', '0');
     expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(0);
   });

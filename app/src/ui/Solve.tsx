@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { db, getSetting, SETTING, type AttemptRow, type QuestionRow } from '../db';
+import { db, type AttemptRow, type QuestionRow } from '../db';
 import { deadlineOf, easyToUnknown, examLabel, finishRun, firstUnanswered, loadSession, pauseRun, recordAnswer, resumeRun, saveNote, type Session, type Target } from '../study';
 import { ZoomImage } from './ZoomImage';
 import { questionMeta, startRelearn, startSubject, startToday, todayStatus, type TodayStatus } from '../coach';
@@ -8,7 +8,6 @@ import { askChoice, askConfirm } from './Dialog';
 import { Icon } from './Icon';
 import { Calculator } from './Calculator';
 import { Scratchpad } from './Scratchpad';
-import { isCalcQuestion } from '../calc/detect';
 
 const CIRCLED = ['', '①', '②', '③', '④', '⑤'];
 const MAX_ELAPSED = 30 * 60 * 1000;
@@ -43,10 +42,11 @@ export function Solve(props: { target: Target; onExit: () => void; onResult: (pe
   const [goalPending, setGoalPending] = useState(false);
   const [goalOpen, setGoalOpen] = useState(false);
   const [showRounds, setShowRounds] = useState(false);
-  /** 계산 도구(v0.10): 계산기·손글씨 메모. 계산 문제면 마지막에 쓴 도구가 저절로 열린다(설정에서 끌 수 있음) */
+  /**
+   * 계산 도구(v0.10): 계산기·손글씨 메모. v0.10.4(사용자 결정): 계산 문제 자동 판정·자동 열기는 없앰 —
+   * 모든 문항에서 보기 위 [계산기] [메모]를 필요할 때 누른다. 열어 둔 도구는 다음 문항에서도 그대로(메모 내용만 문항마다 새 장)
+   */
   const [tool, setTool] = useState<'calc' | 'memo' | null>(null);
-  const lastTool = useRef<'calc' | 'memo'>('calc');
-  const [autoTools, setAutoTools] = useState(true);
   const shownAt = useRef(performance.now());
   const hiddenFor = useRef(0);
   const hiddenAt = useRef<number | null>(null);
@@ -146,20 +146,7 @@ export function Solve(props: { target: Target; onExit: () => void; onResult: (pe
   // 다음 문항을 읽는 동안에는 이전 문항을 쓰지 않는다(빠른 연속 탭이 이전 문항에 기록되던 경합 방지)
   const q = loaded && loaded.qid === qid ? loaded : null;
   const attempt: AttemptRow | undefined = q ? s?.answers.get(q.qid) : undefined;
-  const calcQ = !!q && isCalcQuestion(q);
-
-  useEffect(() => {
-    getSetting<boolean>(SETTING.autoTools, true).then(setAutoTools).catch(() => undefined);
-  }, []);
-  // 문항이 바뀌면: 계산 문제면 도구를 열고, 아니면 닫아 문제 그림을 넓게(메모는 문항마다 새 장)
-  useEffect(() => {
-    if (!q) return;
-    setTool(calcQ && autoTools ? lastTool.current : null);
-  }, [q?.qid, autoTools]);
-  const pickTool = (t: 'calc' | 'memo') => {
-    lastTool.current = t;
-    setTool((cur) => (cur === t ? null : t));
-  };
+  const pickTool = (t: 'calc' | 'memo') => setTool((cur) => (cur === t ? null : t));
 
   const answer = async (chosen: number, easy = false) => {
     if (!s || !q || attempt || saving) return;
@@ -479,14 +466,16 @@ export function Solve(props: { target: Target; onExit: () => void; onResult: (pe
             </div>
           </div>
           <footer className="solve-bottom">
+            {/* v0.10.4(사용자 의견): 모든 문항에서 눈에 잘 띄게 — 크게, 아이콘과 함께, 열려 있으면 파란 면 */}
             <div className="tool-bar" role="toolbar" aria-label="계산 도구">
-              <button type="button" className={`chip-btn${tool === 'calc' ? ' on' : ''}`} onClick={() => pickTool('calc')} aria-pressed={tool === 'calc'} data-testid="tool-calc">
-                계산기
+              <button type="button" className={`tool-btn${tool === 'calc' ? ' on' : ''}`} onClick={() => pickTool('calc')} aria-pressed={tool === 'calc'} data-testid="tool-calc">
+                <Icon name="calculator" size={22} />
+                <span>계산기</span>
               </button>
-              <button type="button" className={`chip-btn${tool === 'memo' ? ' on' : ''}`} onClick={() => pickTool('memo')} aria-pressed={tool === 'memo'} data-testid="tool-memo">
-                <Icon name="pencil" size={16} /> 메모
+              <button type="button" className={`tool-btn${tool === 'memo' ? ' on' : ''}`} onClick={() => pickTool('memo')} aria-pressed={tool === 'memo'} data-testid="tool-memo">
+                <Icon name="memo" size={22} />
+                <span>메모</span>
               </button>
-              {calcQ && <span className="calc-tag" data-testid="calc-tag">계산 문제</span>}
             </div>
             <div className="choices" role="group" aria-label="보기 선택">
               {Array.from({ length: q?.choiceCount ?? 4 }, (_, i) => i + 1).map((n) => {

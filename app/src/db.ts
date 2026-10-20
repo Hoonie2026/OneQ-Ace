@@ -178,7 +178,6 @@ export const SETTING = {
   lastBackupAt: 'lastBackupAt',
   attemptsAtLastBackup: 'attemptsAtLastBackup',
   certCode: 'certCode', // 홈에서 고른 자격종목
-  autoTools: 'autoTools', // 계산 문제에서 계산기·메모 저절로 열기(v0.10, 기본 켬)
 } as const;
 
 export async function getSetting<T>(key: string, fallback: T, d: OneQDB = db): Promise<T> {

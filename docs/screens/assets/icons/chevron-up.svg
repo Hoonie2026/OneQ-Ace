@@ -1,4 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-  <!-- 접기 (Lucide chevron-up) | [왜 이렇게 구성했나요?] 열림 상태 표시 (기존 ▴ 대체) | License: Lucide ISC -->
-  <path d="m18 15-6-6-6 6"/>
-</svg>

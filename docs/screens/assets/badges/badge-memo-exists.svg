@@ -1,9 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="102" height="32" viewBox="0 0 102 32" font-family="'Pretendard Variable', Pretendard, sans-serif">
-  <rect width="102" height="32" rx="16" fill="#f3e8ff" stroke="#d8b4fe" stroke-width="1"/>
-  <g transform="translate(11, 8) scale(0.68)" fill="none" stroke="#6d28d9" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/>
-    <path d="M14 2v4a2 2 0 0 0 2 2h4"/>
-    <path d="M16 13H8"/><path d="M16 17H8"/>
-  </g>
-  <text x="31" y="20.5" fill="#5b21b6" font-size="13" font-weight="800">메모 있음</text>
-</svg>

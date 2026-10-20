@@ -1,7 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="106" height="32" viewBox="0 0 106 32" font-family="'Pretendard Variable', Pretendard, sans-serif">
-  <rect width="106" height="32" rx="16" fill="#fff3dc" stroke="#f5d08a" stroke-width="1"/>
-  <!-- Flame / Star icon -->
-  <path d="M18.5 8.5c.5 2.5 2.5 3.5 2.5 6.5a4.5 4.5 0 1 1-9 0c0-2 1.2-3.6 2.5-4.8.4 1.3 1.2 2 2 2.3.3-1.4.8-2.8 2-4z" fill="#d97706"/>
-  <text x="31" y="20.5" fill="#92400e" font-size="13" font-weight="800">3회 출제</text>
-  <path d="M86 13.5l3.5 3.5 3.5-3.5" fill="none" stroke="#92400e" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
-</svg>

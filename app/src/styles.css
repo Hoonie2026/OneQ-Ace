@@ -2830,29 +2830,35 @@ details.why[open] summary::after {
   align-items: center;
   gap: 8px;
 }
-.tool-bar .chip-btn {
-  min-height: 36px;
+/* v0.10.4: 계산기·메모 단추 — 모든 문항에서 보이므로 크게, 아이콘과 함께(반씩 나눠 쓰기) */
+.tool-bar .tool-btn {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 46px;
   padding: 0 14px;
-  border: 0;
-  background: var(--surface-2);
-  color: var(--ink);
+  border: 1.5px solid color-mix(in srgb, var(--primary) 28%, transparent);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--primary) 7%, var(--surface));
+  color: var(--primary);
   font: inherit;
-  font-size: 15px;
-  font-weight: 600;
+  font-size: 16px;
+  font-weight: 700;
+  cursor: pointer;
 }
-.tool-bar .chip-btn.on,
+.tool-bar .tool-btn:active {
+  filter: brightness(0.95);
+}
+.tool-bar .tool-btn.on {
+  border-color: var(--primary);
+  background: var(--primary);
+  color: var(--primary-ink);
+}
 .pad-tools .chip-btn.on {
   background: color-mix(in srgb, var(--primary) 16%, var(--surface));
   color: var(--primary);
-}
-.calc-tag {
-  margin-left: auto;
-  padding: 3px 10px;
-  border-radius: 999px;
-  background: var(--check-bg);
-  color: var(--check);
-  font-size: 13px;
-  font-weight: 700;
 }
 .tool-panel {
   flex: none;
@@ -3184,7 +3190,4 @@ details.why summary {
 .tool-panel.is-memo .tool-memo {
   flex: 1;
   min-height: 0;
-}
-.check-line[data-testid='auto-tools'] input {
-  accent-color: var(--primary);
 }

@@ -14,7 +14,7 @@ import {
   type Fingerprint,
   type RestoreReport,
 } from '../backup';
-import { db, describeError, getSetting, isStandalone, setSetting, SETTING, STAGE0_DB_NAME } from '../db';
+import { db, describeError, getSetting, isStandalone, SETTING, STAGE0_DB_NAME } from '../db';
 import { deletePacks, wipeAll, wipeCertRecords, wipeRecords } from '../wipe';
 import { deviceEnv, deviceNoun, deviceSummary, formatBytes, readStorageInfo, storagePlace, type StorageInfo } from '../util';
 import { examLabel } from '../study';
@@ -48,7 +48,6 @@ export function Settings(props: {
   const [fp, setFp] = useState<Fingerprint | null>(null);
   const [lastBackup, setLastBackup] = useState<number | null>(null);
   const [newSince, setNewSince] = useState(0);
-  const [autoTools, setAutoTools] = useState(true);
   const [pending, setPending] = useState(0);
   const [info, setInfo] = useState<StorageInfo>({});
   const [busy, setBusy] = useState(false);
@@ -65,7 +64,6 @@ export function Settings(props: {
     setFp(await fingerprint());
     setLastBackup(await getSetting<number | null>(SETTING.lastBackupAt, null));
     setNewSince((await backupDue()).newAttempts);
-    setAutoTools(await getSetting<boolean>(SETTING.autoTools, true));
     setPending(await db.orphans.count());
     setInfo(await readStorageInfo());
     setStage0(await Dexie.exists(STAGE0_DB_NAME).catch(() => false));
@@ -304,18 +302,10 @@ export function Settings(props: {
 
       <section className="card">
         <h2>풀이 화면</h2>
-        <label className="check-line" data-testid="auto-tools">
-          <input
-            type="checkbox"
-            checked={autoTools}
-            onChange={async (e) => {
-              setAutoTools(e.target.checked);
-              await setSetting(SETTING.autoTools, e.target.checked);
-            }}
-          />
-          <span>계산 문제에서 계산기·메모 저절로 열기</span>
-        </label>
-        <p className="hint">풀이 화면 아래 [계산기] [메모]는 언제든 누를 수 있습니다. PC 키보드: 1~4 보기, M 모름, E 쉬움, Enter 다음, ← 이전.</p>
+        <p className="hint">
+          모든 문항에서 보기 위 <b>[계산기] [메모]</b>를 누르면 열리고, 한 번 더 누르면 닫힙니다. 같은 문항에서는 오가도 내용이 그대로, 메모는 다음 문항에서 새 장입니다.
+        </p>
+        <p className="hint">PC 키보드: 1~4 보기, M 모름, E 쉬움, Enter 다음, ← 이전.</p>
       </section>
 
       <section className="card" data-testid="pack-section">
