@@ -2825,37 +2825,6 @@ details.why[open] summary::after {
   flex-direction: column;
   min-height: 0;
 }
-.tool-bar {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-/* v0.10.4: 계산기·메모 단추 — 모든 문항에서 보이므로 크게, 아이콘과 함께(반씩 나눠 쓰기) */
-.tool-bar .tool-btn {
-  flex: 1;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  min-height: 46px;
-  padding: 0 14px;
-  border: 1.5px solid color-mix(in srgb, var(--primary) 28%, transparent);
-  border-radius: 14px;
-  background: color-mix(in srgb, var(--primary) 7%, var(--surface));
-  color: var(--primary);
-  font: inherit;
-  font-size: 16px;
-  font-weight: 700;
-  cursor: pointer;
-}
-.tool-bar .tool-btn:active {
-  filter: brightness(0.95);
-}
-.tool-bar .tool-btn.on {
-  border-color: var(--primary);
-  background: var(--primary);
-  color: var(--primary-ink);
-}
 .pad-tools .chip-btn.on {
   background: color-mix(in srgb, var(--primary) 16%, var(--surface));
   color: var(--primary);
@@ -3190,4 +3159,100 @@ details.why summary {
 .tool-panel.is-memo .tool-memo {
   flex: 1;
   min-height: 0;
+}
+
+/* v0.10.5(사용자 의견): 풀이 화면 하단 2줄 — 1줄 보기, 2줄 [모름|쉬움] 박스 + [계산기|메모] 박스.
+   높이·간격을 줄여 문제 영역을 넓힘(현행 3줄 대비 약 90px). 단추 높이는 누르기 최소(44px) 유지 */
+.solve-bottom {
+  gap: 4px;
+  padding-top: 8px;
+  padding-bottom: calc(max(env(safe-area-inset-bottom), 8px) + 4px);
+}
+.solve-bottom .choices {
+  gap: 6px;
+}
+.solve-bottom .choice {
+  min-height: 46px;
+  font-size: 20px;
+  border-radius: 12px;
+}
+.act-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+}
+.act-group {
+  display: flex;
+  min-height: 46px;
+  border: 1.5px solid var(--line);
+  border-radius: 12px;
+  overflow: hidden;
+  background: var(--surface-2);
+}
+.act-group > button {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-height: 43px;
+  margin: 0;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  color: var(--ink);
+  font: inherit;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.act-group > button + button {
+  border-left: 1.5px solid var(--line);
+}
+.act-group > button:active:not(:disabled) {
+  filter: brightness(0.95);
+}
+.act-answer > .btn-easy {
+  background: color-mix(in srgb, var(--ok) 14%, var(--surface));
+  color: var(--ok);
+}
+.act-row > .btn-next {
+  min-height: 46px;
+  border-radius: 12px;
+  font-size: 16px;
+}
+.act-tools {
+  border-color: color-mix(in srgb, var(--primary) 35%, transparent);
+  background: color-mix(in srgb, var(--primary) 7%, var(--surface));
+}
+.act-tools > button {
+  color: var(--primary);
+}
+.act-tools > button + button {
+  border-left-color: color-mix(in srgb, var(--primary) 35%, transparent);
+}
+.act-tools > button.on {
+  background: var(--primary);
+  color: var(--primary-ink);
+}
+/* 답한 뒤: 도구는 아이콘만(이름은 aria-label로 유지), [다음 →]을 넓게 */
+.act-row.is-answered .act-tools > button {
+  flex: none;
+  width: 56px;
+  padding: 0;
+}
+.act-row.is-answered .act-tools > button span {
+  display: none;
+}
+/* 넓은 화면(PC·태블릿 가로): 자리가 넉넉하므로 답한 뒤에도 글자 표시 */
+@media (min-width: 900px) {
+  .act-row.is-answered .act-tools > button {
+    width: auto;
+    padding: 0 12px;
+  }
+  .act-row.is-answered .act-tools > button span {
+    display: inline;
+  }
 }

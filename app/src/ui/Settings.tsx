@@ -303,7 +303,7 @@ export function Settings(props: {
       <section className="card">
         <h2>풀이 화면</h2>
         <p className="hint">
-          모든 문항에서 보기 위 <b>[계산기] [메모]</b>를 누르면 열리고, 한 번 더 누르면 닫힙니다. 같은 문항에서는 오가도 내용이 그대로, 메모는 다음 문항에서 새 장입니다.
+          모든 문항에서 보기 아래 줄 <b>[계산기] [메모]</b>를 누르면 열리고, 한 번 더 누르면 닫힙니다. 같은 문항에서는 오가도 내용이 그대로, 메모는 다음 문항에서 새 장입니다.
         </p>
         <p className="hint">PC 키보드: 1~4 보기, M 모름, E 쉬움, Enter 다음, ← 이전.</p>
       </section>

@@ -44,7 +44,7 @@ export function Solve(props: { target: Target; onExit: () => void; onResult: (pe
   const [showRounds, setShowRounds] = useState(false);
   /**
    * 계산 도구(v0.10): 계산기·손글씨 메모. v0.10.4(사용자 결정): 계산 문제 자동 판정·자동 열기는 없앰 —
-   * 모든 문항에서 보기 위 [계산기] [메모]를 필요할 때 누른다. 열어 둔 도구는 다음 문항에서도 그대로(메모 내용만 문항마다 새 장)
+   * 모든 문항에서 보기 아래 줄 [계산기|메모]를 필요할 때 누른다. 열어 둔 도구는 다음 문항에서도 그대로(메모 내용만 문항마다 새 장)
    */
   const [tool, setTool] = useState<'calc' | 'memo' | null>(null);
   const shownAt = useRef(performance.now());
@@ -466,17 +466,6 @@ export function Solve(props: { target: Target; onExit: () => void; onResult: (pe
             </div>
           </div>
           <footer className="solve-bottom">
-            {/* v0.10.4(사용자 의견): 모든 문항에서 눈에 잘 띄게 — 크게, 아이콘과 함께, 열려 있으면 파란 면 */}
-            <div className="tool-bar" role="toolbar" aria-label="계산 도구">
-              <button type="button" className={`tool-btn${tool === 'calc' ? ' on' : ''}`} onClick={() => pickTool('calc')} aria-pressed={tool === 'calc'} data-testid="tool-calc">
-                <Icon name="calculator" size={22} />
-                <span>계산기</span>
-              </button>
-              <button type="button" className={`tool-btn${tool === 'memo' ? ' on' : ''}`} onClick={() => pickTool('memo')} aria-pressed={tool === 'memo'} data-testid="tool-memo">
-                <Icon name="memo" size={22} />
-                <span>메모</span>
-              </button>
-            </div>
             <div className="choices" role="group" aria-label="보기 선택">
               {Array.from({ length: q?.choiceCount ?? 4 }, (_, i) => i + 1).map((n) => {
                 const state = !attempt
@@ -497,24 +486,35 @@ export function Solve(props: { target: Target; onExit: () => void; onResult: (pe
                 );
               })}
             </div>
-            {attempt ? (
-              <button className="btn btn-primary btn-block btn-next" onClick={next}>
-                {remaining === 0 ? (isMock ? '채점하기' : '성적 보기') : '다음 →'}
-              </button>
-            ) : isMock ? (
-              <button className="btn btn-block btn-next btn-unknown" disabled={saving || !q} onClick={() => answer(0)}>
-                모름
-              </button>
-            ) : (
-              <div className="unknown-row">
-                <button className="btn btn-next btn-unknown" disabled={saving || !q} onClick={() => answer(0)}>
-                  모름
+            {/* v0.10.5(사용자 의견): 하단 2줄 — 보기 아래 한 줄에 [모름|쉬움](답한 뒤 [다음 →]) 박스와 [계산기|메모] 박스. 답한 뒤 도구는 아이콘만 */}
+            <div className={`act-row${attempt ? ' is-answered' : ''}`}>
+              {attempt ? (
+                <button className="btn btn-primary btn-next" onClick={next}>
+                  {remaining === 0 ? (isMock ? '채점하기' : '성적 보기') : '다음 →'}
                 </button>
-                <button className="btn btn-next btn-easy" disabled={saving || !q} onClick={() => answer(0, true)} data-testid="easy">
-                  쉬움
+              ) : (
+                <div className="act-group act-answer">
+                  <button className="btn btn-next btn-unknown" disabled={saving || !q} onClick={() => answer(0)}>
+                    모름
+                  </button>
+                  {!isMock && (
+                    <button className="btn btn-next btn-easy" disabled={saving || !q} onClick={() => answer(0, true)} data-testid="easy">
+                      쉬움
+                    </button>
+                  )}
+                </div>
+              )}
+              <div className="act-group act-tools tool-bar" role="toolbar" aria-label="계산 도구">
+                <button type="button" className={`tool-btn${tool === 'calc' ? ' on' : ''}`} onClick={() => pickTool('calc')} aria-pressed={tool === 'calc'} aria-label="계산기" data-testid="tool-calc">
+                  <Icon name="calculator" size={18} />
+                  <span>계산기</span>
+                </button>
+                <button type="button" className={`tool-btn${tool === 'memo' ? ' on' : ''}`} onClick={() => pickTool('memo')} aria-pressed={tool === 'memo'} aria-label="메모" data-testid="tool-memo">
+                  <Icon name="memo" size={18} />
+                  <span>메모</span>
                 </button>
               </div>
-            )}
+            </div>
           </footer>
         </div>
       </div>

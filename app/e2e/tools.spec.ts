@@ -1,5 +1,5 @@
 /**
- * 계산 도구(v0.10~v0.10.4): 모든 문항에서 보기 위 [계산기] [메모] — 처음에는 닫혀 있고 누르면 열림(v0.10.4: 계산 문제 자동 판정 없앰).
+ * 계산 도구(v0.10~v0.10.5): 모든 문항에서 보기 아래 줄 [계산기|메모] 박스(v0.10.5 하단 2줄) — 처음에는 닫혀 있고 누르면 열림(v0.10.4: 계산 문제 자동 판정 없앰).
  * 도·분·초 계산·도분초 표시, 손글씨 메모, 같은 문항에서 오가도 그대로, 다음 문항에서도 도구는 열린 채(메모만 새 장),
  * PC 키보드(2 → 답, Enter → 다음). 휴대폰 크기 + PC 크기(1366×768, 두 단 화면)
  */
@@ -29,6 +29,15 @@ for (const [name, w, h] of [['phone', 0, 0], ['pc', 1366, 768]] as const) {
     await page.getByTestId('go-subjects').click();
     await page.getByTestId('subject-study').first().click();
     await page.getByRole('button', { name: '1번' }).waitFor();
+    // v0.10.5: 하단 2줄 — 보기 바로 아래(4px) 한 줄에 [모름|쉬움] 박스와 [계산기|메모] 박스
+    const lay = await page.evaluate(() => {
+      const r = (s: string) => document.querySelector(s)!.getBoundingClientRect();
+      return { ch: r('.choices'), ans: r('.act-answer'), tools: r('.act-tools'), foot: r('footer.solve-bottom') };
+    });
+    expect(lay.ans.top - lay.ch.bottom).toBeLessThanOrEqual(5);
+    expect(Math.abs(lay.ans.top - lay.tools.top)).toBeLessThan(1);
+    expect(lay.tools.left).toBeGreaterThan(lay.ans.right);
+    if (!w) expect(lay.foot.height).toBeLessThan(125);
     // 처음에는 닫혀 있고, 단추로 연다
     await expect(page.getByTestId('tool-panel')).toBeHidden();
     await expect(page.getByTestId('tool-calc')).toContainText('계산기');
@@ -62,6 +71,10 @@ for (const [name, w, h] of [['phone', 0, 0], ['pc', 1366, 768]] as const) {
     await page.locator('body').click({ position: { x: 5, y: 5 } }).catch(() => undefined);
     await page.keyboard.press('2');
     await expect(page.getByTestId('feedback')).toBeVisible();
+    // 답한 뒤: 왼쪽 박스가 [다음 →], 휴대폰에서는 도구가 아이콘만(이름은 aria-label)
+    await expect(page.locator('.act-row > .btn-next')).toBeVisible();
+    await expect(page.getByRole('button', { name: '계산기' })).toBeVisible();
+    await expect(page.getByTestId('tool-calc').locator('span')).toBeVisible({ visible: !!w });
     await page.keyboard.press('Enter');
     await expect(page.getByTestId('feedback')).toBeHidden();
     // 다음 문항: 열어 둔 메모는 그대로 열려 있고 내용만 새 장
