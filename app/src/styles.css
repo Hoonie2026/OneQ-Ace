@@ -3342,3 +3342,131 @@ details.why summary {
 @media (prefers-reduced-motion: reduce) {
   .imp-bar-wait > span { animation: none; width: 100%; opacity: 0.4; }
 }
+
+/* v0.11(ADR 020): 과목별 학습 — 안내문 대신 막대 안내창(PC 마우스 올림 / 폰·태블릿·펜 누름) */
+.subject-tip-hint {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 8px;
+  font-size: 13.5px;
+}
+.subject {
+  position: relative;
+}
+.subject.tip-open {
+  z-index: 5;
+}
+.bar-hit {
+  position: relative;
+  margin: 0 -6px;
+  padding: 4px 6px 8px;
+  border-radius: 10px;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+.bar-hit:hover,
+.bar-hit[aria-expanded='true'] {
+  background: var(--surface-2, rgb(15 29 46 / 0.04));
+}
+.bar-hit:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+.subject-tip {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc(100% + 4px);
+  z-index: 20;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: 0 8px 28px rgb(15 29 46 / 0.18);
+  font-size: 13.5px;
+  line-height: 1.5;
+  cursor: auto;
+}
+.subject-tip dl {
+  margin: 0;
+  display: grid;
+  gap: 2px;
+}
+.subject-tip dt {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+  font-weight: 700;
+}
+.subject-tip dt:first-child {
+  margin-top: 0;
+}
+.subject-tip dd {
+  margin: 0 0 0 20px;
+  color: var(--muted);
+}
+.subject-tip dd b {
+  color: var(--ink);
+}
+.subject-tip small {
+  font-size: 12.5px;
+}
+.tip-swatch {
+  display: inline-block;
+  flex: none;
+  width: 14px;
+  height: 10px;
+  border-radius: 3px;
+}
+.tip-swatch.fill {
+  background: linear-gradient(90deg, var(--fail) 0 33%, #e0a400 33% 66%, var(--ok) 66%);
+}
+.tip-swatch.mark {
+  width: 4px;
+  height: 14px;
+  margin: 0 5px;
+  background: var(--ink);
+}
+.tip-swatch.dash {
+  width: 0;
+  height: 14px;
+  margin: 0 7px;
+  border-left: 2px dashed var(--muted);
+  border-radius: 0;
+}
+.tip-c {
+  font-weight: 700;
+}
+.tip-c.bad {
+  color: var(--fail);
+}
+.tip-c.warn {
+  color: #b07e00;
+}
+.tip-c.ok {
+  color: var(--ok);
+}
+/* 시스템 추천 학습 단추: 아래 줄에 오늘 남은 문항(v0.11) */
+.btn.btn-stack {
+  flex-direction: column;
+  gap: 1px;
+  padding-top: 8px;
+  padding-bottom: 8px;
+}
+.btn-sub {
+  font-size: 13.5px;
+  font-weight: 500;
+  opacity: 0.88;
+}
+@media (prefers-color-scheme: dark) {
+  .subject-tip {
+    box-shadow: 0 8px 28px rgb(0 0 0 / 0.5);
+  }
+  .tip-c.warn {
+    color: #e8b923;
+  }
+}

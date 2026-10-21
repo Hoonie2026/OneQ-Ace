@@ -149,7 +149,7 @@ test('3단계 게이트(5단계 개편 후): 오프라인 과목별 학습·이�
   const n1 = await doneToday();
   expect(n1).toBeGreaterThanOrEqual(15);
 
-  // ③-2 다른 과목을 7문항 풀다 멈춤 → 앱 종료·다시 열기(오프라인) → 홈에서 이어서
+  // ③-2 다른 과목을 7문항 풀다 ✕ → 앱 종료·다시 열기(오프라인) → 그 과목을 다시 고르면 남은 문항으로 새 묶음(v0.11 — "이어서 학습" 없음)
   await page.getByTestId('go-subjects').click();
   await expect(page.getByTestId('subject-study').nth(1)).toHaveText('학습하기 (20문항)'); // 오늘 남은 목표 vs 그 과목 낼 문항(20)
   await page.getByTestId('subject-study').nth(1).click();
@@ -159,11 +159,13 @@ test('3단계 게이트(5단계 개편 후): 오프라인 과목별 학습·이�
     await goNext();
   }
   await page.getByRole('button', { name: '풀이 멈추고 홈으로' }).click();
-  await page.getByTestId('dialog-choice-later').click(); // ✕ → 나중에 이어서 하기(v0.8.3)
+  await expect(page.getByTestId('dialog')).toHaveCount(0); // ✕는 묻지 않고 홈으로(답은 이미 저장)
   await page.reload();
-  await expect(page.getByTestId('today-resume')).toContainText('13문항 남음');
-  await page.getByTestId('today-resume').click();
-  await expect(page.getByTestId('progress')).toHaveText('8 / 20');
+  await expect(page.getByTestId('go-recommend')).toBeVisible();
+  await expect(page.getByTestId('today-resume')).toHaveCount(0);
+  await page.getByTestId('go-subjects').click();
+  await page.getByTestId('subject-study').nth(1).click();
+  await expect(page.getByTestId('progress')).toContainText('1 /');
   for (let guard = 0; guard < 40; guard++) {
     await answerOne();
     if (await goNext()) break;

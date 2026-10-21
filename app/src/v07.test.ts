@@ -162,8 +162,8 @@ describe('웹검색 검색어(v0.7)', () => {
 });
 
 describe('v0.7.1', () => {
-  it('오늘 학습 마치기: 열린 오늘 학습 묶음을 닫고(기록은 그대로) 오늘 결과를 센다', async () => {
-    const { finishToday, todayStatus } = await import('./coach');
+  it('열린 학습 묶음 닫기(v0.11 closeOpenToday — 옛 오늘 학습 마치기): 기록은 그대로, 오늘 결과를 센다', async () => {
+    const { closeOpenToday: finishToday, todayStatus } = await import('./coach');
     await importPackBytes(await makePack({ questions: Array.from({ length: 6 }, (_, i) => ({ hash: `f${i}`, answer: 1 })) }), {}, d);
     await savePlanSettings('TEST', { examDate: '2027-02-01', dailyMinutes: 6 }, d); // 6분 ÷ 1.5분 = 4문항
     const qids = ['TEST-2022-1-001', 'TEST-2022-1-002', 'TEST-2022-1-003'];

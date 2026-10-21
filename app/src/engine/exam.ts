@@ -7,7 +7,7 @@
  * - 처음 보는 문항 정답률 = 과목별 **최근** 첫 풀이의 정답률(공부할수록 오르는 힘을 반영). 시험에서는 모르는 문항도 찍으므로
  *   "모름"은 4지선다 추측 확률(25%)로 센다. 틀린 답은 이미 찍은 것이라 그대로 0
  *
- * 현재 점수(기록 그대로)는 따로: 푼 문항은 가장 최근 답(모름·오답 0점), 안 푼 문항 0점 — 회차 성적(3단계)과 같은 셈법. "지금까지 결과"
+ * 현재 점수(v0.11 — ADR 020)는 따로: 실제로 푼 문항만 분모, 같은 문항은 1번·가장 최근 답으로(모름·오답 0) — solvedScores. "지금까지 결과"
  */
 import { GUESS } from './memory';
 import type { Bank } from './items';
@@ -57,25 +57,48 @@ export function newItemRates(bank: Bank, attempts: EngineAttempt[]): Map<string,
   return out;
 }
 
-/** 현재 점수(기록 그대로, 안 푼 문항 0점): 과목별, 동일 문항은 출제 횟수만큼 센다 */
-export function recordedScores(bank: Bank, attempts: EngineAttempt[]): Map<string, number> {
+/** 현재 점수 한 과목(또는 전체): 푼 문항 수 · 그중 최근 답이 정답인 문항 수 · 점수(푼 문항이 없으면 null) */
+export interface SolvedScore {
+  solved: number;
+  correct: number;
+  score: number | null;
+}
+
+/**
+ * 현재 점수(v0.11 — ADR 020, 사용자 결정): **실제로 푼 문항 중 정답 비율**.
+ * - 분모 = 한 번이라도 푼 문항(보유 문항 전체가 아님). 같은 문항(다른 회차의 같은 내용 포함 — 학습 단위)은 여러 번 풀어도 1문항
+ * - 정답/오답은 그 문항의 **가장 최근 답**으로(회독 수는 반영하지 않음). 모름은 오답, [쉬움]은 정답
+ * - 모의고사 풀이는 원장에서 이미 빠져 있다(load.ts — 모의고사 성적은 모의고사 이력에만)
+ * 반환: 과목 key → 점수, 그리고 '*' = 모든 과목 합계(홈의 현재 점수)
+ */
+export function solvedScores(bank: Bank, attempts: EngineAttempt[]): Map<string, SolvedScore> {
   const last = new Map<string, EngineAttempt>();
   for (const a of attempts) {
     const it = bank.itemOf.get(a.qid);
     if (!it) continue;
     const cur = last.get(it.key);
-    if (!cur || a.ts > cur.ts) last.set(it.key, a);
+    if (!cur || a.ts >= cur.ts) last.set(it.key, a);
   }
-  const acc = new Map<string, { sum: number; n: number }>();
+  const acc = new Map<string, { solved: number; correct: number }>();
+  const add = (k: string, ok: boolean) => {
+    const v = acc.get(k) ?? { solved: 0, correct: 0 };
+    v.solved++;
+    if (ok) v.correct++;
+    acc.set(k, v);
+  };
+  const current = new Set(bank.subjects.filter((s) => s.current).map((s) => s.key));
   for (const it of bank.items) {
-    const a = acc.get(it.subjectKey) ?? { sum: 0, n: 0 };
     const l = last.get(it.key);
-    const p = l?.correct ? 1 : 0; // 안 푼 문항·모름·오답 0점
-    a.sum += p * it.qids.length;
-    a.n += it.qids.length;
-    acc.set(it.subjectKey, a);
+    if (!l) continue;
+    add(it.subjectKey, l.correct);
+    if (current.has(it.subjectKey)) add('*', l.correct);
   }
-  return new Map([...acc].map(([k, a]) => [k, Math.round((1000 * a.sum) / Math.max(1, a.n)) / 10]));
+  const out = new Map<string, SolvedScore>();
+  for (const k of [...bank.subjects.map((s) => s.key), '*']) {
+    const v = acc.get(k) ?? { solved: 0, correct: 0 };
+    out.set(k, { ...v, score: v.solved ? Math.round((1000 * v.correct) / v.solved) / 10 : null });
+  }
+  return out;
 }
 
 /**

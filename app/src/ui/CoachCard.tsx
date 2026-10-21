@@ -28,8 +28,8 @@ export function CoachCard(props: {
   lastMock: { date: string; score: number } | null;
   onPlan: () => void;
   onRecommend: () => void;
-  onResume: (sessionId: string) => void;
-  onFinish: () => void;
+  /** 오늘 기록 보기(v0.11 — "오늘 학습 마치기" 대신) */
+  onDayLog: () => void;
   onSubjects: () => void;
   onMock: () => void;
 }) {
@@ -38,7 +38,7 @@ export function CoachCard(props: {
   const examDay = settings ? new Date(settings.examDate + 'T00:00').toLocaleDateString('ko-KR', { month: 'long', day: 'numeric', weekday: 'short' }) : null;
   const proj = exam.projectedAvg;
   const projCls = scoreTone(proj);
-  const open = coach.openToday && coach.openToday.left > 0 ? coach.openToday : null;
+  const left = Math.max(0, today.target - coach.doneToday);
   const pct = today.target ? Math.min(100, (coach.doneToday / today.target) * 100) : 0;
 
   return (
@@ -61,9 +61,12 @@ export function CoachCard(props: {
         <div className="card score-box">
           <small>현재 점수</small>
           <p>
-            <b data-testid="current-avg">{exam.currentAvg}</b>점
+            <b data-testid="current-avg">{exam.current ?? '—'}</b>
+            {exam.current != null ? '점' : ''}
           </p>
-          <small className="muted score-note">풀이 기록 기준</small>
+          <small className="muted score-note" data-testid="current-basis">
+            {exam.solved ? `푼 ${exam.solved}문항 중 정답 ${exam.correct}` : '문제를 풀면 표시'}
+          </small>
         </div>
         <div className={`card score-box ${projCls}`}>
           <small>시험일 예상 점수</small>
@@ -98,21 +101,20 @@ export function CoachCard(props: {
         <p className="meter-text" data-testid="week-goal">
           오늘 {coach.doneToday} / {today.target}문항{coach.doneToday >= today.target && today.target > 0 ? ' 완료' : ''}
         </p>
-        {open ? (
-          <button className="btn btn-primary btn-block btn-big" disabled={props.busy} onClick={() => props.onResume(open.sessionId)} data-testid="today-resume">
-            이어서 학습 ({open.left}문항 남음)
-          </button>
-        ) : (
-          <button className="btn btn-primary btn-block btn-big" disabled={props.busy} onClick={props.onRecommend} data-testid="go-recommend">
-            시스템 추천 학습
-          </button>
-        )}
+        {/* v0.11(ADR 020): 학습 방식은 세 가지 — 시스템 추천 · 과목별 · 모의고사. "이어서 학습"·"오늘 학습 마치기" 없음.
+            답은 바로 저장되고, 시작할 때마다 오늘 남은 목표만큼 오늘 기록으로 다시 고른다(날이 바뀌면 새로) */}
+        <button className="btn btn-primary btn-block btn-big btn-stack" disabled={props.busy} onClick={props.onRecommend} data-testid="go-recommend">
+          시스템 추천 학습
+          <small className="btn-sub" data-testid="go-recommend-sub">
+            {left > 0 ? `오늘 남은 ${left}문항` : '오늘 목표 완료 · 추가 학습'}
+          </small>
+        </button>
         <button className="btn btn-block" onClick={props.onSubjects} data-testid="go-subjects">
           과목별 학습
         </button>
         {coach.doneToday > 0 && (
-          <button className="link-btn center-link" onClick={props.onFinish} data-testid="finish-day">
-            오늘 학습 마치기 <Icon name="forward" size={16} />
+          <button className="link-btn center-link" onClick={props.onDayLog} data-testid="day-log">
+            오늘 기록 보기 <Icon name="forward" size={16} />
           </button>
         )}
       </section>

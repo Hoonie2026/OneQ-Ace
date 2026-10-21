@@ -24,7 +24,7 @@ const MAX_ELAPSED = 30 * 60 * 1000;
  * 그 자리에는 **[쉬움]**: 보기를 고르지 않고 정답 처리(FSRS Easy — 다음 복습이 길게). 정답을 보고 사실 몰랐으면 [모름으로 바꾸기].
  * "한 줄 설명"은 **메모**로 — 메모가 있는 문항은 다시 풀 때 "메모 있음"이 보인다(다른 회차의 같은 문항 메모 포함).
  */
-export function Solve(props: { target: Target; onExit: () => void; onResult: (peek?: boolean) => void; onSolve?: (t: Target) => void; onSummary?: (certCode: string) => void }) {
+export function Solve(props: { target: Target; onExit: () => void; onResult: (peek?: boolean) => void; onSolve?: (t: Target) => void }) {
   const [s, setS] = useState<Session | null>(null);
   const [index, setIndex] = useState(0);
   const [loaded, setLoaded] = useState<QuestionRow | null>(null);
@@ -242,12 +242,12 @@ export function Solve(props: { target: Target; onExit: () => void; onResult: (pe
     if (t && props.onSolve) props.onSolve(t);
     else props.onExit();
   };
-  const endToday = async () => {
+  /** 홈으로(v0.11 — "오늘 학습 마치기" 대신): 이 묶음을 닫고 홈으로. 푼 기록은 답할 때마다 이미 저장됨 */
+  const goHome = async () => {
     if (!s) return;
     await finishRun(s.run.sessionId);
     setGoalOpen(false);
-    if (props.onSummary) props.onSummary(certCode);
-    else props.onExit();
+    props.onExit();
   };
 
   const prev = async () => {
@@ -256,8 +256,9 @@ export function Solve(props: { target: Target; onExit: () => void; onResult: (pe
   };
 
   /**
-   * ✕(v0.8.3 — 실기기 의견): 오늘 학습(시스템 추천·과목별·다시 풀기) 도중이면 [오늘 학습 마치기] [나중에 이어서 하기] 중에서 고른다.
-   * 마치기 = 이 묶음을 닫고 오늘 학습 요약으로(기록은 그대로), 이어서 = 묶음을 열어 둔 채 홈(홈에 "이어서 학습")
+   * ✕ — v0.11(ADR 020, 실기기 의견): 시스템 추천·과목별·다시 풀기는 묻지 않고 홈으로. 답은 하나하나 이미 저장됐고,
+   * 묶음은 닫는다 — 다음에 시작하면 오늘 남은 목표만큼 오늘 기록으로 다시 고른다(v0.8.3의 [오늘 학습 마치기|나중에 이어서 하기] 선택 창 삭제).
+   * 모의고사만 실제 시험처럼 멈춤·이어 풀기·제출을 묻는다
    */
   const exit = async () => {
     await flushNote();
@@ -276,15 +277,7 @@ export function Solve(props: { target: Target; onExit: () => void; onResult: (pe
       await pauseRun(s.run.sessionId);
       return props.onExit();
     }
-    if (s && s.run.mode === 'today' && !s.run.finishedAt) {
-      const left = s.qids.filter((x) => !s.answers.has(x)).length;
-      const pick = await askChoice(`이 묶음에 ${left}문항이 남았습니다. 푼 기록은 그대로 남습니다.`, [
-        { value: 'later', text: '나중에 이어서 하기', primary: true },
-        { value: 'end', text: '오늘 학습 마치기' },
-      ], { title: '학습을 멈출까요?', cancelText: '계속 풀기' });
-      if (pick === 'end') return endToday();
-      if (pick !== 'later') return;
-    }
+    if (s && s.run.mode === 'today' && !s.run.finishedAt) return goHome();
     props.onExit();
   };
 
@@ -555,8 +548,8 @@ export function Solve(props: { target: Target; onExit: () => void; onResult: (pe
                   ? `오답/모름 ${s.qids.filter((x) => s.answers.get(x) && !s.answers.get(x)!.correct).length}문항 다시 풀기`
                   : '계속 학습하기 (오늘 기록으로 추천)'}
               </button>
-              <button className="btn btn-block" onClick={endToday} data-testid="goal-end">
-                오늘 학습 마치기
+              <button className="btn btn-block" onClick={goHome} data-testid="goal-end">
+                홈으로
               </button>
             </div>
           </section>

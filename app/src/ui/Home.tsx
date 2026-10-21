@@ -193,8 +193,7 @@ export function Home(props: {
               lastMock={lastMock}
               onPlan={() => props.onPlan(cert, certName ?? cert)}
               onRecommend={() => setView('recommend')}
-              onResume={(sessionId) => props.onSolve({ kind: 'set', sessionId })}
-              onFinish={() => props.onSummary(cert)}
+              onDayLog={() => props.onSummary(cert)}
               onSubjects={() => setView('subjects')}
               onMock={() => setView('mock')}
             />

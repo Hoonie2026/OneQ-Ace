@@ -55,8 +55,7 @@ test('학습 점검 카드: 사흘 동안 계획(하루 4시간)보다 훨씬 �
       await page.getByRole('button', { name: /^(다음 →|성적 보기)$/ }).click();
     }
     await page.getByRole('button', { name: '풀이 멈추고 홈으로' }).click();
-    await page.getByTestId('dialog-choice-end').click(); // ✕ → 오늘 학습 마치기 → 요약(묶음 닫힘)
-    await page.getByTestId('summary-home').click();
+    // v0.11: ✕는 묻지 않고 홈으로(묶음 닫힘)
     await expect(page.getByTestId('go-recommend')).toBeVisible();
   }
   await page.clock.setSystemTime(new Date(t0.getTime() + 3 * DAY));

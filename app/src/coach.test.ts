@@ -90,13 +90,16 @@ describe('홈 대시보드·오늘 학습(5단계)', () => {
     const s2 = (await loadSession(t2, d))!;
     expect(s2.qids.slice(0, 5).sort()).toEqual([...r.wrongQids].sort());
     expect(s2.qids.some((q) => s.qids.includes(q) && !r.wrongQids.includes(q))).toBe(false);
-    // 홈: 오늘 푼 수, 열린 묶음 이어 풀기
+    // 홈: 오늘 푼 수(v0.11 — "이어서 학습" 없음, 새 묶음을 시작하면 전 묶음은 닫힌다)
     const c = (await loadCoach('TEST', NOW + 3_600_000, d))!;
     expect(c.doneToday).toBe(15);
-    expect(c.openToday!.left).toBe(15);
-    // 오늘 학습 마치기 요약
+    const t3 = (await startToday('TEST', NOW + 3_600_001, d))!;
+    expect((await d.runs.get((t2 as { sessionId: string }).sessionId))!.finishedAt).toBe(NOW + 3_600_001);
+    expect((await d.runs.get((t3 as { sessionId: string }).sessionId))!.finishedAt).toBeFalsy();
+    // 오늘 학습 기록(현재 점수 = 푼 15문항 중 정답 10)
     const sum2 = (await daySummary('TEST', NOW + 3_600_000, d))!;
     expect([sum2.answered, sum2.correct]).toEqual([15, 10]);
+    expect([sum2.currentSolved, sum2.currentCorrect, sum2.current]).toEqual([15, 10, 66.7]);
     expect(sum2.projectedAvg).not.toBeNull();
   });
 
@@ -228,7 +231,7 @@ describe('실기기 v0.5.0 보완(ADR 011)', () => {
     const before = (await loadCoach('TEST', NOW, d))!;
     await solveSet((await startMock('TEST', NOW, d))!, () => 1); // 전부 정답
     const after = (await loadCoach('TEST', NOW + 60_000, d))!;
-    expect(after.exam.currentAvg).toBe(before.exam.currentAvg);
+    expect(after.exam.current).toBe(before.exam.current);
     expect(after.doneToday).toBe(0);
     expect((await mockHistory('TEST', d))[0].result.avgScore).toBe(100);
   });
@@ -240,5 +243,59 @@ describe('실기기 v0.5.0 보완(ADR 011)', () => {
     const c = (await loadCoach('TEST', NOW + 60_000, d))!;
     expect(c.today.relearn).toBeLessThanOrEqual(Math.ceil(c.today.size * 0.6));
     expect(c.today.fresh).toBeGreaterThan(0);
+  });
+});
+
+describe('v0.11 현재 점수 = 푼 문항 중 정답 비율(ADR 020)', () => {
+  it('안 푼 문항은 분모에서 빠지고, 같은 문항을 여러 번 풀면 1문항·최근 답으로', async () => {
+    await twoRounds();
+    let c = (await loadCoach('TEST', NOW, d))!;
+    expect(c.exam.current).toBeNull(); // 아직 푼 문항 없음 → —
+    expect(c.subjects.every((s) => s.current == null && s.solved === 0)).toBe(true);
+    const q1 = (await d.questions.get('TEST-2022-1-001'))!; // 과목1
+    const q2 = (await d.questions.get('TEST-2022-1-002'))!; // 과목1
+    const q3 = (await d.questions.get('TEST-2022-1-011'))!; // 과목2
+    const run = (await startSubject('TEST', c.subjects[0].key, NOW, d))!;
+    let s = (await loadSession(run, d))!;
+    const ans = async (q: typeof q1, chosen: number, ts: number) => {
+      s = (await recordAnswer(s, q, chosen, 30_000, { now: ts }, d)).session;
+    };
+    // 직접 원장에 답을 쌓는다(묶음에 없는 문항도 원장은 문항 단위)
+    await ans(q1, 2, NOW + 1); // 오답
+    await ans(q2, 1, NOW + 2); // 정답
+    await ans(q3, 0, NOW + 3); // 모름 = 오답
+    c = (await loadCoach('TEST', NOW + 10, d))!;
+    expect([c.exam.solved, c.exam.correct, c.exam.current]).toEqual([3, 1, 33.3]);
+    const s1 = c.subjects.find((x) => x.name === '과목1')!;
+    const s2 = c.subjects.find((x) => x.name === '과목2')!;
+    expect([s1.solved, s1.correct, s1.current]).toEqual([2, 1, 50]);
+    expect([s2.solved, s2.correct, s2.current]).toEqual([1, 0, 0]);
+    // q1을 다시 풀어 맞힘 → 푼 문항 수는 그대로 3, 정답만 최신으로(회독 미반영)
+    const again = (await startRelearn('TEST', [q1.qid], NOW + 20, d))!;
+    s = (await loadSession(again, d))!;
+    await ans(q1, 1, NOW + 21);
+    c = (await loadCoach('TEST', NOW + 30, d))!;
+    expect([c.exam.solved, c.exam.correct, c.exam.current]).toEqual([3, 2, 66.7]);
+    expect(c.subjects.find((x) => x.name === '과목1')!.current).toBe(100);
+    // 최근 답이 오답이면 다시 오답으로
+    const again2 = (await startRelearn('TEST', [q1.qid], NOW + 40, d))!;
+    s = (await loadSession(again2, d))!;
+    await ans(q1, 3, NOW + 41);
+    c = (await loadCoach('TEST', NOW + 50, d))!;
+    expect([c.exam.solved, c.exam.correct]).toEqual([3, 1]);
+  });
+
+  it('하루가 지나면 어제 묶음은 이어지지 않는다 — 새로 시작하면 오늘 남은 목표만큼', async () => {
+    await twoRounds();
+    await savePlanSettings('TEST', { examDate: '2027-01-18', dailyMinutes: 22.5 }, d); // 하루 15문항
+    const y = (await startToday('TEST', NOW, d))!;
+    await solveSet(y, () => 1, 4); // 어제 4문항만 풀고 그만
+    const tomorrow = NOW + 24 * 3_600_000;
+    const c = (await loadCoach('TEST', tomorrow, d))!;
+    expect(c.doneToday).toBe(0);
+    expect(c.today.size).toBe(15); // 어제 남은 11이 아니라 오늘 목표 15
+    const t = (await startToday('TEST', tomorrow, d))!;
+    expect((await loadSession(t, d))!.qids).toHaveLength(15);
+    expect((await d.runs.get((y as { sessionId: string }).sessionId))!.finishedAt).toBe(tomorrow);
   });
 });

@@ -11,7 +11,7 @@ const VERDICT: Record<NonNullable<R['verdict']>, { icon: string; text: string; c
 };
 
 /** 성적. 풀이 중에도 지금까지 푼 문항으로 실시간 계산한다(ADR 003) */
-export function Result(props: { target: Target; onHome: () => void; /** 위 ‹ — 풀이 중 성적 보기면 그 풀이로(v0.8.4), 아니면 홈 */ onBack?: () => void; onSolve: (t: Target) => void; onSummary: (certCode: string) => void; toast: (m: string) => void }) {
+export function Result(props: { target: Target; onHome: () => void; /** 위 ‹ — 풀이 중 성적 보기면 그 풀이로(v0.8.4), 아니면 홈 */ onBack?: () => void; onSolve: (t: Target) => void; toast: (m: string) => void }) {
   const [res, setRes] = useState<R | null>(null);
   const [rule, setRule] = useState({ min: 40, avg: 60 });
   const [packId, setPackId] = useState('');
@@ -49,7 +49,7 @@ export function Result(props: { target: Target; onHome: () => void; /** 위 ‹ 
     if (t) props.onSolve(t);
     else {
       props.toast('오늘 낼 문항을 모두 풀었습니다');
-      props.onSummary(set.certCode);
+      props.onHome();
     }
   };
   const isMock = set?.mode === 'mock';
@@ -170,11 +170,12 @@ export function Result(props: { target: Target; onHome: () => void; /** 위 ‹ 
         )}
         {set?.mode === 'today' && res.complete && (
           <>
-            <button className="btn btn-primary btn-block" onClick={() => props.onSummary(set.certCode)} data-testid="finish-day">
-              오늘 학습 마치기
+            {/* v0.11(ADR 020): "오늘 학습 마치기" 없음 — 계속하거나 홈으로 */}
+            <button className="btn btn-primary btn-block" onClick={next} data-testid="today-next">
+              {subjectKey ? '이 과목 계속 학습하기' : '계속 학습하기'}
             </button>
-            <button className="btn btn-block" onClick={next} data-testid="today-next">
-              {subjectKey ? '이 과목 더 하기(15문항)' : '계속 학습하기'}
+            <button className="btn btn-block" onClick={props.onHome} data-testid="result-home">
+              홈으로
             </button>
           </>
         )}

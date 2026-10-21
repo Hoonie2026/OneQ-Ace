@@ -1,19 +1,17 @@
 import { useEffect, useState } from 'react';
-import { daySummary, finishToday, type DaySummary as S } from '../coach';
+import { daySummary, type DaySummary as S } from '../coach';
 import { scoreTone } from './CoachCard';
 import { BackButton, Icon } from './Icon';
 
 /**
- * 오늘 학습 마치기(ADR 009 — 실기기 v0.3.0 Q5): 오늘 푼 것, 현재 점수 → 계획 이행 시 예상 점수.
+ * 오늘 학습 기록(ADR 009 → v0.11 ADR 020): 오늘 푼 것, 현재 점수 → 계획 이행 시 예상 점수.
+ * v0.11부터 "오늘 학습 마치기"는 없고, 홈의 [오늘 기록 보기]로 언제든 본다(묶음을 닫는 일도 하지 않음 — 보기만).
  * 학습 계획 바꾸기는 홈의 "학습계획 설정(재설정)" 한 곳에서(v0.8.1 — 접근 경로 일원화).
  */
 export function DaySummary(props: { certCode: string; onHome: () => void }) {
   const [s, setS] = useState<S | null>(null);
   useEffect(() => {
-    // 오늘 학습 마치기 = 열린 오늘 학습 묶음을 닫는다(기록은 그대로) → 홈은 "시스템 추천 학습"(v0.7.1)
-    finishToday(props.certCode)
-      .then(() => daySummary(props.certCode))
-      .then((x) => (x ? setS(x) : props.onHome()));
+    daySummary(props.certCode).then((x) => (x ? setS(x) : props.onHome()));
   }, [props.certCode]);
   if (!s) return <div className="app" />;
   const rate = s.answered ? Math.round((s.correct / s.answered) * 100) : 0;
@@ -21,7 +19,7 @@ export function DaySummary(props: { certCode: string; onHome: () => void }) {
     <div className="app">
       <header className="page-head">
         <BackButton label="홈" onClick={props.onHome} />
-        <h1>오늘 학습 마침</h1>
+        <h1>오늘 학습 기록</h1>
       </header>
 
       <section className="card result-hero" data-testid="day-summary">
@@ -44,8 +42,8 @@ export function DaySummary(props: { certCode: string; onHome: () => void }) {
         <div className="score-pair">
           <div>
             <small>현재</small>
-            <b>{s.currentAvg}</b>
-            <small>점</small>
+            <b data-testid="summary-current">{s.current ?? '—'}</b>
+            <small>{s.current != null ? '점' : ''}</small>
           </div>
           <span className="arrow" aria-hidden="true">
             <Icon name="arrow" size={26} />
