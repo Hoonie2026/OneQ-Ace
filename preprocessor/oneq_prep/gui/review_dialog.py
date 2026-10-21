@@ -29,13 +29,14 @@ class QuestionCard(QFrame):
         super().__init__()
         self.it = it
         self.edit = edit
-        self.setObjectName("card")
-        self.setFrameShape(QFrame.StyledPanel)
+        self.setObjectName("qcard")
         lay = QVBoxLayout(self)
+        lay.setContentsMargins(16, 14, 16, 14)
+        lay.setSpacing(8)
         head = f"<b>{it.no}번</b> · {it.pdf_subject}"
         if it.local_no != it.no:
             head += f" {it.local_no}번"
-        head += f" &nbsp; 정답 <b>{_circ(it.answer)}</b> <span style='color:gray'>{SRC.get(it.answer_source or '', '')}</span>"
+        head += f" &nbsp; 정답 <b>{it.answer or '?'}번</b> <span style='color:gray'>{SRC.get(it.answer_source or '', '')}</span>"
         top = QLabel(head)
         top.setTextFormat(Qt.RichText)
         lay.addWidget(top)
@@ -51,6 +52,11 @@ class QuestionCard(QFrame):
             sl = QLabel(f"재배정 제안: {s.current} → <b>{s.suggested}</b> (확신 {s.confidence:.0%})")
             sl.setTextFormat(Qt.RichText)
             lay.addWidget(sl)
+        if "law" in it.flags:
+            refs = getattr(it, "law_refs", []) or []
+            lw = QLabel("법령·기준 문항" + (f" — {', '.join(refs[:2])}" if refs else "") + " · 앱에서 답한 뒤 현행 기준 확인 안내")
+            lw.setObjectName("law")
+            lay.addWidget(lw, 0, Qt.AlignLeft)
         if notes:
             n = QLabel(" · ".join(notes))
             n.setObjectName("muted")
@@ -66,7 +72,7 @@ class QuestionCard(QFrame):
         row.addWidget(QLabel("정답"))
         self.answer = QComboBox()
         for k in range(1, max(4, it.choice_count) + 1):
-            self.answer.addItem(_circ(k), k)
+            self.answer.addItem(f"{k}번", k)      # 원문자(③)는 글꼴에 따라 아주 작게 그려져 숫자로
         self.answer.setCurrentIndex(max(0, (edit.answer or it.answer or 1) - 1))
         row.addWidget(self.answer)
         row.addSpacing(12)
@@ -130,6 +136,8 @@ class ReviewDialog(QDialog):
                                      reason=it.excluded or "")
 
         lay = QVBoxLayout(self)
+        lay.setContentsMargins(24, 20, 24, 16)
+        lay.setSpacing(12)
         title = QLabel(f"<h2 style='margin:0'>{prepared.pack_id}</h2><span style='color:gray'>{prepared.pdf.name} · "
                        f"{len(prepared.items)}문항</span>")
         title.setTextFormat(Qt.RichText)
@@ -163,7 +171,7 @@ class ReviewDialog(QDialog):
         bar = QHBoxLayout()
         bar.addWidget(QLabel("보기:"))
         self.filter = QComboBox()
-        self.filter.addItems(["확인할 문항(경고·재배정 제안·제외)", "전체 문항"])
+        self.filter.addItems(["확인할 문항(경고·재배정 제안·제외)", "전체 문항", "법령·기준 문항"])
         bar.addWidget(self.filter)
         self.count = QLabel()
         bar.addWidget(self.count, 1)
@@ -182,6 +190,7 @@ class ReviewDialog(QDialog):
         b_rerun = QPushButton("저장하고 이 회차 다시 만들기")
         b_rerun.setDefault(True)
         b_rerun.setObjectName("primary")
+        b_save.setMinimumHeight(40)
         b_rerun.clicked.connect(lambda: self._save(True))
         b_close = QPushButton("닫기")
         b_close.clicked.connect(self.reject)
@@ -195,6 +204,8 @@ class ReviewDialog(QDialog):
     def _wanted(self, it) -> bool:
         if self.filter.currentIndex() == 1:
             return True
+        if self.filter.currentIndex() == 2:
+            return "law" in it.flags
         return bool([w for w in it.warnings if not w.startswith("info:")] or it.excluded
                     or (it.suggestion and it.suggestion.suggested != it.suggestion.current)
                     or self.edits[it.no].excluded)

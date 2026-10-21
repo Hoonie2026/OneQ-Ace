@@ -29,7 +29,7 @@ class BatchSpec:
     source_type: str = "public-pbt"
     date: str | None = None          # 파일명에 시행일이 없을 때(PDF 1개)
     round_no: int | None = None      # 회차 강제(PDF 1개)
-    pack_version: int = 1
+    pack_version: int = 2            # v0.4: 법령·기준 표시(ADR 019)가 든 판 — 앱이 1판을 자동 교체
     report_only: bool = False
     workers: int | None = None       # None이면 코어 수에 맞춰(최대 4)
     file_dates: dict[Path, str] = field(default_factory=dict)   # 파일별 시행일(파일명에 없을 때, 창 프로그램)
@@ -49,6 +49,7 @@ class RoundResult:
     date: str = ""
     status: str = "waiting"          # waiting · running · packed · review · error · skipped
     questions: int = 0
+    law: int = 0                     # 법령·기준 문항 수(ADR 019)
     size: int = 0
     message: str = ""
     issues: list[str] = field(default_factory=list)
@@ -187,6 +188,7 @@ def _finish_round(spec: BatchSpec, r: RoundResult, p: Prepared) -> None:
     r.prepared = p
     r.pack_id = p.pack_id
     r.questions = len(p.items)
+    r.law = sum("law" in it.flags for it in p.items if not it.excluded)
     r.issues = list(p.issues)
     if p.issues or spec.report_only:
         if p.issues:

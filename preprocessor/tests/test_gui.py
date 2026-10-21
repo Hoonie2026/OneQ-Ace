@@ -29,8 +29,8 @@ def win(qtbot, tmp_path, monkeypatch):
     qtbot.addWidget(w)
     w.out.setText(str(tmp_path / "packs"))
     w.name.setText("시험")
-    w.cert.setCurrentIndex(w.cert.findData("SAFETY"))
-    w.workers.setValue(2)
+    assert w.set_cert("SAFETY")
+    w.speed.setCurrentIndex(w.speed.findData(2))
     return w
 
 
@@ -42,7 +42,9 @@ def test_plan_and_date_entry(win, tmp_path):
     win.add_paths([tmp_path])
     assert [r.pdf.name for r in win.rows] == sorted([a.name, b.name])
     i = [r.pdf.name for r in win.rows].index(a.name)
-    assert win.rows[i].status == "error" and "시행일" in win.table.item(i, 4).text()
+    from oneq_prep.gui.app import C_MSG, C_STATUS
+    assert win.rows[i].status == "error" and "시행일" in win.table.item(i, C_MSG).text()
+    assert win.table.item(i, C_STATUS).data(0x0100) == "needdate"
     win.table.item(i, 1).setText("2024-07-05")
     win.refresh_plan()
     assert win.rows[i].pack_id == "SAFETY-2024-3" and win.rows[i].status == "waiting"
@@ -51,6 +53,9 @@ def test_plan_and_date_entry(win, tmp_path):
 
 def test_inputs_required(win):
     win.name.setText("")
+    win.picker.current = None
+    assert "종목" in win.check_inputs([Path("x.pdf")])
+    win.set_cert("SAFETY")
     assert "PDF" in win.check_inputs([])
     assert "만든 사람" in win.check_inputs([Path("x.pdf")])
 
@@ -64,6 +69,9 @@ def test_run_review_rerun(win, qtbot, tmp_path):
     assert [r.status for r in win.rows] == ["packed", "packed"]
     assert (tmp_path / "packs" / "oneq-SAFETY-2022-2.zip").exists()
     assert "팩 2개" in win.status.text()
+    assert all(r.law > 0 for r in win.rows)                       # 법령·기준 문항 표시(ADR 019)
+    assert win.law_note.isVisible() is False or "법령" in win.law_note.title.text()
+    assert "법령·기준" in win.law_note.title.text()
 
     # 검수 창: 5번 정답을 바꾸고 저장 → 검수 파일
     r = win.rows[1]
@@ -86,3 +94,25 @@ def test_run_review_rerun(win, qtbot, tmp_path):
     z = zipfile.ZipFile(tmp_path / "packs" / "oneq-SAFETY-2022-2.zip")
     q5 = [q for q in json.loads(z.read("questions.json")) if q["no"] == 5][0]
     assert q5["answer"] == new and q5["answerCheck"] == "corrected"
+
+
+def test_cert_search_and_profile_dialog(win, qtbot, tmp_path, monkeypatch):
+    """프로필이 없는 종목(전기기사) → [과목 직접 입력] → 저장하면 검색에 ✓, 처리 가능."""
+    monkeypatch.setenv("ONEQ_PREP_HOME", str(tmp_path / "home"))
+    from oneq_prep.certs import search
+    from oneq_prep.gui.profile_dialog import ProfileDialog
+    win.picker.reload()
+    elec = search("전기", win.picker.certs)[0]
+    win.picker.select(elec)
+    assert win.picker.code is None and win.picker.missing.isVisibleTo(win.picker)
+    dlg = ProfileDialog(elec, win)
+    qtbot.addWidget(dlg)
+    dlg.code_edit.setText("ELEC")
+    from PySide6.QtWidgets import QTableWidgetItem
+    for r, name in enumerate(["전기자기학", "전력공학", "전기기기", "회로이론 및 제어공학", "전기설비기술기준"]):
+        dlg.table.setItem(r, 0, QTableWidgetItem(name))
+    dlg._save()
+    assert dlg.code == "ELEC" and (tmp_path / "home" / "standards" / "ELEC.json").exists()
+    win.picker.reload()
+    assert win.set_cert("ELEC") and win.picker.code == "ELEC"
+    assert "5과목 100문항" in win.picker.info.text()

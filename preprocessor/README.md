@@ -3,7 +3,10 @@
 기출 PDF를 원큐합격 문제팩(`.zip`, 포맷 `oqp/1`)으로 바꾼다. 포맷은 `shared/pack-schema.json`, 결정 이유는
 `docs/ADR/001-pack-format-oqp1.md`, `005-subject-standard-in-preprocessor.md`, `012-preprocessor-mvp.md`, `016-safety-2026-merged-subjects.md`.
 
-## 창 프로그램 v0.3.0 (ADR 018) — 동료에게 나눠 주는 방식
+## 창 프로그램 v0.4.0 (ADR 018·019) — 동료에게 나눠 주는 방식
+
+v0.4: 원큐합격 디자인(Pretendard), 종목 검색(별칭·공공데이터 CSV)·과목 직접 입력, 과목 개편 요약, 법령·기준 문항 표시(`lawtag.py`, 팩 `flags: law`·`lawRefs`), 팩 판 기본 2.
+종목 목록: 공공데이터포털 "한국산업인력공단_국가자격 종목 목록 정보" CSV → `standards/qualifications.csv`, "…_국가기술자격시험_공통 편성기준 정보" CSV → `standards/qual-codes.csv`(선택).
 
 ```
 pip install -r preprocessor/requirements-gui.txt
@@ -92,7 +95,10 @@ PATH에 없으면 환경변수 `ONEQ_TESSERACT=C:\Program Files\Tesseract-OCR\te
 | `pack.py` | 준비(검사) → 검수 파일 반영 → 팩 쓰기, 명령줄 |
 | `batch.py` | 여러 PDF 일괄 처리 — 회차별 독립, CPU 코어 나눠 동시 처리(spawn), 진행 이벤트·멈추기 |
 | `review.py` | 검수 파일 만들기 규칙(HTML 보고서와 같은 결과) |
-| `gui/` | PySide6 창 프로그램(목록·진행·검수 창) |
+| `gui/` | PySide6 창 프로그램(목록·진행·검수 창, 테마·종목 검색·과목 입력) |
+| `lawtag.py` | 법령·기준 문항 표시(낱말 사전 `standards/law-terms.json`) |
+| `certs.py` | 종목 검색(별칭·공공데이터 CSV) |
+| `summary.py` | 과목 개편 요약·법령 요약 글 |
 | `report.py` | 검수 보고서 HTML |
 | `validate.py` | 스키마 + 정합성 검사. 학습앱 `app/src/pack/validate.ts`와 같은 오류 코드 |
 

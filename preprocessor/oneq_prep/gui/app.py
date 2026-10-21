@@ -1,7 +1,6 @@
-"""원큐합격 전처리기 — 창 프로그램 본체(ADR 018).
+"""원큐합격 전처리기 — 창 프로그램 본체(ADR 018·019).
 
-① 종목·저장 위치·만든 사람 → ② 기출 PDF 넣기(끌어다 놓기) → ③ [팩 만들기](여러 회차 동시 처리, 진행률·멈추기)
-→ 결과 표에서 '검수 필요' 회차를 두 번 눌러 검수 → [저장하고 다시 만들기].
+머리 띠 | 왼쪽: ① 종목(검색) ② 팩 정보 | 오른쪽: ③ 기출 PDF(끌어다 놓기·표) + 과목 개편·법령 안내 | 아래: 실행 띠
 """
 from __future__ import annotations
 
@@ -10,37 +9,30 @@ import sys
 import time
 from pathlib import Path
 
-from PySide6.QtCore import QSettings, QStandardPaths, Qt, QThread, QTimer, QUrl
-from PySide6.QtGui import QAction, QColor, QDesktopServices, QIcon
-from PySide6.QtWidgets import (QAbstractItemView, QApplication, QComboBox, QFileDialog, QFormLayout, QGroupBox,
-                               QHBoxLayout, QHeaderView, QLabel, QLineEdit, QMainWindow, QMessageBox, QProgressBar,
-                               QPushButton, QSpinBox, QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget)
+from PySide6.QtCore import QObject, QSettings, QStandardPaths, Qt, QThread, QTimer, QUrl, Signal, Slot
+from PySide6.QtGui import QColor, QDesktopServices, QIcon, QPixmap
+from PySide6.QtWidgets import (QAbstractItemView, QApplication, QComboBox, QFileDialog, QFrame, QGridLayout,
+                               QHBoxLayout, QHeaderView, QLabel, QLineEdit, QMainWindow, QMenu, QMessageBox,
+                               QProgressBar, QPushButton, QScrollArea, QStackedWidget, QTableWidget, QTableWidgetItem,
+                               QToolButton, QVBoxLayout, QWidget)
 
 from .. import __version__
 from .. import standards as S
 from ..batch import STATUS_TEXT, BatchSpec, RoundResult, default_workers, plan_rounds
+from ..summary import law_summary, peek_subjects, subject_change
+from . import theme
+from .cert_picker import CertPicker
+from .profile_dialog import ProfileDialog
 from .review_dialog import ReviewDialog
+from .widgets import BadgeDelegate, Card, DropZone, Note, field_label
 from .worker import BatchWorker
 
 APP_NAME = "원큐합격 전처리기"
 SOURCE_TYPES = [("public-pbt", "공개 기출(시행 회차)"), ("recalled", "복원 기출"), ("other", "기타(경향·예상 문제)")]
-COLS = ["PDF 파일", "시행일", "팩 이름", "상태", "내용"]
-STATUS_COLOR = {"packed": "#1f7a4d", "review": "#9a6700", "error": "#b3261e", "running": "#1f5fd1", "skipped": "#6b6b66"}
+SPEEDS = [(2, "보통 — 2회차씩 동시에"), (4, "빠르게 — 4회차씩(메모리 8GB 이상)"), (1, "천천히 — 1회차씩(오래된 PC)")]
+COLS = ["PDF 파일", "시행일", "팩 이름", "법령 문항", "상태", "내용"]
+C_FILE, C_DATE, C_PACK, C_LAW, C_STATUS, C_MSG = range(6)
 DATE_RE = re.compile(r"^20\d{2}-\d{2}-\d{2}$")
-
-STYLE = """
-QWidget { font-size: 14px; }
-QGroupBox { font-weight: 600; margin-top: 10px; }
-QPushButton { padding: 6px 14px; }
-QPushButton#primary { background: #1f5fd1; color: white; border: 0; border-radius: 6px; padding: 9px 22px; font-size: 16px; font-weight: 600; }
-QPushButton#primary:disabled { background: #9db3e0; }
-QLabel#warn { color: #9a6700; }
-QLabel#muted, QLabel#hint { color: #6b6b66; }
-QLabel#issues { color: #b3261e; }
-QFrame#card { background: palette(base); border: 1px solid #d8d6cf; border-radius: 8px; }
-QFrame#card[changed="true"] { border: 2px solid #1f5fd1; }
-QFrame#card[excluded="true"] { background: #f1f0ec; }
-"""
 
 
 def resource_path(rel: str) -> Path:
@@ -48,11 +40,25 @@ def resource_path(rel: str) -> Path:
     return base / rel
 
 
+class PeekWorker(QObject):
+    """처리 전 과목 미리 읽기(PDF 1~2개, 회차당 1~4초) — 화면이 멈추지 않게 다른 스레드에서."""
+    done = Signal(object, object)    # (key, list[list[str]])
+
+    def __init__(self, key, pdfs: list[Path]):
+        super().__init__()
+        self.key, self.pdfs = key, pdfs
+
+    @Slot()
+    def run(self) -> None:
+        self.done.emit(self.key, [peek_subjects(p) for p in self.pdfs])
+
+
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle(f"{APP_NAME} v{__version__}")
-        self.resize(1080, 760)
+        self.setMinimumSize(1080, 720)
+        self.resize(1320, 880)
         self.setAcceptDrops(True)
         self.settings = QSettings("OneQ-Ace", "oneq-prep")
         self.pdfs: list[Path] = []
@@ -60,144 +66,257 @@ class MainWindow(QMainWindow):
         self.rows: list[RoundResult] = []
         self.thread: QThread | None = None
         self.worker: BatchWorker | None = None
+        self.peek_thread: QThread | None = None
+        self.peek_cache: dict[Path, list[str]] = {}
         self.started = 0.0
         self.done = 0
         self.report: Path | None = None
         self._building = False
 
-        central = QWidget()
-        root = QVBoxLayout(central)
+        page = QWidget()
+        page.setObjectName("page")
+        root = QVBoxLayout(page)
+        root.setContentsMargins(0, 0, 0, 0)
+        root.setSpacing(0)
+        root.addWidget(self._header())
 
-        # ① 종목·저장 위치
-        g1 = QGroupBox("① 종목과 저장 위치")
-        form = QFormLayout(g1)
-        self.cert = QComboBox()
-        for code in S.available():
-            prof = S.load(code)
-            if not prof.draft:
-                self.cert.addItem(f"{prof.name} ({code}) — {len(prof.subjects)}과목", code)
-        self.out = QLineEdit()
-        b_out = QPushButton("바꾸기…")
-        b_out.clicked.connect(self.pick_out)
-        h = QHBoxLayout()
-        h.addWidget(self.out, 1)
-        h.addWidget(b_out)
+        body = QHBoxLayout()
+        body.setContentsMargins(24, 20, 24, 16)
+        body.setSpacing(16)
+        left = QVBoxLayout()
+        left.setSpacing(16)
+        left.addWidget(self._card_cert())
+        left.addWidget(self._card_pack())
+        left.addStretch(1)
+        lw = QWidget()
+        lw.setLayout(left)
+        lw.setFixedWidth(364)
+        scroll = QScrollArea()
+        scroll.setObjectName("side")
+        scroll.setWidget(lw)
+        scroll.setWidgetResizable(True)
+        scroll.setFixedWidth(376)
+        lw.setObjectName("sideBody")             # 배경만 투명(스타일시트는 이름으로 — 안쪽 카드에 번지지 않게)
+        scroll.viewport().setObjectName("sideViewport")
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        body.addWidget(scroll)
+        body.addWidget(self._card_pdfs(), 1)
+        root.addLayout(body, 1)
+        root.addWidget(self._action_bar())
+        self.setCentralWidget(page)
+
+        self.timer = QTimer(self)
+        self.timer.setInterval(1000)
+        self.timer.timeout.connect(self.tick)
+        self.peek_timer = QTimer(self)
+        self.peek_timer.setSingleShot(True)
+        self.peek_timer.setInterval(400)
+        self.peek_timer.timeout.connect(self.start_peek)
+        self.load_settings()
+        self.picker.changed.connect(lambda _c: self.refresh_plan())
+        self.picker.want_profile.connect(self.make_profile)
+
+    # ───────────────── 화면 만들기 ─────────────────
+    def _header(self) -> QFrame:
+        h = QFrame()
+        h.setObjectName("header")
+        lay = QHBoxLayout(h)
+        lay.setContentsMargins(24, 14, 24, 14)
+        lay.setSpacing(14)
+        logo = QLabel()
+        pm = QPixmap(str(resource_path("oneq_prep/gui/icon.png")))
+        if not pm.isNull():
+            logo.setPixmap(pm.scaled(44, 44, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+        lay.addWidget(logo)
+        tv = QVBoxLayout()
+        tv.setSpacing(2)
+        t = QLabel(APP_NAME)
+        t.setObjectName("appTitle")
+        s = QLabel("기출 PDF를 원큐합격 문제팩으로 — 현행 출제기준에 맞춰 과목을 정리합니다")
+        s.setObjectName("appSub")
+        tv.addWidget(t)
+        tv.addWidget(s)
+        lay.addLayout(tv)
+        lay.addStretch(1)
+        v = QLabel(f"v{__version__}")
+        v.setObjectName("versionChip")
+        lay.addWidget(v)
+        help_btn = QToolButton()
+        help_btn.setText("도움말 ▾")
+        help_btn.setPopupMode(QToolButton.InstantPopup)
+        help_btn.setStyleSheet("QToolButton{border:0;padding:6px 10px;font-weight:600;}"
+                               "QToolButton::menu-indicator{image:none;}")
+        m = QMenu(help_btn)
+        m.addAction("사용 안내", lambda: QMessageBox.information(self, APP_NAME, (
+            "① 종목을 찾아 고릅니다(예: 측량, 건안기).\n② 만든 사람·저장 폴더를 확인합니다.\n"
+            "③ 기출 PDF를 끌어다 놓고 [팩 만들기].\n\n'검수 필요' 회차는 두 번 눌러 고치고 [저장하고 다시 만들기].\n"
+            "만든 팩(oneq-…zip)을 휴대폰으로 옮겨 원큐합격 앱에서 가져옵니다.")))
+        m.addAction("라이선스·사용한 오픈소스", self.show_licenses)
+        m.addAction(f"{APP_NAME} 정보", lambda: QMessageBox.about(
+            self, APP_NAME, f"{APP_NAME} v{__version__}\n기출 PDF → 원큐합격 문제팩(.zip)"))
+        help_btn.setMenu(m)
+        lay.addWidget(help_btn)
+        return h
+
+    def _card_cert(self) -> Card:
+        c = Card("종목", "1")
+        self.picker = CertPicker()
+        c.body.addWidget(self.picker)
+        return c
+
+    def _card_pack(self) -> Card:
+        c = Card("팩 정보", "2")
+        g = QGridLayout()
+        g.setHorizontalSpacing(10)
+        g.setVerticalSpacing(4)
         self.name = QLineEdit()
         self.name.setPlaceholderText("예: 홍길동(철도3부)")
+        self.out = QLineEdit()
+        b_out = QPushButton("바꾸기")
+        b_out.clicked.connect(self.pick_out)
         self.origin = QLineEdit()
         self.origin.setPlaceholderText("예: comcbt.com 교사용")
         self.source_type = QComboBox()
         for v, t in SOURCE_TYPES:
             self.source_type.addItem(t, v)
-        self.workers = QSpinBox()
-        self.workers.setRange(1, max(1, (QThread.idealThreadCount() or 2)))
-        self.workers.setSuffix(" 회차씩 동시에")
-        form.addRow("종목(출제기준)", self.cert)
-        form.addRow("팩 저장 폴더", h)
-        form.addRow("만든 사람", self.name)
-        form.addRow("원본 출처", self.origin)
-        form.addRow("문제 종류", self.source_type)
-        form.addRow("처리 속도", self.workers)
-        root.addWidget(g1)
+        self.speed = QComboBox()
+        for v, t in SPEEDS:
+            self.speed.addItem(t, v)
+        r = 0
+        for label, w, extra in (("만든 사람 — 앱의 문제팩 정보에 보입니다", self.name, None),
+                                ("팩 저장 폴더", self.out, b_out), ("원본 출처", self.origin, None),
+                                ("문제 종류", self.source_type, None), ("처리 속도", self.speed, None)):
+            g.addWidget(field_label(label), r, 0, 1, 2)
+            if extra:
+                g.addWidget(w, r + 1, 0)
+                g.addWidget(extra, r + 1, 1)
+            else:
+                g.addWidget(w, r + 1, 0, 1, 2)
+            g.setRowMinimumHeight(r + 2, 2)
+            r += 3
+        g.setColumnStretch(0, 1)
+        c.body.addLayout(g)
+        return c
 
-        # ② PDF 목록
-        g2 = QGroupBox("② 기출 PDF — 이 창으로 끌어다 놓거나 [PDF 추가]")
-        v2 = QVBoxLayout(g2)
+    def _card_pdfs(self) -> Card:
+        c = Card("기출 PDF", "3")
+        self.summary = QLabel()
+        self.summary.setObjectName("muted")
+        c.head.addWidget(self.summary)
         bar = QHBoxLayout()
-        for text, fn in (("PDF 추가…", self.add_files), ("폴더 추가…", self.add_folder), ("선택 빼기", self.remove_selected),
+        bar.setSpacing(8)
+        for text, fn in (("PDF 추가", self.add_files), ("폴더 추가", self.add_folder), ("선택 빼기", self.remove_selected),
                          ("모두 비우기", self.clear_files)):
             b = QPushButton(text)
             b.clicked.connect(fn)
             bar.addWidget(b)
         bar.addStretch(1)
-        self.summary = QLabel()
-        self.summary.setObjectName("muted")
-        bar.addWidget(self.summary)
-        v2.addLayout(bar)
+        c.body.addLayout(bar)
+
+        self.stack = QStackedWidget()
+        self.drop = DropZone()
+        self.drop.clicked.connect(self.add_files)
         self.table = QTableWidget(0, len(COLS))
         self.table.setHorizontalHeaderLabels(COLS)
-        hh = self.table.horizontalHeader()
-        hh.setSectionResizeMode(0, QHeaderView.Stretch)
-        for c in (1, 2, 3):
-            hh.setSectionResizeMode(c, QHeaderView.ResizeToContents)
-        hh.setSectionResizeMode(4, QHeaderView.Stretch)
-        self.table.setSelectionBehavior(QAbstractItemView.SelectRows)
+        self.table.setAlternatingRowColors(True)
+        self.table.setShowGrid(False)
+        self.table.setWordWrap(False)
+        self.table.setTextElideMode(Qt.ElideMiddle)
         self.table.verticalHeader().setVisible(False)
+        self.table.verticalHeader().setDefaultSectionSize(40)
+        self.table.setSelectionBehavior(QAbstractItemView.SelectRows)
+        self.table.setItemDelegateForColumn(C_STATUS, BadgeDelegate(self.table))
+        hh = self.table.horizontalHeader()
+        hh.setHighlightSections(False)
+        hh.setMinimumSectionSize(56)
+        hh.setSectionResizeMode(C_FILE, QHeaderView.Stretch)
+        for col, w in ((C_DATE, 104), (C_PACK, 140), (C_LAW, 76), (C_STATUS, 104), (C_MSG, 170)):
+            hh.setSectionResizeMode(col, QHeaderView.Interactive)
+            self.table.setColumnWidth(col, w)
         self.table.itemChanged.connect(self.on_item_changed)
         self.table.cellDoubleClicked.connect(self.open_review)
-        v2.addWidget(self.table, 1)
-        hint = QLabel("시행일은 파일 이름(예: …20220305…)에서 읽습니다. 없으면 시행일 칸을 두 번 눌러 YYYY-MM-DD로 적으세요. "
-                      "처리한 뒤 회차를 두 번 누르면 문항을 검수할 수 있습니다.")
+        self.stack.addWidget(self.drop)
+        self.stack.addWidget(self.table)
+        c.body.addWidget(self.stack, 1)
+
+        self.change_note = Note("info")
+        self.change_note.setVisible(False)
+        self.law_note = Note("warn")
+        self.law_note.setVisible(False)
+        c.body.addWidget(self.change_note)
+        c.body.addWidget(self.law_note)
+        hint = QLabel("처리한 뒤 회차를 두 번 누르면 문항을 검수할 수 있습니다. 파일 이름에 시행일이 없으면 시행일 칸을 두 번 눌러 YYYY-MM-DD로 적으세요.")
         hint.setObjectName("hint")
         hint.setWordWrap(True)
-        v2.addWidget(hint)
-        root.addWidget(g2, 1)
+        c.body.addWidget(hint)
+        return c
 
-        # ③ 실행
-        g3 = QHBoxLayout()
+    def _action_bar(self) -> QFrame:
+        f = QFrame()
+        f.setObjectName("actionBar")
+        lay = QHBoxLayout(f)
+        lay.setContentsMargins(24, 14, 24, 14)
+        lay.setSpacing(14)
         self.run_btn = QPushButton("팩 만들기")
         self.run_btn.setObjectName("primary")
+        self.run_btn.setMinimumWidth(160)
         self.run_btn.clicked.connect(lambda: self.start())
         self.stop_btn = QPushButton("멈추기")
         self.stop_btn.setEnabled(False)
         self.stop_btn.clicked.connect(self.stop)
+        mid = QVBoxLayout()
+        mid.setSpacing(6)
+        self.status = QLabel("종목을 고르고 기출 PDF를 넣은 뒤 [팩 만들기]를 누르세요.")
+        self.status.setObjectName("status")
         self.progress = QProgressBar()
-        self.progress.setTextVisible(True)
-        self.status = QLabel("PDF를 넣고 [팩 만들기]를 누르세요.")
-        g3.addWidget(self.run_btn)
-        g3.addWidget(self.stop_btn)
-        g3.addWidget(self.progress, 1)
-        root.addLayout(g3)
-        root.addWidget(self.status)
-        g4 = QHBoxLayout()
-        self.open_out_btn = QPushButton("팩 저장 폴더 열기")
+        self.progress.setValue(0)
+        mid.addWidget(self.status)
+        mid.addWidget(self.progress)
+        self.open_out_btn = QPushButton("팩 폴더 열기")
         self.open_out_btn.clicked.connect(lambda: QDesktopServices.openUrl(QUrl.fromLocalFile(self.out.text())))
-        self.open_report_btn = QPushButton("검수 보고서(웹) 열기")
+        self.open_report_btn = QPushButton("검수 보고서(웹)")
         self.open_report_btn.setEnabled(False)
         self.open_report_btn.clicked.connect(lambda: self.report and QDesktopServices.openUrl(QUrl.fromLocalFile(str(self.report))))
-        g4.addWidget(self.open_out_btn)
-        g4.addWidget(self.open_report_btn)
-        g4.addStretch(1)
-        root.addLayout(g4)
-        self.setCentralWidget(central)
+        lay.addWidget(self.run_btn)
+        lay.addWidget(self.stop_btn)
+        lay.addLayout(mid, 1)
+        lay.addWidget(self.open_out_btn)
+        lay.addWidget(self.open_report_btn)
+        return f
 
-        help_menu = self.menuBar().addMenu("도움말")
-        act = QAction("라이선스·사용한 오픈소스", self)
-        act.triggered.connect(self.show_licenses)
-        help_menu.addAction(act)
-        act2 = QAction(f"{APP_NAME} 정보", self)
-        act2.triggered.connect(lambda: QMessageBox.about(self, APP_NAME, f"{APP_NAME} v{__version__}\n기출 PDF → 원큐합격 문제팩(.zip)"))
-        help_menu.addAction(act2)
-
-        self.timer = QTimer(self)
-        self.timer.setInterval(1000)
-        self.timer.timeout.connect(self.tick)
-        self.load_settings()
-        self.cert.currentIndexChanged.connect(self.refresh_plan)
-
-    # ── 설정 ──
+    # ───────────────── 설정 ─────────────────
     def load_settings(self) -> None:
         st = self.settings
         docs = QStandardPaths.writableLocation(QStandardPaths.DocumentsLocation)
         self.out.setText(st.value("out", str(Path(docs) / "원큐합격 문제팩")))
         self.name.setText(st.value("name", ""))
         self.origin.setText(st.value("origin", ""))
-        i = self.cert.findData(st.value("cert", "SURVEY"))
-        self.cert.setCurrentIndex(max(0, i))
+        self.picker.select_code(st.value("cert", "SURVEY"))
         j = self.source_type.findData(st.value("source_type", "public-pbt"))
         self.source_type.setCurrentIndex(max(0, j))
-        self.workers.setValue(int(st.value("workers", default_workers())))
+        k = self.speed.findData(int(st.value("workers", min(2, default_workers()))))
+        self.speed.setCurrentIndex(max(0, k))
 
     def save_settings(self) -> None:
         st = self.settings
         st.setValue("out", self.out.text())
         st.setValue("name", self.name.text())
         st.setValue("origin", self.origin.text())
-        st.setValue("cert", self.cert.currentData())
+        if self.picker.code:
+            st.setValue("cert", self.picker.code)
         st.setValue("source_type", self.source_type.currentData())
-        st.setValue("workers", self.workers.value())
+        st.setValue("workers", self.speed.currentData())
 
-    # ── PDF 목록 ──
+    def set_cert(self, code: str) -> bool:
+        return self.picker.select_code(code)
+
+    def make_profile(self, cert) -> None:
+        dlg = ProfileDialog(cert, self)
+        if dlg.exec() and dlg.code:
+            self.picker.reload()
+            self.picker.select_code(dlg.code)
+
+    # ───────────────── PDF 목록 ─────────────────
     def pick_out(self) -> None:
         d = QFileDialog.getExistingDirectory(self, "팩 저장 폴더", self.out.text())
         if d:
@@ -206,10 +325,7 @@ class MainWindow(QMainWindow):
     def add_paths(self, paths: list[Path]) -> None:
         added = 0
         for p in paths:
-            if p.is_dir():
-                cand = sorted(p.rglob("*.pdf"))
-            else:
-                cand = [p] if p.suffix.lower() == ".pdf" else []
+            cand = sorted(p.rglob("*.pdf")) if p.is_dir() else ([p] if p.suffix.lower() == ".pdf" else [])
             for c in cand:
                 c = c.resolve()
                 if c not in self.pdfs:
@@ -231,7 +347,7 @@ class MainWindow(QMainWindow):
             self.add_paths([Path(d)])
 
     def remove_selected(self) -> None:
-        names = {self.table.item(i.row(), 0).data(Qt.UserRole) for i in self.table.selectionModel().selectedRows()}
+        names = {self.table.item(i.row(), C_FILE).data(Qt.UserRole) for i in self.table.selectionModel().selectedRows()}
         self.pdfs = [p for p in self.pdfs if str(p) not in names]
         self.refresh_plan()
 
@@ -243,65 +359,79 @@ class MainWindow(QMainWindow):
     def dragEnterEvent(self, e):  # noqa: N802 — Qt 이름
         if e.mimeData().hasUrls():
             e.acceptProposedAction()
+            self.drop.set_active(True)
+
+    def dragLeaveEvent(self, e):  # noqa: N802
+        self.drop.set_active(False)
 
     def dropEvent(self, e):  # noqa: N802
+        self.drop.set_active(False)
         self.add_paths([Path(u.toLocalFile()) for u in e.mimeData().urls() if u.isLocalFile()])
 
     def spec(self, pdfs: list[Path] | None = None) -> BatchSpec:
-        return BatchSpec(pdfs=list(pdfs if pdfs is not None else self.pdfs), cert=self.cert.currentData(),
+        return BatchSpec(pdfs=list(pdfs if pdfs is not None else self.pdfs), cert=self.picker.code or "",
                          out=Path(self.out.text()), prepared_by=self.name.text().strip(), origin=self.origin.text().strip(),
-                         source_type=self.source_type.currentData(), workers=self.workers.value(),
+                         source_type=self.source_type.currentData(), workers=self.speed.currentData(),
                          file_dates=dict(self.file_dates), context=list(self.pdfs))
 
     def refresh_plan(self) -> None:
-        if not self.cert.currentData():
-            return
-        self.rows = plan_rounds(self.spec(), S.load(self.cert.currentData())) if self.pdfs else []
+        code = self.picker.code
+        if code and self.pdfs:
+            self.rows = plan_rounds(self.spec(), S.load(code))
+        elif self.pdfs:
+            self.rows = [RoundResult(pdf=p, message="종목을 먼저 고르세요") for p in sorted(self.pdfs, key=lambda x: x.name)]
+        else:
+            self.rows = []
         self.render_rows()
+        self.law_note.setVisible(False)
+        self.peek_timer.start()
 
     def render_rows(self) -> None:
         self._building = True
+        self.stack.setCurrentIndex(1 if self.rows else 0)
         self.table.setRowCount(len(self.rows))
         dup = {r.pack_id for r in self.rows if r.pack_id and sum(x.pack_id == r.pack_id for x in self.rows) > 1}
         for i, r in enumerate(self.rows):
-            name = QTableWidgetItem(r.pdf.name)
-            name.setData(Qt.UserRole, str(r.pdf))
-            name.setFlags(name.flags() & ~Qt.ItemIsEditable)
-            date = QTableWidgetItem(r.date or "")
             needs_date = not re.search(r"20\d{6}", r.pdf.name)
-            if not needs_date:
-                date.setFlags(date.flags() & ~Qt.ItemIsEditable)
-            elif not r.date:
-                date.setText("YYYY-MM-DD")
-                date.setForeground(QColor("#b3261e"))
-            pid = QTableWidgetItem(r.pack_id)
-            pid.setFlags(pid.flags() & ~Qt.ItemIsEditable)
+            key = r.status
             st_text = STATUS_TEXT.get(r.status, r.status)
-            if needs_date and not r.date and r.status == "error":
-                st_text = "시행일 필요"
-            st = QTableWidgetItem(st_text)
-            st.setFlags(st.flags() & ~Qt.ItemIsEditable)
-            st.setForeground(QColor(STATUS_COLOR.get(r.status, "#1d1d1b")))
             msg = r.message
-            if r.pack_id in dup and r.status == "waiting":
-                msg = "같은 팩 이름이 둘 이상 — 시행일·파일을 확인하세요"
             if needs_date and not r.date and r.status in ("waiting", "error"):
+                key, st_text = "needdate", "시행일 필요"
                 msg = "파일 이름에 시행일이 없어요 — 시행일 칸을 두 번 눌러 적으세요"
-            m = QTableWidgetItem(msg)
-            m.setFlags(m.flags() & ~Qt.ItemIsEditable)
-            if r.issues:
-                m.setToolTip("\n".join(r.issues[:20]))
-            for c, it in enumerate((name, date, pid, st, m)):
+            elif r.pack_id in dup and r.status == "waiting":
+                msg = "같은 팩 이름이 둘 이상 — 같은 회차 PDF가 두 번 들어갔는지 확인하세요"
+            if r.status == "packed":
+                msg = f"{r.questions}문항 · {r.size / 1e6:.1f}MB"
+            cells = [r.pdf.name, r.date or ("YYYY-MM-DD" if needs_date else ""), r.pack_id,
+                     f"{r.law}" if r.law else "", st_text, msg]
+            for c, text in enumerate(cells):
+                it = QTableWidgetItem(text)
+                if not (c == C_DATE and needs_date):
+                    it.setFlags(it.flags() & ~Qt.ItemIsEditable)
+                if c == C_LAW:
+                    it.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
                 self.table.setItem(i, c, it)
+            self.table.item(i, C_FILE).setData(Qt.UserRole, str(r.pdf))
+            self.table.item(i, C_FILE).setToolTip(str(r.pdf))
+            self.table.item(i, C_STATUS).setData(Qt.UserRole, key)
+            if r.issues:
+                self.table.item(i, C_MSG).setToolTip("\n".join(r.issues[:20]))
+            elif r.status == "packed":
+                self.table.item(i, C_MSG).setToolTip(r.message)
+            elif msg:
+                self.table.item(i, C_MSG).setToolTip(msg)
+            if needs_date and not r.date:
+                self.table.item(i, C_DATE).setForeground(QColor(theme.BAD))
         self._building = False
         n = len(self.rows)
         packed = sum(r.status == "packed" for r in self.rows)
-        self.summary.setText(f"PDF {n}개" + (f" · 팩 {packed}개" if packed else ""))
+        self.summary.setText(f"PDF {n}개" + (f" · 팩 {packed}개" if packed else "") if n else "")
 
     def on_item_changed(self, item: QTableWidgetItem) -> None:
-        if self._building or item.column() != 1:
+        if self._building or item.column() != C_DATE:
             return
-        p = Path(self.table.item(item.row(), 0).data(Qt.UserRole))
+        p = Path(self.table.item(item.row(), C_FILE).data(Qt.UserRole))
         v = item.text().strip()
         if DATE_RE.match(v):
             self.file_dates[p] = v
@@ -309,8 +439,57 @@ class MainWindow(QMainWindow):
             self.file_dates.pop(p, None)
         QTimer.singleShot(0, self.refresh_plan)
 
-    # ── 실행 ──
+    # ── 과목 개편 미리 보기(처리 전) ──
+    def start_peek(self) -> None:
+        code = self.picker.code
+        if not code or not self.pdfs or self.peek_thread is not None:
+            if not self.pdfs or not code:
+                self.change_note.setVisible(False)
+            return
+        dated = sorted((r for r in self.rows if r.date), key=lambda r: r.date)
+        sample = [dated[0].pdf, dated[-1].pdf] if len(dated) > 1 else [r.pdf for r in self.rows[:1]]
+        sample = list(dict.fromkeys(sample))
+        todo = [p for p in sample if p not in self.peek_cache]
+        if not todo:
+            self.show_change(code, sample)
+            return
+        self.change_note.set("info", "과목 구성을 확인하는 중…", [])
+        self.peek_thread = QThread(self)
+        w = PeekWorker((code, tuple(sample)), todo)
+        w.moveToThread(self.peek_thread)
+        self.peek_thread.started.connect(w.run)
+        w.done.connect(self.on_peek)
+        w.done.connect(self.peek_thread.quit)
+        self.peek_thread.finished.connect(self._peek_finished)
+        self._peek_worker = w
+        self.peek_thread.start()
+
+    def _peek_finished(self) -> None:
+        self.peek_thread.deleteLater()
+        self.peek_thread = None
+
+    def on_peek(self, key, lists) -> None:
+        code, sample = key
+        todo = [p for p in sample if p not in self.peek_cache]
+        for p, lst in zip(todo, lists):
+            self.peek_cache[p] = lst
+        if code == self.picker.code:
+            self.show_change(code, list(sample))
+
+    def show_change(self, code: str, sample: list[Path]) -> None:
+        lists = [self.peek_cache.get(p, []) for p in sample]
+        if not any(lists):
+            self.change_note.setVisible(False)
+            return
+        cs = subject_change(S.load(code), lists, [r.date for r in self.rows])
+        kind = "warn" if (cs.unknown or cs.legacy_rounds) else ("info" if cs.changed else "ok")
+        title = "과목 개편 — 현행 출제기준으로 정리해 팩을 만듭니다" if cs.changed else "과목 구성 확인"
+        self.change_note.set(kind, title, cs.lines())
+
+    # ───────────────── 실행 ─────────────────
     def check_inputs(self, pdfs: list[Path]) -> str | None:
+        if not self.picker.code:
+            return "종목을 먼저 고르세요(출제기준이 없으면 [과목 직접 입력])."
         if not pdfs:
             return "기출 PDF를 먼저 넣으세요."
         if not self.name.text().strip():
@@ -365,7 +544,7 @@ class MainWindow(QMainWindow):
     def set_running(self, on: bool) -> None:
         self.run_btn.setEnabled(not on)
         self.stop_btn.setEnabled(on)
-        for w in (self.cert, self.out, self.name, self.origin, self.source_type, self.workers):
+        for w in (self.picker, self.out, self.name, self.origin, self.source_type, self.speed):
             w.setEnabled(not on)
         self.setAcceptDrops(not on)
 
@@ -411,12 +590,17 @@ class MainWindow(QMainWindow):
         rev = sum(r.status == "review" for r in rows)
         err = sum(r.status == "error" for r in rows)
         skip = sum(r.status == "skipped" for r in rows)
-        text = f"끝: 팩 {ok}개 · 검수 필요 {rev}개 · 오류 {err}개" + (f" · 건너뜀 {skip}개" if skip else "") + \
+        text = f"끝 — 팩 {ok}개 · 검수 필요 {rev}개 · 오류 {err}개" + (f" · 건너뜀 {skip}개" if skip else "") + \
                f" · {sec // 60}분 {sec % 60}초"
-        self.status.setText(text + ("  — '검수 필요' 회차를 두 번 눌러 고치세요." if rev else ""))
+        self.status.setText(text + ("  — '검수 필요' 회차를 두 번 눌러 고치세요" if rev else ""))
+        lines = law_summary(self.rows)
+        if lines:
+            self.law_note.set("warn", "법령·기준 개정 주의", lines)
+        else:
+            self.law_note.setVisible(False)
 
     def open_review(self, row: int, col: int) -> None:
-        if col == 1 or self.worker is not None or row >= len(self.rows):
+        if col == C_DATE or self.worker is not None or row >= len(self.rows):
             return
         r = self.rows[row]
         if r.prepared is None:
@@ -446,6 +630,9 @@ class MainWindow(QMainWindow):
             if self.thread:
                 self.thread.quit()
                 self.thread.wait(30_000)
+        if self.peek_thread:
+            self.peek_thread.quit()
+            self.peek_thread.wait(10_000)
         self.save_settings()
         e.accept()
 
@@ -453,7 +640,7 @@ class MainWindow(QMainWindow):
 def main() -> None:
     app = QApplication(sys.argv)
     app.setApplicationName(APP_NAME)
-    app.setStyleSheet(STYLE)
+    theme.apply(app)
     icon = resource_path("oneq_prep/gui/icon.png")
     if icon.exists():
         app.setWindowIcon(QIcon(str(icon)))

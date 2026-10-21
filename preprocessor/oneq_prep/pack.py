@@ -22,6 +22,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from . import __version__
+from . import lawtag
 from . import standards as S
 from .extract import Layout, analyze
 from .reassign import Reference, Suggestion
@@ -141,6 +142,7 @@ class Item:
     warnings: list[str] = field(default_factory=list)
     excluded: str | None = None   # 제외 사유
     suggestion: Suggestion | None = None
+    law_refs: list[str] = field(default_factory=list)   # 법령·기준 이름(ADR 019) — 팩 lawRefs
 
 
 @dataclass
@@ -282,6 +284,11 @@ def prepare(pdf_path: Path, profile: S.Profile, out_dir: Path, all_dates: list[s
         it = Item(q.no, q.local_no, raw, std, ans, src, check, accept.get(q.no, []),
                   n_choice,
                   buf.getvalue(), (img.width, img.height), q.text(), flags, warn)
+        # 법령·기준 문항 표시(ADR 019): 개정으로 원본 정답이 현행과 다를 수 있는 문항 → 앱이 답한 뒤 안내
+        is_law, refs = lawtag.tag(it.text, profile.code, std or raw)
+        if is_law:
+            it.flags.append("law")
+            it.law_refs = refs
         if std is None:
             it.excluded = f"현행 출제기준에 없는 과목({raw})"
         if q.no in excl:
@@ -349,7 +356,7 @@ def write_pack(p: Prepared, out_dir: Path, prepared_by: str, source_type: str = 
             "text": it.text,
             "contentHash": content_hash(it.text),
             "keywords": [],
-            "lawRefs": [],
+            "lawRefs": it.law_refs,
             "clusterId": None,
             "flags": it.flags,
         }
@@ -456,7 +463,7 @@ def main(argv=None):
     ap.add_argument("--source-type", default="public-pbt", choices=["public-pbt", "recalled", "other"])
     ap.add_argument("--date", help="시행일 YYYY-MM-DD(파일명에 없을 때, PDF 1개)")
     ap.add_argument("--round", type=int, dest="round_no", help="회차 강제 지정(PDF 1개)")
-    ap.add_argument("--pack-version", type=int, default=1)
+    ap.add_argument("--pack-version", type=int, default=2, help="팩 판(v0.4부터 기본 2: 법령·기준 표시가 든 판 — 앱이 1판을 자동 교체, 기록은 이어짐)")
     ap.add_argument("--report-only", action="store_true", help="팩은 쓰지 않고 보고서만")
     ap.add_argument("--workers", type=int, default=None, help="동시에 처리할 회차 수(기본: CPU 코어 수 - 1, 최대 4)")
     a = ap.parse_args(argv)

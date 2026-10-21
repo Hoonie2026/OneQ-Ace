@@ -10,6 +10,9 @@
     (사용한 버전은 _internal/PySide6 폴더 이름·버전 정보 참고). 요청하면 이 배포본에 쓴 버전의 소스를 같은 방법으로 제공합니다.
   - LGPL v3 원문: https://www.gnu.org/licenses/lgpl-3.0.html
 
+■ Pretendard 글꼴 — SIL Open Font License 1.1 (Copyright 2021 Kil Hyung-jin, https://github.com/orioncactus/pretendard)
+  원문: _internal/oneq_prep/gui/fonts/OFL.txt
+■ 국가자격 종목 목록 — 공공데이터포털(한국산업인력공단), 이용허락범위 제한 없음
 ■ pypdfium2 (Apache-2.0 또는 BSD-3-Clause), PDFium (BSD-3-Clause 등)
 ■ pdfplumber (MIT), pdfminer.six (MIT)
 ■ Pillow (MIT-CMU / HPND)

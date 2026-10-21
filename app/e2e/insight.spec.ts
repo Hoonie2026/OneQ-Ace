@@ -8,6 +8,15 @@ import { join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { makePack } from '../src/test/makePack';
 
+/** 화면 전체 사진. 아이폰 크기(화소 3배)에서 아주 긴 화면은 브라우저 한도를 넘어 실패하므로 그때는 보이는 부분만 */
+async function shot(page: import('@playwright/test').Page, path: string) {
+  try {
+    await page.screenshot({ path, fullPage: true });
+  } catch {
+    await page.screenshot({ path });
+  }
+}
+
 const SAMPLE = resolve(import.meta.dirname, '../../packs/oneq-SURVEY-2022-1.zip');
 async function packFile(): Promise<string> {
   if (existsSync(SAMPLE)) return SAMPLE;
@@ -57,5 +66,5 @@ test('학습 점검 카드: 사흘 동안 계획(하루 4시간)보다 훨씬 �
   await expect(page.getByTestId('insight-pace')).not.toContainText('평균 0분');
   await expect(page.getByTestId('insight-atpace')).toContainText('이 속도면 시험일 예상');
   await expect(page.getByTestId('insight-card')).not.toContainText('합격 가능성');
-  await page.screenshot({ path: `test-results/insight-${info.project.name}.png`, fullPage: true });
+  await shot(page, `test-results/insight-${info.project.name}.png`);
 });

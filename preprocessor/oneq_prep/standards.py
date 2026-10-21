@@ -10,6 +10,7 @@ preprocessor/standards/<종목코드>.json
 from __future__ import annotations
 
 import json
+import os
 import re
 import sys
 from dataclasses import dataclass, field
@@ -19,6 +20,22 @@ from pathlib import Path
 def _root() -> Path:
     base = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parents[1]))   # PyInstaller 대비
     return base / "standards"
+
+
+def user_root() -> Path:
+    """사용자가 만든 출제기준 프로필(창 프로그램 [과목 직접 입력]) — 실행파일 폴더가 아니라 사용자 폴더에 저장(ADR 019).
+    같은 종목 코드면 사용자 것이 함께 배포된 것보다 우선."""
+    env = os.environ.get("ONEQ_PREP_HOME")
+    if env:
+        base = Path(env)
+    elif os.name == "nt":
+        base = Path(os.environ.get("APPDATA", Path.home())) / "OneQ-Ace"
+    else:
+        base = Path.home() / ".local" / "share" / "OneQ-Ace"
+    return base / "standards"
+
+
+CODE_RE = re.compile(r"^[A-Z][A-Z0-9]{1,15}$")
 
 
 def norm(name: str) -> str:
@@ -64,7 +81,12 @@ class Profile:
 
 
 def load(code: str, root: Path | None = None) -> Profile:
-    p = (root or _root()) / f"{code}.json"
+    if root is not None:
+        p = root / f"{code}.json"
+    else:
+        p = user_root() / f"{code}.json"
+        if not p.exists():
+            p = _root() / f"{code}.json"
     if not p.exists():
         raise FileNotFoundError(f"출제기준 프로필 없음: {p}")
     d = json.loads(p.read_text(encoding="utf-8"))
@@ -73,4 +95,23 @@ def load(code: str, root: Path | None = None) -> Profile:
 
 
 def available(root: Path | None = None) -> list[str]:
-    return sorted(p.stem for p in (root or _root()).glob("*.json"))
+    """프로필 종목 코드(대문자 파일 이름만 — law-terms.json 같은 설정 파일은 제외)."""
+    roots = [root] if root is not None else [_root(), user_root()]
+    codes = {p.stem for r in roots if r.exists() for p in r.glob("*.json") if CODE_RE.match(p.stem)}
+    return sorted(codes)
+
+
+def is_user_profile(code: str) -> bool:
+    return (user_root() / f"{code}.json").exists()
+
+
+def save_user_profile(d: dict) -> Path:
+    """창 프로그램에서 만든 프로필 저장. d는 SURVEY.json과 같은 모양(code·name·grade·version·passRule·subjects)."""
+    if not CODE_RE.match(d.get("code", "")):
+        raise ValueError("종목 코드는 영문 대문자로 시작하는 2~16자(예: ELEC, RAILCIVIL)")
+    if not d.get("subjects"):
+        raise ValueError("과목을 하나 이상 적으세요")
+    p = user_root() / f"{d['code']}.json"
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(json.dumps(d, ensure_ascii=False, indent=2), encoding="utf-8")
+    return p

@@ -10,10 +10,13 @@ PRE = HERE.parent                           # preprocessor
 REPO = PRE.parent
 
 datas = [
-    (str(PRE / "standards" / "*.json"), "standards"),
+    (str(PRE / "standards" / "*.json"), "standards"),          # 출제기준 프로필 + law-terms.json
+    (str(PRE / "oneq_prep" / "gui" / "fonts" / "*"), "oneq_prep/gui/fonts"),   # Pretendard(OFL)
     (str(REPO / "shared" / "pack-schema.json"), "shared"),
     (str(PRE / "THIRD-PARTY-NOTICES.txt"), "."),
 ]
+if list((PRE / "standards").glob("*.csv")):
+    datas.append((str(PRE / "standards" / "*.csv"), "standards"))   # 공공데이터 종목 목록(있으면)
 icon_png = PRE / "oneq_prep" / "gui" / "icon.png"
 if icon_png.exists():
     datas.append((str(icon_png), "oneq_prep/gui"))
@@ -29,7 +32,7 @@ a = Analysis(
     pathex=[str(PRE)],
     binaries=binaries,
     datas=datas,
-    hiddenimports=["oneq_prep.gui.app", "oneq_prep.pack", "oneq_prep.batch"],
+    hiddenimports=["oneq_prep.gui.app", "oneq_prep.pack", "oneq_prep.batch", "oneq_prep.lawtag", "oneq_prep.summary", "oneq_prep.certs"],
     excludes=["tkinter", "matplotlib", "PySide6.QtWebEngineCore", "PySide6.QtWebEngineWidgets", "PySide6.Qt3DCore",
               "PySide6.QtQuick", "PySide6.QtQml", "PySide6.QtMultimedia", "PySide6.QtCharts", "PySide6.QtDataVisualization",
               "pytest", "pytestqt", "scipy", "pandas", "lxml", "IPython", "sympy", "matplotlib"],
