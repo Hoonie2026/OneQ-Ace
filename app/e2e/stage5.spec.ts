@@ -123,7 +123,10 @@ test('5단계: 학습 계획 → 오늘 학습(계획량 한 묶음·틀린 문�
   await page.getByTestId('day-log').click();
   await expect(page.getByTestId('day-summary')).toBeVisible();
   await expect(page.getByRole('heading', { name: '오늘 학습 기록' })).toBeVisible();
-  await expect(page.getByTestId('summary-verdict')).toBeVisible();
+  // v0.11.1: 오늘 것만 — 목표 진행·남은 문항, 오늘 성적, 과목은 전부(안 푼 과목 0 / 0)
+  await expect(page.getByTestId('day-left')).toContainText('오늘 목표를 다 풀었습니다');
+  await expect(page.getByTestId('day-subjects').locator('li')).toHaveCount(5);
+  await expect(page.getByTestId('day-summary')).not.toContainText('계획 이행');
   await shot(page, `test-results/stage5-summary-${info.project.name}.png`);
   await page.getByTestId('summary-home').click();
   await expect(page.getByTestId('go-recommend')).toBeVisible();

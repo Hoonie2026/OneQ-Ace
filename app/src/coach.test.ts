@@ -100,6 +100,9 @@ describe('홈 대시보드·오늘 학습(5단계)', () => {
     const sum2 = (await daySummary('TEST', NOW + 3_600_000, d))!;
     expect([sum2.answered, sum2.correct]).toEqual([15, 10]);
     expect([sum2.currentSolved, sum2.currentCorrect, sum2.current]).toEqual([15, 10, 66.7]);
+    // v0.11.1: 목표·남은 문항, 과목은 전부(오늘 안 푼 과목도 0/0으로)
+    expect([sum2.target, sum2.left, sum2.wrong + sum2.unknown]).toEqual([15, 0, 5]);
+    expect(sum2.bySubject.map((b) => b.name).sort()).toEqual(['과목1', '과목2']);
     expect(sum2.projectedAvg).not.toBeNull();
   });
 

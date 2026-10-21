@@ -364,6 +364,13 @@ export interface DaySummary {
   correct: number;
   unknown: number;
   minutes: number;
+  /** 오늘 오답(모름 제외) */
+  wrong: number;
+  /** 오늘 목표 문항 수·계획 시간(분)과 남은 문항 수(v0.11.1 — 아직 안 끝났는지) */
+  target: number;
+  plannedMinutes: number;
+  left: number;
+  /** 현행 과목 전부(오늘 안 푼 과목은 0/0 — v0.11.1 실기기 의견) */
   bySubject: { name: string; answered: number; correct: number }[];
   /** 현재 점수(푼 문항 중 정답 비율 — ADR 020)와 그 문항 수 */
   current: number | null;
@@ -399,7 +406,11 @@ export async function daySummary(certCode: string, now = Date.now(), d: OneQDB =
     correct: todays.filter((a) => a.correct).length,
     unknown: todays.filter((a) => a.chosen === 0).length,
     minutes: Math.round(todays.reduce((t, a) => t + Math.min(a.elapsedMs, 600_000), 0) / 60_000),
-    bySubject: c.subjects.map((s) => by.get(s.name)).filter((x): x is NonNullable<typeof x> => !!x),
+    wrong: todays.filter((a) => !a.correct && a.chosen !== 0).length,
+    target: c.today.target,
+    plannedMinutes: c.today.minutes,
+    left: Math.max(0, c.today.target - todays.length),
+    bySubject: c.subjects.map((s) => by.get(s.name) ?? { name: s.name, answered: 0, correct: 0 }),
     current: c.exam.current,
     currentSolved: c.exam.solved,
     currentCorrect: c.exam.correct,

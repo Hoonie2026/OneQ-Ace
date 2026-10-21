@@ -3470,3 +3470,139 @@ details.why summary {
     color: #e8b923;
   }
 }
+
+/* v0.11.1: 오늘 학습 기록 — 오늘 것만, 큰 글자(50대 이상 시인성) */
+.day-log .dl-card {
+  display: grid;
+  gap: 6px;
+  padding: 20px;
+}
+.dl-card h2 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--muted);
+}
+.dl-big {
+  margin: 0;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+.dl-big b {
+  font-size: 48px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+.dl-big span {
+  margin-left: 4px;
+  font-size: 22px;
+  font-weight: 600;
+  color: var(--muted);
+}
+.dl-meter {
+  height: 14px;
+  margin: 6px 0 2px;
+}
+.dl-left {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--primary);
+}
+.dl-left.ok {
+  color: var(--ok);
+}
+.dl-time,
+.dl-sub {
+  margin: 0;
+  font-size: 16px;
+  color: var(--muted);
+}
+.dl-time b {
+  color: var(--ink);
+}
+.dl-tiles {
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+}
+.dl-tiles li {
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+  padding: 12px 4px;
+  border-radius: 12px;
+  background: var(--surface-2, rgb(15 29 46 / 0.04));
+}
+.dl-tiles small {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--muted);
+}
+.dl-tiles b {
+  font-size: 30px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+.dl-tiles .ok b {
+  color: var(--ok);
+}
+.dl-tiles .bad b {
+  color: var(--fail);
+}
+.dl-tiles .unk b {
+  color: var(--check);
+}
+.dl-subjects {
+  list-style: none;
+  margin: 4px 0 6px;
+  padding: 0;
+}
+.dl-subjects li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 0;
+  border-bottom: 1px solid var(--line);
+  font-size: 19px;
+}
+.dl-subjects li:last-child {
+  border-bottom: 0;
+}
+.dl-name {
+  font-weight: 600;
+}
+.dl-val {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex: none;
+  font-variant-numeric: tabular-nums;
+}
+.dl-val b {
+  font-size: 22px;
+  font-weight: 800;
+}
+.dl-val small {
+  min-width: 3.2em;
+  text-align: right;
+  font-size: 16px;
+  color: var(--muted);
+}
+.dl-subjects li.none .dl-name,
+.dl-subjects li.none b {
+  color: var(--muted);
+  font-weight: 600;
+}
+@media (max-width: 360px) {
+  .dl-tiles b {
+    font-size: 26px;
+  }
+  .dl-tiles small {
+    font-size: 14px;
+  }
+}
