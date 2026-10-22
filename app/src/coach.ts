@@ -105,6 +105,8 @@ export interface TodayPlan {
   /** 지금 시작하면 낼 문항 수 = 오늘 남은 계획량(다 했으면 추가 15문항) */
   size: number;
   extra: boolean;
+  /** 지금 단계에서 남은 문항(v0.11.4): 목표 전이면 목표 − 푼 수, 목표 뒤에는 추가 15문항 묶음 중 남은 수 */
+  left: number;
   /** 구성(왜 나오는지): 오늘 틀린 문항 다시 / 지난번 틀린·모름 복습 / 맞혔지만 다시 볼 때 된 문항 / 새 문항 */
   relearn: number;
   wrong: number;
@@ -120,14 +122,22 @@ export interface TodayPlan {
 /** 오늘 계획량을 다 한 뒤 더 할 때 한 번에 내는 문항 수 */
 export const EXTRA_SIZE = 15;
 
+/**
+ * 오늘 남은 문항(v0.11.4 — 시스템 추천·과목별이 같은 숫자를 쓰도록 한 곳에서): 목표 전이면 목표 − 오늘 푼 수,
+ * 목표를 채운 뒤에는 추가 학습 15문항 단위로 그중 남은 수(목표 뒤 5문항 풀었으면 10)
+ */
+export function stageLeft(target: number, done: number): { left: number; extra: boolean } {
+  if (done < target) return { left: target - done, extra: false };
+  return { left: EXTRA_SIZE - ((done - target) % EXTRA_SIZE), extra: true };
+}
+
 function todayPlan(ctx: EngineContext, views: { order: string[]; subjects: SubjectView[] }, doneToday: number, now: number): TodayPlan {
   const { order } = views;
   const settings = ctx.settings ?? { ...DEFAULT_PLAN_SETTINGS, examDate: '9999-12-31' };
   const minutes = minutesToday(settings, startOfDay(now));
   const target = Math.max(0, Math.round((minutes * 60) / ctx.mem.secPerQuestion));
-  const left = target - doneToday;
-  const extra = left <= 0;
-  const want = extra ? EXTRA_SIZE : left;
+  const { left, extra } = stageLeft(target, doneToday);
+  const want = left;
   const entries = buildDailySession(ctx.bank, ctx.mem, order, now, ctx.attempts, want, composeOpts(ctx, views.subjects));
   const count = (k: string) => entries.filter((e) => e.kind === k).length;
   const by = new Map<string, { name: string; review: number; fresh: number }>();
@@ -143,6 +153,7 @@ function todayPlan(ctx: EngineContext, views: { order: string[]; subjects: Subje
     target,
     size: entries.length,
     extra,
+    left,
     relearn: count('relearn'),
     wrong: count('wrong'),
     review: count('review'),
@@ -256,8 +267,8 @@ export function examViews(ctx: EngineContext, forecast: Forecast | null, outlook
 export function sessionSizeFor(ctx: EngineContext, now: number): { size: number; extra: boolean } {
   const settings = ctx.settings ?? { ...DEFAULT_PLAN_SETTINGS, examDate: '9999-12-31' };
   const target = Math.max(0, Math.round((minutesToday(settings, startOfDay(now)) * 60) / ctx.mem.secPerQuestion));
-  const left = target - ctx.attempts.filter((a) => a.ts >= startOfDay(now)).length;
-  return left > 0 ? { size: left, extra: false } : { size: EXTRA_SIZE, extra: true };
+  const st = stageLeft(target, ctx.attempts.filter((a) => a.ts >= startOfDay(now)).length);
+  return { size: st.left, extra: st.extra };
 }
 
 /** 과목별 학습 한 묶음(오늘 남은 목표 문항 수 — 그 과목에 낼 문항이 그보다 적으면 있는 만큼, 자동 순서) */
@@ -312,7 +323,7 @@ export async function startToday(certCode: string, now = Date.now(), d: OneQDB =
   const { order } = views;
   const doneToday = ctx.attempts.filter((a) => a.ts >= startOfDay(now)).length;
   const tp = todayPlan(ctx, views, doneToday, now);
-  const entries = buildDailySession(ctx.bank, ctx.mem, order, now, ctx.attempts, tp.extra ? EXTRA_SIZE : Math.max(1, tp.target - doneToday), composeOpts(ctx, views.subjects));
+  const entries = buildDailySession(ctx.bank, ctx.mem, order, now, ctx.attempts, Math.max(1, tp.left), composeOpts(ctx, views.subjects));
   if (!entries.length) return null;
   await closeOpenToday(certCode, now, d);
   const run = await createSetRun(certCode, 'today', '오늘 학습', entries.map((e) => e.qid), { now }, d);

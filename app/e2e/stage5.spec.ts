@@ -99,9 +99,7 @@ test('5단계: 학습 계획 → 오늘 학습(계획량 한 묶음·틀린 문�
   // v0.11.2: 위 줄은 "과목명 회차"만(문항 번호 없음)
   await expect(page.getByTestId('solve-src').locator('b')).toHaveText(/^과목\d$/);
   await expect(page.getByTestId('solve-src')).not.toContainText('번');
-  // 풀이 중 성적 보기 → ‹ 는 이 풀이로 돌아온다(v0.8.4)
-  await page.getByRole('button', { name: '지금 성적 보기' }).click();
-  await page.getByTestId('result-back').click();
+  await expect(page.getByRole('button', { name: '지금 성적 보기' })).toHaveCount(0); // v0.11.4: [성적] 없음
   await expect(page.getByTestId('progress')).toHaveText('1 / 20');
   for (let k = 0; k < 20; k++) {
     await expect(page.getByTestId('progress')).toHaveText(`${k + 1} / 20`);
@@ -143,25 +141,28 @@ test('5단계: 학습 계획 → 오늘 학습(계획량 한 묶음·틀린 문�
   await expect(page.getByTestId('week-goal')).toContainText('완료');
   await page.getByTestId('go-recommend').click();
   await expect(page.getByTestId('rec-title')).toContainText('추가 학습 15문항');
-  await expect(page.getByTestId('rec-subjects')).toContainText('추가');
+  await expect(page.getByTestId('rec-subjects')).toContainText('목표'); // v0.11.4: 추가 학습이어도 "목표"
   await page.getByRole('button', { name: '홈으로' }).click();
   await expect(page.getByTestId('current-avg')).not.toHaveText('0');
   await shot(page, `test-results/stage5-home-${info.project.name}.png`);
 
-  // 과목별 학습(v0.11): 안내문 대신 막대 안내창 — 누르면(마우스는 올리면) 그 과목 설명, 바깥을 누르면 닫힘
+  // 과목별 학습(v0.11.4 전면 개편): 오늘 목표(시스템 추천과 같은 숫자) → "학습할 과목을 선택하세요" → 과목 | [학습하기 (n문항)]
   await page.getByTestId('go-subjects').click();
-  await expect(page.getByTestId('subject-list')).toContainText('푼 ');
-  await expect(page.getByTestId('subject-tip')).toHaveCount(0);
-  await page.getByTestId('subject-bar-hit').first().click();
-  await expect(page.getByTestId('subject-tip')).toHaveCount(1);
-  await expect(page.getByTestId('subject-tip')).toContainText('막대 = 누적 점수');
-  await expect(page.getByTestId('subject-tip')).toContainText('과락선');
+  await expect(page.getByTestId('rec-title')).toContainText('추가 학습 15문항 중 14문항 남음'); // 목표 뒤 다시 풀기 1문항
+  await expect(page.getByTestId('subject-list')).toContainText('학습할 과목을 선택하세요');
+  await expect(page.getByTestId('subject-list')).not.toContainText('과락');
+  await expect(page.getByTestId('subject-study').first()).toHaveText('학습하기 (14문항)');
   await shot(page, `test-results/stage5-subjects-${info.project.name}.png`);
-  await page.getByRole('heading', { name: '과목별 학습' }).click();
-  await expect(page.getByTestId('subject-tip')).toHaveCount(0);
   await page.getByTestId('subject-study').first().click();
   await expect(page.getByTestId('progress')).toContainText('1 /');
+  await page.getByRole('button', { name: '1번' }).click();
+  await page.getByRole('button', { name: /^(다음 →|성적 보기)$/ }).click();
+  await shot(page, `test-results/stage5-solve-${info.project.name}.png`);
+  // ✕ → 과목별 학습 화면으로 돌아옴(다른 과목을 고를 수 있게), 남은 수는 1 줄어듦
   await page.getByRole('button', { name: '풀이 멈추고 홈으로' }).click();
+  await expect(page.getByTestId('subject-list')).toBeVisible();
+  await expect(page.getByTestId('rec-title')).toContainText('추가 학습 15문항 중 13문항 남음');
+  await page.getByTestId('back-home').click();
   await expect(page.getByTestId('go-recommend')).toBeVisible();
 
   // 모의고사: 정답 숨김, 타이머와 제출 버튼이 따로

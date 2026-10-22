@@ -305,3 +305,13 @@ describe('v0.11 현재 점수 = 푼 문항 중 정답 비율(ADR 020)', () => {
     expect((await d.runs.get((y as { sessionId: string }).sessionId))!.finishedAt).toBe(tomorrow);
   });
 });
+
+describe('v0.11.4 남은 문항(시스템 추천·과목별 공통)', () => {
+  it('목표 전: 목표 − 푼 수, 목표 뒤: 추가 15문항 중 남은 수', async () => {
+    const { stageLeft } = await import('./coach');
+    expect(stageLeft(40, 2)).toEqual({ left: 38, extra: false });
+    expect(stageLeft(40, 40)).toEqual({ left: 15, extra: true });
+    expect(stageLeft(40, 45)).toEqual({ left: 10, extra: true });
+    expect(stageLeft(40, 55)).toEqual({ left: 15, extra: true });
+  });
+});

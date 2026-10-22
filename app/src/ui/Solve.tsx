@@ -24,7 +24,7 @@ const MAX_ELAPSED = 30 * 60 * 1000;
  * 그 자리에는 **[쉬움]**: 보기를 고르지 않고 정답 처리(FSRS Easy — 다음 복습이 길게). 정답을 보고 사실 몰랐으면 [모름으로 바꾸기].
  * "한 줄 설명"은 **메모**로 — 메모가 있는 문항은 다시 풀 때 "메모 있음"이 보인다(다른 회차의 같은 문항 메모 포함).
  */
-export function Solve(props: { target: Target; onExit: () => void; onResult: (peek?: boolean) => void; onSolve?: (t: Target) => void }) {
+export function Solve(props: { target: Target; /** 나가기 — 과목별 학습 묶음이면 'subjects'(과목별 학습 화면으로, v0.11.4) */ onExit: (view?: 'subjects') => void; onResult: (peek?: boolean) => void; onSolve?: (t: Target) => void }) {
   const [s, setS] = useState<Session | null>(null);
   const [index, setIndex] = useState(0);
   const [loaded, setLoaded] = useState<QuestionRow | null>(null);
@@ -240,14 +240,14 @@ export function Solve(props: { target: Target; onExit: () => void; onResult: (pe
         ? await startRelearn(certCode, wrong)
         : await startToday(certCode);
     if (t && props.onSolve) props.onSolve(t);
-    else props.onExit();
+    else props.onExit(s.run.subjectKey ? 'subjects' : undefined);
   };
   /** 홈으로(v0.11 — "오늘 학습 마치기" 대신): 이 묶음을 닫고 홈으로. 푼 기록은 답할 때마다 이미 저장됨 */
   const goHome = async () => {
     if (!s) return;
     await finishRun(s.run.sessionId);
     setGoalOpen(false);
-    props.onExit();
+    props.onExit(s.run.subjectKey ? 'subjects' : undefined);
   };
 
   const prev = async () => {
@@ -278,6 +278,7 @@ export function Solve(props: { target: Target; onExit: () => void; onResult: (pe
       return props.onExit();
     }
     if (s && s.run.mode === 'today' && !s.run.finishedAt) return goHome();
+    if (s?.run.subjectKey) return props.onExit('subjects');
     props.onExit();
   };
 
@@ -334,32 +335,16 @@ export function Solve(props: { target: Target; onExit: () => void; onResult: (pe
         <button className="icon-btn" onClick={prev} disabled={index === 0} aria-label="이전 문항">
           <Icon name="back" size={24} />
         </button>
+        {/* v0.11.4(실기기 의견): 가운데 진행 수, 오른쪽에 과목명(진하게)·회차 두 줄. [성적] 단추는 없앰(모의고사 [제출]은 남은 시간 줄로) */}
         <div className="solve-meta">
           <strong data-testid="progress">
             {index + 1} / {s.qids.length}
           </strong>
-          {/* v0.11.2(실기기 의견): "과목명 회차"만 — 과목명은 진하게·조금 크게(어느 과목인지 바로), 회차는 옅게. 문항 번호 뺌. 한 줄 그대로라 풀이 영역은 줄지 않음 */}
-          <span className="solve-src" data-testid="solve-src">
-            {subject && <b className="solve-subj">{subject.name}</b>}
-            <small>{examLabel(qPack.manifest)}</small>
-          </span>
         </div>
-        {isMock ? (
-          <button className="score-btn" onClick={submit} aria-label="제출하고 채점" data-testid="mock-submit">
-            제출
-          </button>
-        ) : (
-          <button
-            className="score-btn"
-            onClick={async () => {
-              await flushNote();
-              props.onResult(true); // 풀이 중 성적 보기 — 성적 화면의 ‹는 이 풀이로 돌아온다(v0.8.4)
-            }}
-            aria-label="지금 성적 보기"
-          >
-            <Icon name="chart" size={18} /> 성적
-          </button>
-        )}
+        <div className="solve-src" data-testid="solve-src">
+          {subject && <b className="solve-subj">{subject.name}</b>}
+          <small>{examLabel(qPack.manifest)}</small>
+        </div>
       </header>
       <div className="solve-progress" aria-hidden="true">
         <div style={{ width: `${(answeredCount / s.qids.length) * 100}%` }} />
@@ -379,9 +364,14 @@ export function Solve(props: { target: Target; onExit: () => void; onResult: (pe
         </div>
       )}
       {isMock && (
-        <p className={`mock-timer${deadline && deadline - nowMs < 5 * 60_000 ? ' bad' : ''}`} role="timer" data-testid="mock-timer">
-          남은 시간 <b>{fmtLeft(deadline ? deadline - nowMs : 0)}</b>
-        </p>
+        <div className="mock-bar">
+          <p className={`mock-timer${deadline && deadline - nowMs < 5 * 60_000 ? ' bad' : ''}`} role="timer" data-testid="mock-timer">
+            남은 시간 <b>{fmtLeft(deadline ? deadline - nowMs : 0)}</b>
+          </p>
+          <button className="score-btn" onClick={submit} aria-label="제출하고 채점" data-testid="mock-submit">
+            제출
+          </button>
+        </div>
       )}
       {q && ((history.get(q.qid)?.length ?? 0) > 1 || (!isMock && (note || otherNote))) && (
         <div className="freq-row">
@@ -551,7 +541,7 @@ export function Solve(props: { target: Target; onExit: () => void; onResult: (pe
                   : '계속 학습하기 (오늘 기록으로 추천)'}
               </button>
               <button className="btn btn-block" onClick={goHome} data-testid="goal-end">
-                홈으로
+                {s.run.subjectKey ? '다른 과목 고르기' : '홈으로'}
               </button>
             </div>
           </section>

@@ -37,6 +37,8 @@ interface Cert {
  */
 export function Home(props: {
   version: number;
+  /** 처음 보일 보기(v0.11.4 — 과목별 학습에서 풀다 나오면 과목별 학습 화면으로 돌아온다) */
+  initialView?: 'subjects';
   busy: boolean;
   onImport: (files: File[], pickMs: number | null) => void;
   onPickFailed: () => void;
@@ -52,7 +54,7 @@ export function Home(props: {
   const [certs, setCerts] = useState<Cert[]>([]);
   const [cert, setCert] = useState<string | null>(null);
   const [coach, setCoach] = useState<Coach | null>(null);
-  const [view, setView] = useState<View>('home');
+  const [view, setView] = useState<View>(props.initialView ?? 'home');
   const [lastMock, setLastMock] = useState<{ date: string; score: number } | null>(null);
   const [starting, setStarting] = useState(false);
   const [insight, setInsight] = useState<Insight | null>(null);

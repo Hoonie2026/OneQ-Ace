@@ -1,15 +1,8 @@
-import { useEffect, useRef, useState } from 'react';
-import { EXTRA_SIZE, fmtMinutes, type Coach } from '../coach';
-import { Icon } from './Icon';
-import { MIN_TIMING_OBS } from '../engine/memory';
+import { type Coach } from '../coach';
 import { DIAG_OBS, REVIEW_SHARE } from '../engine/session';
+import { GoalTitle } from './GoalTitle';
 
-/** 초 → "1분 32초" */
-export function fmtSec(sec: number): string {
-  const m = Math.floor(sec / 60);
-  const s = Math.round(sec % 60);
-  return m ? (s ? `${m}분 ${s}초` : `${m}분`) : `${s}초`;
-}
+export { fmtSec } from './GoalTitle';
 
 /**
  * 시스템 추천 학습(ADR 011·014): 오늘 무엇을 왜 푸는지 먼저 보여 주고 [학습 시작].
@@ -18,26 +11,6 @@ export function fmtSec(sec: number): string {
  */
 export function RecommendView(props: { coach: Coach; busy: boolean; onStart: () => void }) {
   const { today } = props.coach;
-  const timed = today.timingObs >= MIN_TIMING_OBS;
-  const left = Math.max(0, today.target - today.done);
-  // v0.11.3(실기기 의견): 제목 = 오늘 목표(푼 게 있으면 남은 수), 목표를 채운 뒤에는 추가 학습
-  const title = today.extra ? `추가 학습 ${today.size}문항` : today.done > 0 ? `오늘 목표 ${today.target}문항 중 ${left}문항 남음` : `오늘 목표 ${today.target}문항`;
-  // 문항 수 계산 카드: PC는 제목에 마우스를 올리면, 폰·태블릿·펜은 제목을 누르면(과목별 학습 안내창과 같은 방식)
-  const [tip, setTip] = useState(false);
-  const pointer = useRef('mouse');
-  useEffect(() => {
-    if (!tip) return;
-    const down = (e: PointerEvent) => {
-      if (!(e.target as HTMLElement | null)?.closest('[data-tip="rec-count"]')) setTip(false);
-    };
-    const key = (e: KeyboardEvent) => e.key === 'Escape' && setTip(false);
-    document.addEventListener('pointerdown', down);
-    document.addEventListener('keydown', key);
-    return () => {
-      document.removeEventListener('pointerdown', down);
-      document.removeEventListener('keydown', key);
-    };
-  }, [tip]);
   const rows: { label: string; n: number; hint: string; tag: string }[] = [
     { label: '오늘 틀린·모름 문항 다시', n: today.relearn, hint: '틀린 직후 정답을 확인하고 한 번 더', tag: '오답 교정' },
     { label: '지난번 틀린·모름 문항', n: today.wrong, hint: '잊을 때쯤(기억률 90% 아래로 떨어질 날) 다시', tag: '간격 반복' },
@@ -47,43 +20,7 @@ export function RecommendView(props: { coach: Coach; busy: boolean; onStart: () 
   return (
     <section className="stack" data-testid="recommend">
       <div className="card">
-        <div
-          className="rec-title"
-          data-tip="rec-count"
-          role="button"
-          tabIndex={0}
-          aria-expanded={tip}
-          aria-label={`${title} — 문항 수 계산 보기`}
-          data-testid="rec-title"
-          onPointerDown={(e) => (pointer.current = e.pointerType)}
-          onPointerEnter={(e) => e.pointerType === 'mouse' && setTip(true)}
-          onPointerLeave={(e) => e.pointerType === 'mouse' && setTip(false)}
-          onClick={() => setTip((t) => (pointer.current === 'mouse' ? true : !t))}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' || e.key === ' ') {
-              e.preventDefault();
-              setTip((t) => !t);
-            }
-          }}
-        >
-          <h2>
-            {title} <Icon name="info" size={18} className="rec-info" />
-          </h2>
-          {tip && (
-            <div className="calc-box rec-tip" role="tooltip" data-testid="rec-count">
-              <b>문항 수 계산</b>
-              {today.extra && <p>오늘 목표 {today.target}문항을 다 풀어 {EXTRA_SIZE}문항씩 추가로 냅니다.</p>}
-              <p>목표 문항 수는 "홈 &gt; 학습계획 설정"의 하루 학습시간 설정값에 따라 자동 계산</p>
-              <p>
-                오늘 계획 {fmtMinutes(today.minutes)} / 문항당 {fmtSec(today.secPerQuestion)} = <b>{today.target}문항</b>
-              </p>
-              <p className="muted">
-                문항당 시간은 풀이가 {MIN_TIMING_OBS}건 이상 쌓일 때부터 통계에 따라 자동 재설정
-                {timed ? ` (지금: 내 풀이 ${today.timingObs}건의 중앙값)` : ' (지금: 기본값 1분 30초)'}
-              </p>
-            </div>
-          )}
-        </div>
+        <GoalTitle today={today} />
 
         {today.size === 0 ? (
           <p className="today-what">오늘 낼 문항을 모두 풀었습니다. 내일 복습이 준비됩니다.</p>
@@ -106,32 +43,37 @@ export function RecommendView(props: { coach: Coach; busy: boolean; onStart: () 
         )}
 
         {today.bySubject.length > 0 && (
-          <table className="mini-table" data-testid="rec-subjects">
+          <table className="mini-table rec-table" data-testid="rec-subjects">
+            {/* v0.11.4: 과목 열을 넓게, 숫자 열은 좁게 · 목표 열은 굵게(추가 학습이어도 "목표") */}
+            <colgroup>
+              <col />
+              <col className="num" />
+              <col className="num" />
+              <col className="num" />
+            </colgroup>
             <thead>
               <tr>
                 <th>과목</th>
-                <th>복습</th>
-                <th>새 문항</th>
-                <th>{today.extra ? '추가' : '목표'}</th>
+                <th className="n">복습</th>
+                <th className="n">새 문항</th>
+                <th className="n goal">목표</th>
               </tr>
             </thead>
             <tbody>
               {today.bySubject.map((b) => (
                 <tr key={b.name}>
                   <td>{b.name}</td>
-                  <td>{b.review}</td>
-                  <td>{b.fresh}</td>
-                  <td>
-                    <b>{b.review + b.fresh}</b>
-                  </td>
+                  <td className="n">{b.review}</td>
+                  <td className="n">{b.fresh}</td>
+                  <td className="n goal">{b.review + b.fresh}</td>
                 </tr>
               ))}
               <tr className="sum-row">
                 <td>합계</td>
-                <td>{today.bySubject.reduce((t, b) => t + b.review, 0)}</td>
-                <td>{today.bySubject.reduce((t, b) => t + b.fresh, 0)}</td>
-                <td>
-                  <b data-testid="rec-total">{today.size}</b>
+                <td className="n">{today.bySubject.reduce((t, b) => t + b.review, 0)}</td>
+                <td className="n">{today.bySubject.reduce((t, b) => t + b.fresh, 0)}</td>
+                <td className="n goal" data-testid="rec-total">
+                  {today.size}
                 </td>
               </tr>
             </tbody>
