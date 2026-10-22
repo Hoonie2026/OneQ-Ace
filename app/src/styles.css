@@ -3657,3 +3657,56 @@ details.why summary {
   font-weight: 500;
   color: var(--muted);
 }
+
+/* v0.11.3: 시스템 추천 — 제목에 마우스를 올리거나 누르면 문항 수 계산 카드 */
+.rec-title {
+  position: relative;
+  margin: -4px -6px 6px;
+  padding: 4px 6px;
+  border-radius: 10px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.rec-title:hover,
+.rec-title[aria-expanded='true'] {
+  background: var(--surface-2, rgb(15 29 46 / 0.04));
+}
+.rec-title:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+.rec-title h2 {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+}
+.rec-info {
+  flex: none;
+  color: var(--muted);
+}
+.calc-box.rec-tip {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc(100% + 4px);
+  z-index: 20;
+  margin: 0;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  box-shadow: 0 8px 28px rgb(15 29 46 / 0.18);
+  cursor: auto;
+}
+.calc-box.rec-tip p {
+  line-height: 1.5;
+}
+.mini-table .sum-row td {
+  border-top: 2px solid var(--line);
+  font-weight: 700;
+}
+@media (prefers-color-scheme: dark) {
+  .calc-box.rec-tip {
+    box-shadow: 0 8px 28px rgb(0 0 0 / 0.5);
+  }
+}

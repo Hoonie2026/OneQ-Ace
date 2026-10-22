@@ -81,8 +81,15 @@ test('5단계: 학습 계획 → 오늘 학습(계획량 한 묶음·틀린 문�
   // 시스템 추천 학습: 무엇을 왜 푸는지 안내 → 학습 시작(계획량 20문항 한 묶음) → 목표를 채우면 "오늘 학습 목표 달성" 상자(v0.7.1)
   await page.getByTestId('go-recommend').click();
   await expect(page.getByTestId('today-what')).toContainText('새 문항');
-  await expect(page.getByTestId('rec-count')).toContainText('30분 ÷ 문항당 1분 30초 = 20문항');
+  // v0.11.3: 제목 "오늘 목표 20문항", 누르면(마우스는 올리면) 문항 수 계산 카드, 과목표에 목표·합계
+  await expect(page.getByTestId('rec-title')).toContainText('오늘 목표 20문항');
+  await expect(page.getByTestId('rec-count')).toHaveCount(0);
+  await page.getByTestId('rec-title').click();
+  await expect(page.getByTestId('rec-count')).toContainText('30분 / 문항당 1분 30초 = 20문항');
+  await expect(page.getByTestId('rec-count')).toContainText('학습계획');
   await expect(page.getByTestId('rec-subjects')).toBeVisible();
+  await expect(page.getByTestId('rec-total')).toHaveText('20');
+  await shot(page, `test-results/stage5-recommend-tip-${info.project.name}.png`);
   await page.getByTestId('rec-why').locator('summary').click();
   await expect(page.getByTestId('rec-why')).toContainText('복습은 최대 60%');
   await shot(page, `test-results/stage5-recommend-${info.project.name}.png`);
@@ -135,7 +142,8 @@ test('5단계: 학습 계획 → 오늘 학습(계획량 한 묶음·틀린 문�
   await expect(page.getByTestId('go-recommend')).toBeVisible();
   await expect(page.getByTestId('week-goal')).toContainText('완료');
   await page.getByTestId('go-recommend').click();
-  await expect(page.getByTestId('recommend')).toContainText('오늘 목표 완료 · 추가 학습');
+  await expect(page.getByTestId('rec-title')).toContainText('추가 학습 15문항');
+  await expect(page.getByTestId('rec-subjects')).toContainText('추가');
   await page.getByRole('button', { name: '홈으로' }).click();
   await expect(page.getByTestId('current-avg')).not.toHaveText('0');
   await shot(page, `test-results/stage5-home-${info.project.name}.png`);
