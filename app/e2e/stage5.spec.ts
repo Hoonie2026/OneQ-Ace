@@ -89,6 +89,9 @@ test('5단계: 학습 계획 → 오늘 학습(계획량 한 묶음·틀린 문�
   await expect(page.getByTestId('today-start')).toHaveText('학습 시작 (20문항)');
   await page.getByTestId('today-start').click();
   await expect(page.getByTestId('progress')).toHaveText('1 / 20');
+  // v0.11.2: 위 줄은 "과목명 회차"만(문항 번호 없음)
+  await expect(page.getByTestId('solve-src').locator('b')).toHaveText(/^과목\d$/);
+  await expect(page.getByTestId('solve-src')).not.toContainText('번');
   // 풀이 중 성적 보기 → ‹ 는 이 풀이로 돌아온다(v0.8.4)
   await page.getByRole('button', { name: '지금 성적 보기' }).click();
   await page.getByTestId('result-back').click();
@@ -143,7 +146,7 @@ test('5단계: 학습 계획 → 오늘 학습(계획량 한 묶음·틀린 문�
   await expect(page.getByTestId('subject-tip')).toHaveCount(0);
   await page.getByTestId('subject-bar-hit').first().click();
   await expect(page.getByTestId('subject-tip')).toHaveCount(1);
-  await expect(page.getByTestId('subject-tip')).toContainText('막대 = 현재 점수');
+  await expect(page.getByTestId('subject-tip')).toContainText('막대 = 누적 점수');
   await expect(page.getByTestId('subject-tip')).toContainText('과락선');
   await shot(page, `test-results/stage5-subjects-${info.project.name}.png`);
   await page.getByRole('heading', { name: '과목별 학습' }).click();

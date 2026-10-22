@@ -57,9 +57,9 @@ export function CoachCard(props: {
         </div>
       </section>
 
-      <section className="score-boxes" aria-label="현재 점수와 시험일 예상 점수">
+      <section className="score-boxes" aria-label="누적 점수와 시험일 예상 점수">
         <div className="card score-box">
-          <small>현재 점수</small>
+          <small>누적 점수</small>
           <p>
             <b data-testid="current-avg">{exam.current ?? '—'}</b>
             {exam.current != null ? '점' : ''}
@@ -124,7 +124,7 @@ export function CoachCard(props: {
           <h2>모의고사</h2>
           <span className="muted">{props.lastMock ? `최근 ${props.lastMock.date} · ${props.lastMock.score}점` : '아직 안 봄'}</span>
         </div>
-        <p className="hint">지금 실력 확인용. 성적은 모의고사 이력에만 남고 현재 점수·학습 추천에는 넣지 않습니다.</p>
+        <p className="hint">지금 실력 확인용. 성적은 모의고사 이력에만 남고 누적 점수·학습 추천에는 넣지 않습니다.</p>
         <button className="btn btn-block" onClick={props.onMock} data-testid="tab-mock">
           모의고사
         </button>

@@ -90,7 +90,7 @@ export function SubjectList(props: { coach: Coach; busy: boolean; onStudy: (subj
                   }
                 }}
               >
-                <div className="bar dual" role="img" aria-label={`${s.name} 현재 ${cur ?? '—'}점, 시험일 예상 ${proj ?? '—'}점`} data-testid="subject-bar">
+                <div className="bar dual" role="img" aria-label={`${s.name} 누적 ${cur ?? '—'}점, 시험일 예상 ${proj ?? '—'}점`} data-testid="subject-bar">
                   {cur != null && <span className={`bar-fill ${tone(cur)}`} style={{ width: `${Math.max(cur, 0.8)}%` }} data-testid="bar-current" />}
                   <i className="bar-line pass" style={{ left: `${rule.subjectMin}%` }} />
                   {proj != null && (
@@ -125,7 +125,7 @@ function SubjectTip(props: { s: SubjectView; rule: { subjectMin: number; avgMin:
     <div className="subject-tip" role="tooltip" data-testid="subject-tip">
       <dl>
         <dt>
-          <i className="tip-swatch fill" aria-hidden="true" /> 막대 = 현재 점수
+          <i className="tip-swatch fill" aria-hidden="true" /> 막대 = 누적 점수
         </dt>
         <dd>
           {s.current != null ? (

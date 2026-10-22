@@ -370,8 +370,12 @@ export interface DaySummary {
   target: number;
   plannedMinutes: number;
   left: number;
-  /** 현행 과목 전부(오늘 안 푼 과목은 0/0 — v0.11.1 실기기 의견) */
-  bySubject: { name: string; answered: number; correct: number }[];
+  /**
+   * 현행 과목 전부(오늘 안 푼 과목은 0/0 — v0.11.1 실기기 의견).
+   * goal(v0.11.2) = 과목별 오늘 목표 문항 = 오늘 푼 수 + 지금 시작하면 남은 목표에서 그 과목에 배정될 수(시스템 추천 구성과 같은 규칙).
+   * 오늘 목표를 다 채웠으면 푼 수 그대로
+   */
+  bySubject: { name: string; answered: number; correct: number; goal: number }[];
   /** 현재 점수(푼 문항 중 정답 비율 — ADR 020)와 그 문항 수 */
   current: number | null;
   currentSolved: number;
@@ -410,7 +414,11 @@ export async function daySummary(certCode: string, now = Date.now(), d: OneQDB =
     target: c.today.target,
     plannedMinutes: c.today.minutes,
     left: Math.max(0, c.today.target - todays.length),
-    bySubject: c.subjects.map((s) => by.get(s.name) ?? { name: s.name, answered: 0, correct: 0 }),
+    bySubject: c.subjects.map((s) => {
+      const b = by.get(s.name) ?? { name: s.name, answered: 0, correct: 0 };
+      const plan = c.today.extra ? undefined : c.today.bySubject.find((x) => x.name === s.name);
+      return { ...b, goal: b.answered + (plan ? plan.review + plan.fresh : 0) };
+    }),
     current: c.exam.current,
     currentSolved: c.exam.solved,
     currentCorrect: c.exam.correct,

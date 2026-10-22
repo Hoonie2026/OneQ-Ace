@@ -338,8 +338,10 @@ export function Solve(props: { target: Target; onExit: () => void; onResult: (pe
           <strong data-testid="progress">
             {index + 1} / {s.qids.length}
           </strong>
-          <span>
-            {examLabel(qPack.manifest)} · {q ? `${q.no}번` : ''} · {subject ? (s.target.kind === 'set' ? subject.name : `${subject.no}과목 ${subject.name}`) : ''}
+          {/* v0.11.2(실기기 의견): "과목명 회차"만 — 과목명은 진하게·조금 크게(어느 과목인지 바로), 회차는 옅게. 문항 번호 뺌. 한 줄 그대로라 풀이 영역은 줄지 않음 */}
+          <span className="solve-src" data-testid="solve-src">
+            {subject && <b className="solve-subj">{subject.name}</b>}
+            <small>{examLabel(qPack.manifest)}</small>
           </span>
         </div>
         {isMock ? (

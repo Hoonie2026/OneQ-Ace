@@ -3471,17 +3471,27 @@ details.why summary {
   }
 }
 
-/* v0.11.1: 오늘 학습 기록 — 오늘 것만, 큰 글자(50대 이상 시인성) */
+/* v0.11.1 → v0.11.2: 오늘 학습 기록 — 오늘 것만, 큰 글자(50대 이상 시인성), 한 화면에 들어가게 촘촘히 */
 .day-log .dl-card {
   display: grid;
-  gap: 6px;
-  padding: 20px;
+  gap: 4px;
+  padding: 16px 18px;
+}
+.day-log .card + .card {
+  margin-top: 10px;
 }
 .dl-card h2 {
-  margin: 0;
-  font-size: 18px;
-  font-weight: 700;
-  color: var(--muted);
+  margin: 0 0 2px;
+  font-size: 20px;
+  font-weight: 800;
+  color: var(--ink);
+}
+.dl-pair {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 4px 16px;
 }
 .dl-big {
   margin: 0;
@@ -3489,41 +3499,43 @@ details.why summary {
   font-variant-numeric: tabular-nums;
 }
 .dl-big b {
-  font-size: 48px;
+  font-size: 40px;
   font-weight: 800;
   letter-spacing: -0.02em;
 }
 .dl-big span {
   margin-left: 4px;
-  font-size: 22px;
+  font-size: 20px;
   font-weight: 600;
   color: var(--muted);
 }
+.dl-sub-inline {
+  margin-left: 10px;
+  font-size: 15px;
+  color: var(--muted);
+}
 .dl-meter {
-  height: 14px;
-  margin: 6px 0 2px;
+  height: 12px;
+  margin: 6px 0 4px;
 }
 .dl-left {
   margin: 0;
-  font-size: 18px;
-  font-weight: 700;
+  font-size: 19px;
+  font-weight: 800;
   color: var(--primary);
 }
 .dl-left.ok {
   color: var(--ok);
 }
-.dl-time,
-.dl-sub {
+.dl-next {
   margin: 0;
   font-size: 16px;
+  font-weight: 600;
   color: var(--muted);
-}
-.dl-time b {
-  color: var(--ink);
 }
 .dl-tiles {
   list-style: none;
-  margin: 10px 0 0;
+  margin: 8px 0 0;
   padding: 0;
   display: grid;
   grid-template-columns: repeat(4, 1fr);
@@ -3532,8 +3544,8 @@ details.why summary {
 .dl-tiles li {
   display: grid;
   justify-items: center;
-  gap: 2px;
-  padding: 12px 4px;
+  gap: 0;
+  padding: 8px 4px;
   border-radius: 12px;
   background: var(--surface-2, rgb(15 29 46 / 0.04));
 }
@@ -3543,7 +3555,7 @@ details.why summary {
   color: var(--muted);
 }
 .dl-tiles b {
-  font-size: 30px;
+  font-size: 28px;
   font-weight: 800;
   font-variant-numeric: tabular-nums;
 }
@@ -3558,7 +3570,7 @@ details.why summary {
 }
 .dl-subjects {
   list-style: none;
-  margin: 4px 0 6px;
+  margin: 0;
   padding: 0;
 }
 .dl-subjects li {
@@ -3566,15 +3578,19 @@ details.why summary {
   justify-content: space-between;
   align-items: center;
   gap: 12px;
-  padding: 14px 0;
+  padding: 8px 0;
   border-bottom: 1px solid var(--line);
-  font-size: 19px;
+  font-size: 18px;
+  line-height: 1.3;
 }
 .dl-subjects li:last-child {
   border-bottom: 0;
+  padding-bottom: 0;
 }
 .dl-name {
+  min-width: 0;
   font-weight: 600;
+  word-break: keep-all;
 }
 .dl-val {
   display: flex;
@@ -3584,25 +3600,60 @@ details.why summary {
   font-variant-numeric: tabular-nums;
 }
 .dl-val b {
-  font-size: 22px;
+  font-size: 21px;
   font-weight: 800;
 }
 .dl-val small {
-  min-width: 3.2em;
+  min-width: 3.4em;
   text-align: right;
-  font-size: 16px;
-  color: var(--muted);
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--ink);
 }
 .dl-subjects li.none .dl-name,
-.dl-subjects li.none b {
+.dl-subjects li.none b,
+.dl-subjects li.none small {
   color: var(--muted);
   font-weight: 600;
 }
+.day-log .actions {
+  margin-top: 12px;
+}
 @media (max-width: 360px) {
+  .dl-big b {
+    font-size: 34px;
+  }
   .dl-tiles b {
-    font-size: 26px;
+    font-size: 24px;
   }
   .dl-tiles small {
     font-size: 14px;
   }
+}
+
+/* v0.11.2: 풀이 화면 위 "과목명 회차" — 과목명 진하게·조금 크게, 회차 옅게. 한 줄(높이 그대로) */
+.solve-meta .solve-src {
+  display: flex;
+  justify-content: center;
+  align-items: baseline;
+  gap: 6px;
+  opacity: 1;
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+}
+.solve-subj {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 15.5px;
+  font-weight: 800;
+  color: var(--primary);
+  letter-spacing: -0.01em;
+}
+.solve-src small {
+  flex: none;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--muted);
 }
