@@ -6,7 +6,7 @@
   낱말마다 과목 안 단원 몇 곳에 나오는지로 무게(드물수록 큼), "!"로 시작하면 강한 낱말(구조 형식 등, 무게 ×3)
 - 유형(qtype) = calc(수치·수식 답) / law(기준·법령) / concept(나머지) — 겹치면 calc > law > concept (4.2)
 - 순서형(sequence) = 발문 "순서" · ㄱㄴㄷ 나열 · 화살표 보기
-- 확신도: 확신 있는 것은 그대로 팩에, 낮은 것만 "몰아 고르기" 목록으로(4.5)
+- 확신도: 확신 있는 단원만 팩에 확정, 나머지는 "미정" + 후보 3개 → 학습자가 답한 뒤 고름(4.5, 사용자 결정 2026-10-24)
 """
 from __future__ import annotations
 
@@ -194,8 +194,10 @@ class UnitResult:
     runner_up: str | None
     hits: list[str]
     runner_score: float = 0.0
+    candidates: list[str] = field(default_factory=list)   # 점수 있는 단원 상위 3개(학습 중 고르기 후보, 4.5)
 
 
+N_CANDIDATES = 3    # 미정 문항에 남기는 후보 수(사용자 결정 2026-10-24 — 실측: 후보 3개 안에 정답 토목 89%·측량 78%)
 SURE_MIN = 1.5      # 확신: 점수가 이 이상이고
 SURE_RATIO = 2.0    # 둘째 단원 점수의 이 배 이상(C2 실측 2026-10-24: 토목 응용역학 확신 84%·정답 98%, 측량 1과목 맹검 61%·89% — ADR 021 4.5)
 
@@ -226,7 +228,8 @@ def judge_unit(text: str, idx: UnitIndex) -> UnitResult:
         return UnitResult(None, False, 0.0, None, [])
     top, second = scores[0], (scores[1] if len(scores) > 1 else (0.0, None, []))
     sure = top[0] >= SURE_MIN and top[0] >= SURE_RATIO * max(second[0], 1e-9)
-    return UnitResult(top[1], sure, round(top[0], 2), second[1], top[2], round(second[0], 2))
+    cands = [uid for sc, uid, _ in scores[:N_CANDIDATES] if sc > 0]
+    return UnitResult(top[1], sure, round(top[0], 2), second[1], top[2], round(second[0], 2), cands)
 
 
 # ───────────────────────── 한 문항 ─────────────────────────
@@ -238,11 +241,7 @@ class Classified:
     qtype: str
     type_sure: bool
     sequence: bool
-
-    @property
-    def needs_pick(self) -> bool:
-        """몰아 고르기 목록에 올릴지(4.5) — 단원이나 유형이 확신 없음."""
-        return not (self.unit_sure and self.type_sure)
+    candidates: list[str] = field(default_factory=list)   # 단원 미정일 때 학습 중 고르기 후보(4.5)
 
 
 def classify(text: str, idx: UnitIndex | None, is_law: bool = False) -> Classified:
@@ -250,4 +249,4 @@ def classify(text: str, idx: UnitIndex | None, is_law: bool = False) -> Classifi
     if idx is None or not idx.units:
         return Classified(None, True, t.qtype, t.sure, t.sequence)   # 출제기준 단원이 없는 프로필: 단원 판정 안 함
     u = judge_unit(text, idx)
-    return Classified(u.unit if u.sure or u.unit else None, u.sure, t.qtype, t.sure, t.sequence)
+    return Classified(u.unit, u.sure, t.qtype, t.sure, t.sequence, [] if u.sure else u.candidates)

@@ -149,7 +149,8 @@ class Item:
     unit: str | None = None       # 단원(세부항목) id(ADR 021 4.1) — 확신 있거나 사람이 고른 것만
     qtype: str | None = None      # calc / law / concept (4.2)
     sequence: bool = False
-    unsure: list[str] = field(default_factory=list)     # 자동 판정 확신 낮음 → 몰아 고르기 대상("unit"/"qtype")
+    unsure: list[str] = field(default_factory=list)     # 자동 판정 확신 낮음("unit"/"qtype")
+    unit_candidates: list[str] = field(default_factory=list)   # 단원 미정 → 앱에서 학습자가 고르는 후보(최대 3)
 
 
 @dataclass
@@ -330,7 +331,7 @@ def prepare(pdf_path: Path, profile: S.Profile, out_dir: Path, all_dates: list[s
         tc = Counter(it.qtype for it in kept_items)
         nu = sum(1 for it in kept_items if "unit" in it.unsure)
         notes.append(f"유형: 계산 {tc.get('calc', 0)} · 기준·법령 {tc.get('law', 0)} · 개념·실무 {tc.get('concept', 0)}"
-                     + (f" / 단원 못 정함 {nu}문항(몰아 고르기, 건너뛰면 미분류)" if any(profile.units(s['name']) for s in profile.subjects) else ""))
+                     + (f" / 단원 미정 {nu}문항(학습 중 후보 3개에서 고름)" if any(profile.units(s['name']) for s in profile.subjects) else ""))
     n_ex = sum(1 for it in items if it.excluded)
     if n_ex:
         notes.append(f"제외 {n_ex}문항")
@@ -356,10 +357,12 @@ def _classify_items(items: list[Item], profile: S.Profile, review: dict) -> None
         it.qtype, it.sequence = c.qtype, c.sequence
         it.unit = c.unit if c.unit_sure else None
         it.unsure = [k for k, sure in (("unit", c.unit_sure or not idx[it.subject].units), ("qtype", c.type_sure)) if not sure]
+        it.unit_candidates = c.candidates
         if it.no in picked_u:
             v = picked_u[it.no]
             it.unit = None if v in ("미분류", "", None) else v
             it.unsure = [k for k in it.unsure if k != "unit"]
+            it.unit_candidates = []
         if it.no in picked_t and picked_t[it.no] in ("calc", "law", "concept"):
             it.qtype = picked_t[it.no]
             it.unsure = [k for k in it.unsure if k != "qtype"]
@@ -410,6 +413,8 @@ def write_pack(p: Prepared, out_dir: Path, prepared_by: str, source_type: str = 
             q["sequence"] = True
         if it.unsure:
             q["classifyUnsure"] = it.unsure
+        if not it.unit and it.unit_candidates:
+            q["unitCandidates"] = it.unit_candidates
         questions.append(q)
 
     law = {s["name"] for s in prof.subjects if s.get("isLaw")}

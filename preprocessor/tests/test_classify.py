@@ -107,3 +107,15 @@ def test_c2_survey_geodesy_blind():
     """측량 1과목 160문항, 맹검(2026-10-24: 유형 95.0% · 단원 71.9% · 확신 61% 중 88.8%)."""
     typ, unit, cover, prec = _measure("SURVEY-측지학-2019-2022.json", "survey_기출_2011_2022", "측량및지형공간정보기사{}(교사용).pdf")
     assert typ >= 0.90 and unit >= 0.68 and cover >= 0.55 and prec >= 0.85
+
+
+def test_unsure_unit_keeps_three_candidates():
+    """확신 없는 단원은 정하지 않고 후보(최대 3)만 남긴다 — 학습 중 고르기(4.5, 사용자 결정 2026-10-24)."""
+    idx = C.build_index(S.load("CIVIL"), "응용역학")
+    c = C.classify("그림과 같은 캔틸레버 보에서 B점의 반력과 처짐은?\n① ②\n③ ④", idx)
+    if c.unit_sure:
+        assert c.candidates == []
+    else:
+        assert 1 <= len(c.candidates) <= 3 and len(set(c.candidates)) == len(c.candidates)
+    sure = C.classify("양단 힌지 기둥의 세장비는?\n① 34.6② 43.3\n③ 52.0④ 60.7", idx)
+    assert sure.unit_sure and sure.unit == "1-7" and sure.candidates == []

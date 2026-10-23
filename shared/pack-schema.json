@@ -186,6 +186,7 @@
         "unit": { "type": "string", "pattern": "^\\d{1,2}-\\d{1,2}$", "description": "단원(세부항목) id — manifest.subjects[].units. 없으면 미분류(ADR 021 4.5)" },
         "qtype": { "enum": ["calc", "law", "concept"], "description": "유형 탭: 계산 / 기준·법령 / 개념·실무(ADR 021 4.2)" },
         "sequence": { "type": "boolean", "description": "순서·절차형 발문(필터, ADR 021 4.2). true일 때만 쓴다" },
+        "unitCandidates": { "type": "array", "minItems": 1, "maxItems": 3, "uniqueItems": true, "items": { "type": "string", "pattern": "^\\d{1,2}-\\d{1,2}$" }, "description": "단원 미정(unit 없음) 문항의 후보 — 앱이 답한 뒤 학습자에게 고르게 함(ADR 021 4.5)" },
         "classifyUnsure": { "type": "array", "uniqueItems": true, "items": { "enum": ["unit", "qtype"] }, "description": "자동 판정 확신이 낮았고 사람이 고르지 않은 것(전처리기 기록용)" },
         "flags": {
           "type": "array",

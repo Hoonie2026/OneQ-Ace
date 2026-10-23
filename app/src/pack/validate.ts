@@ -59,6 +59,8 @@ export interface PackQuestion {
   qtype?: 'calc' | 'law' | 'concept';
   sequence?: boolean;
   classifyUnsure?: ('unit' | 'qtype')[];
+  /** 단원 미정 문항의 후보(최대 3) — 답한 뒤 학습자가 고름(ADR 021 4.5) */
+  unitCandidates?: string[];
 }
 
 export interface ValidResult {
