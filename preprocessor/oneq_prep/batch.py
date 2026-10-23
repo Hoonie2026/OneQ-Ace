@@ -32,6 +32,7 @@ class BatchSpec:
     pack_version: int = 3            # v0.5: 단원·유형(ADR 021 4절)이 든 판(v0.4 = 2) — 앱이 낮은 판을 자동 교체, 기록은 이어짐
     report_only: bool = False
     workers: int | None = None       # None이면 코어 수에 맞춰(최대 4)
+    bundle: bool = True              # 끝나면 종목 묶음 1개(이번에 새로 만들거나 바뀐 회차만, ADR 021 8절)
     file_dates: dict[Path, str] = field(default_factory=dict)   # 파일별 시행일 직접 지정(창 프로그램)
     context: list[Path] = field(default_factory=list)           # (v0.4 호환, 쓰지 않음 — 회차는 시행월로 정함)
 
@@ -50,6 +51,8 @@ class RoundResult:
     size: int = 0
     message: str = ""
     issues: list[str] = field(default_factory=list)
+    stage: str = ""                  # 처리 단계(읽기 · 문항 나누기 · 정답 · 분류 · 팩) — ADR 021 6절
+    kind: str = ""                   # 글자 / 스캔 / 섞임(쪽마다 글자층 유무)
     zip_path: Path | None = None
     review_file: Path | None = None
     prepared: Prepared | None = None  # 검수 화면용(창 프로그램이 문항 카드를 그림)
@@ -57,11 +60,12 @@ class RoundResult:
 
 @dataclass
 class Event:
-    kind: str                         # plan · start · done · finish
+    kind: str                         # plan · start · stage · done · finish
     index: int = -1
     total: int = 0
     result: RoundResult | None = None
     report: Path | None = None
+    bundle: Path | None = None
 
 
 STATUS_TEXT = {"waiting": "대기", "running": "처리 중", "packed": "팩 생성", "review": "검수 필요",
@@ -82,9 +86,16 @@ def plan_rounds(spec: BatchSpec, prof: S.Profile) -> list[RoundResult]:
     for p in sorted(spec.pdfs, key=lambda x: x.name):
         r = RoundResult(pdf=p)
         try:
-            ex, _ = examinfo.exam_of(p, prof, spec.out, spec.date_of(p), spec.round_no, examinfo.read(p, names=names))
+            info = examinfo.read(p, names=names)
+            if info.cert_name and S.norm(info.cert_name) != S.norm(prof.name):
+                # 다른 종목 문서는 처리하지 않음(ADR 021 2절 — 내용으로 판정). 번호(0000년 nn회)도 잡지 않게 여기서 멈춤
+                r.status, r.message = "error", f"'{info.cert_name}' 문서로 보여요 — 종목을 확인하세요"
+                rows.append(r)
+                continue
+            ex, _ = examinfo.exam_of(p, prof, spec.out, spec.date_of(p), spec.round_no, info)
             r.date = ex["date"]
             r.pack_id = examinfo.pack_id(prof.code, ex)
+            r.kind = examinfo.page_kind(p)
             if r.pack_id in seen:
                 r.status, r.message = "error", f"{seen[r.pack_id].name}와 같은 회차({r.pack_id})"
             seen.setdefault(r.pack_id, p)
@@ -95,10 +106,12 @@ def plan_rounds(spec: BatchSpec, prof: S.Profile) -> list[RoundResult]:
 
 
 def _prepare_job(pdf: Path, cert: str, out: Path, date: str | None, round_no: int | None,
-                 reference=None, standards_root: str | None = None) -> Prepared:
-    """작업 프로세스에서 도는 함수(모듈 맨 위에 있어야 Windows spawn에서 불러올 수 있다)."""
+                 reference=None, standards_root: str | None = None, queue=None) -> Prepared:
+    """작업 프로세스에서 도는 함수(모듈 맨 위에 있어야 Windows spawn에서 불러올 수 있다).
+    queue: 단계 알림(파일, 단계)을 화면 쪽으로 보내는 통로(multiprocessing Manager Queue 또는 None)."""
     prof = S.load(cert, Path(standards_root) if standards_root else None)
-    return prepare(pdf, prof, out, date, round_no, reference=reference)
+    step = (lambda s: queue.put((str(pdf), s))) if queue is not None else None
+    return prepare(pdf, prof, out, date, round_no, reference=reference, log=lambda *_: None, progress=step)
 
 
 def run_batch(spec: BatchSpec, on_event: Callable[[Event], None] | None = None,
@@ -118,8 +131,18 @@ def run_batch(spec: BatchSpec, on_event: Callable[[Event], None] | None = None,
         if r.status == "error":
             emit(Event("done", i, total, r))
 
+    by_pdf = {str(r.pdf): i for i, r in enumerate(rows)}
+
+    def on_stage(pdf: str, stage: str) -> None:
+        i = by_pdf.get(pdf)
+        if i is not None and rows[i].status == "running":
+            rows[i].stage = stage
+            emit(Event("stage", i, total, rows[i]))
+
     def finish(i: int, prepared: Prepared | None, err: BaseException | None):
         r = rows[i]
+        if err is None:
+            on_stage(str(r.pdf), "팩")
         if err is not None:
             r.status, r.message = "error", f"{type(err).__name__}: {err}"
         else:
@@ -142,14 +165,24 @@ def run_batch(spec: BatchSpec, on_event: Callable[[Event], None] | None = None,
                 rows[i].status = "running"
                 emit(Event("start", i, total, rows[i]))
                 try:
-                    finish(i, _prepare_job(rows[i].pdf, spec.cert, spec.out, spec.date_of(rows[i].pdf), spec.round_no,
-                                           reference, std_root), None)
+                    p = prepare(rows[i].pdf, prof, spec.out, spec.date_of(rows[i].pdf), spec.round_no,
+                                reference=reference, log=lambda *_: None,
+                                progress=lambda s, _p=str(rows[i].pdf): on_stage(_p, s))
+                    finish(i, p, None)
                 except Exception as e:  # noqa: BLE001 — 회차 하나의 실패가 전체를 멈추지 않게
                     finish(i, None, e)
             continue
         # spawn: Windows와 같은 방식(창 프로그램은 스레드 안에서 부르므로 fork는 멈출 위험이 있음)
         ctx = multiprocessing.get_context("spawn")
-        with ProcessPoolExecutor(max_workers=min(workers, len(group)), mp_context=ctx) as ex:
+        with ProcessPoolExecutor(max_workers=min(workers, len(group)), mp_context=ctx) as ex, ctx.Manager() as mgr:
+            stages = mgr.Queue()
+
+            def drain() -> None:
+                while True:
+                    try:
+                        on_stage(*stages.get_nowait())
+                    except Exception:  # noqa: BLE001 — 비었음(queue.Empty)
+                        return
             queue = list(group)
             running: dict[Future, int] = {}
             while queue or running:
@@ -158,7 +191,7 @@ def run_batch(spec: BatchSpec, on_event: Callable[[Event], None] | None = None,
                     rows[i].status = "running"
                     emit(Event("start", i, total, rows[i]))
                     running[ex.submit(_prepare_job, rows[i].pdf, spec.cert, spec.out, spec.date_of(rows[i].pdf),
-                                      spec.round_no, reference, std_root)] = i
+                                      spec.round_no, reference, std_root, stages)] = i
                 if should_stop():
                     for i in queue:
                         rows[i].status, rows[i].message = "skipped", "멈춤"
@@ -166,7 +199,8 @@ def run_batch(spec: BatchSpec, on_event: Callable[[Event], None] | None = None,
                     queue.clear()
                 if not running:
                     break
-                done, _ = wait(list(running), timeout=0.5, return_when=FIRST_COMPLETED)
+                done, _ = wait(list(running), timeout=0.3, return_when=FIRST_COMPLETED)
+                drain()
                 for fut in done:
                     i = running.pop(fut)
                     try:
@@ -177,7 +211,12 @@ def run_batch(spec: BatchSpec, on_event: Callable[[Event], None] | None = None,
     from .report import write_report
     prepared = [r.prepared for r in rows if r.prepared is not None]
     report = write_report(prepared, spec.out / REVIEW_DIR / "report.html") if prepared else None
-    emit(Event("finish", total=total, report=report))
+    bundle = None
+    if spec.bundle:
+        from .bundle import write_bundle
+        fresh = [r.zip_path for r in rows if r.status == "packed" and r.zip_path and not (r.prepared and r.prepared.unchanged)]
+        bundle = write_bundle(fresh, spec.out, prof.code)
+    emit(Event("finish", total=total, report=report, bundle=bundle))
     return rows
 
 
@@ -202,4 +241,5 @@ def _finish_round(spec: BatchSpec, r: RoundResult, p: Prepared) -> None:
     r.size = p.zip_path.stat().st_size
     r.questions = m["questionCount"]
     r.status = "packed"
-    r.message = f"{m['questionCount']}문항 · 정답 표시 {p.masked}개 제거 · {r.size / 1e6:.2f}MB"
+    r.message = f"{m['questionCount']}문항 · 정답 표시 {p.masked}개 제거 · {r.size / 1e6:.2f}MB" + \
+        (" · 전과 같은 내용(묶음에서 뺌)" if p.unchanged else (f" · 판 {m['packVersion']}" if m["packVersion"] > spec.pack_version else ""))

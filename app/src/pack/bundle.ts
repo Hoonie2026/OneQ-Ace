@@ -7,29 +7,32 @@ import { unzipSync } from 'fflate';
 
 export interface BundleEntry {
   name: string;
-  blob: Blob;
+  /** 이 팩 하나만 꺼낸다(부를 때 풀기 — 묶음 전체를 한 번에 풀지 않아 큰 묶음도 폰에서 메모리가 넘치지 않게, ADR 021 8절) */
+  load: () => Blob;
 }
 
-/** 묶음이면 안의 팩들, 아니면 null(보통 문제팩 또는 다른 파일) */
+/** 묶음이면 안의 팩들(아직 꺼내지 않은 목록), 아니면 null(보통 문제팩 또는 다른 파일) */
 export function unbundle(data: Uint8Array): BundleEntry[] | null {
-  let files: Record<string, Uint8Array>;
+  const names: string[] = [];
   try {
-    // 이름만 먼저 보고(내용은 풀지 않음) 묶음인지 판단
+    // 이름만 먼저 본다(내용은 풀지 않음)
     let isPack = false;
-    let hasZip = false;
     unzipSync(data, {
       filter: (f) => {
         if (f.name === 'manifest.json') isPack = true;
-        if (/\.zip$/i.test(f.name)) hasZip = true;
+        if (/\.zip$/i.test(f.name) && !f.name.startsWith('__MACOSX/')) names.push(f.name);
         return false;
       },
     });
-    if (isPack || !hasZip) return null;
-    files = unzipSync(data, { filter: (f) => /\.zip$/i.test(f.name) && !f.name.startsWith('__MACOSX/') });
+    if (isPack || !names.length) return null;
   } catch {
     return null;
   }
-  return Object.keys(files)
-    .sort()
-    .map((path) => ({ name: path.split('/').pop() ?? path, blob: new Blob([files[path] as BlobPart], { type: 'application/zip' }) }));
+  return names.sort().map((path) => ({
+    name: path.split('/').pop() ?? path,
+    load: () => {
+      const one = unzipSync(data, { filter: (f) => f.name === path });
+      return new Blob([one[path] as BlobPart], { type: 'application/zip' });
+    },
+  }));
 }

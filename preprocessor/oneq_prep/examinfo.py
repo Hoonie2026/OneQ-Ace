@@ -131,6 +131,22 @@ def read(pdf_path: Path, ocr_text: str | None = None, names: list[str] | None = 
     return info
 
 
+def page_kind(pdf_path: Path, min_chars: int = 50) -> str:
+    """쪽마다 글자층이 있는지 → "글자" / "스캔" / "섞임"(ADR 021 6절, 파일 줄 표시). pypdfium2로 빠르게(쪽당 수 ms)."""
+    import pypdfium2 as pdfium
+    try:
+        doc = pdfium.PdfDocument(str(pdf_path))
+    except Exception as e:  # noqa: BLE001
+        raise ValueError(f"PDF를 열 수 없습니다: {Path(pdf_path).name}") from e
+    try:
+        has = [doc[i].get_textpage().count_chars() >= min_chars for i in range(len(doc))]
+    finally:
+        doc.close()
+    if all(has):
+        return "글자"
+    return "스캔" if not any(has) else "섞임"
+
+
 # ───────────────────────── 시행일 모름: 0000년 nn회 ─────────────────────────
 
 UNKNOWN_FILE = "unknown-dates.json"

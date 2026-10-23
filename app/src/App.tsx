@@ -97,7 +97,7 @@ export default function App() {
     // 진행 창이 먼저 그려지도록 한 번 양보한다(큰 파일을 읽기 시작하면 화면이 한동안 멈출 수 있음)
     const yieldUi = () => new Promise<void>((r) => window.setTimeout(r, 0));
     // 묶음 파일(oneq-…-bundle-….zip)은 안의 팩들로 펼친다(v0.10.8). 보통 팩을 두 번 읽지 않도록 이름·크기로 먼저 거른다
-    const files: { name: string; blob: Blob }[] = [];
+    const files: { name: string; get: () => Blob }[] = [];
     try {
       for (const [i, f] of picked.entries()) {
         if (/bundle|묶음/i.test(f.name) || f.size > 15 * 1024 * 1024) {
@@ -106,7 +106,7 @@ export default function App() {
           try {
             const inner = unbundle(new Uint8Array(await f.arrayBuffer()));
             if (inner?.length) {
-              files.push(...inner);
+              files.push(...inner.map((e) => ({ name: e.name, get: e.load })));
               continue;
             }
           } catch (err) {
@@ -114,7 +114,7 @@ export default function App() {
             continue;
           }
         }
-        files.push({ name: f.name, blob: f });
+        files.push({ name: f.name, get: () => f });
       }
       total = files.length;
       for (const [i, f] of files.entries()) {
@@ -126,7 +126,8 @@ export default function App() {
         await yieldUi();
         const onPhase = (ph: ImportProgress['phase']) => step(i, f.name, ph);
         try {
-          let r = await importPackFile(f.blob, { onPhase });
+          const blob = f.get(); // 묶음 안 팩은 이때 하나씩 꺼낸다(ADR 021 8절)
+          let r = await importPackFile(blob, { onPhase });
           if (r.status === 'same') {
             // 내용까지 같은 팩은 조용히 건너뛴다(여러 회차를 한꺼번에 다시 고른 경우). 학습 기록은 그대로
             if (r.identical) {
@@ -134,7 +135,7 @@ export default function App() {
               continue;
             }
             if (await askConfirm(`${f.name}: 같은 버전(v${r.installedVersion})인데 내용이 다른 팩입니다. 새 것으로 바꿀까요? 학습 기록은 이어집니다`, { okText: '바꾸기' })) {
-              r = await importPackFile(f.blob, { force: true, onPhase });
+              r = await importPackFile(blob, { force: true, onPhase });
             } else continue;
           }
           if (r.status === 'imported') {

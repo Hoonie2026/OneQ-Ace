@@ -88,8 +88,14 @@ class CertPicker(QWidget):
             q = sum(s["count"] for s in p.subjects)
             subj = " · ".join(s["name"] for s in p.subjects)
             mine = " · 이 PC에서 입력" if S.is_user_profile(cert.profile) else ""
-            self.info.setText(f"<span style='color:#1f7a4d;font-weight:600'>✓ 출제기준 등록</span> "
-                              f"· {len(p.subjects)}과목 {q}문항 · {p.version} 기준{mine}<br>{subj}")
+            units = sum(len(p.units(x["name"])) for x in p.subjects)
+            if p.period:   # 큐넷 출제기준 PDF에서 읽은 프로필(ADR 021 1절)
+                head = (f"<span style='color:#1f7a4d;font-weight:600'>✓ 큐넷 출제기준</span> "
+                        f"{p.period['from'].replace('-', '.')} ~ {p.period['to'].replace('-', '.')}")
+            else:
+                head = f"<span style='color:#1f7a4d;font-weight:600'>✓ 출제기준 등록</span> · {p.version} 기준"
+            self.info.setText(f"{head} · {len(p.subjects)}과목 {q}문항" + (f" · 단원 {units}개" if units else "")
+                              + f"{mine}<br>{subj}")
             self.info.setVisible(True)
             self.missing.setVisible(False)
         else:

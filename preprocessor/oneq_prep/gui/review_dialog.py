@@ -115,13 +115,14 @@ class QuestionCard(QFrame):
 class ReviewDialog(QDialog):
     """결과: accepted + rerun=True면 저장한 뒤 이 회차를 다시 만든다."""
 
-    def __init__(self, prepared, out_dir: Path, parent=None):
+    def __init__(self, prepared, out_dir: Path, parent=None, only_suspect: bool = True):
+        """only_suspect: 처음엔 의심 문항만(ADR 021 6절 — 모든 문항 검수는 실사용 범위 밖). 보기 칸에서 전체로 바꿀 수 있음."""
         super().__init__(parent)
         self.p = prepared
         self.out_dir = out_dir
         self.rerun = False
         self.saved_path: Path | None = None
-        self.setWindowTitle(f"검수 — {prepared.pack_id}")
+        self.setWindowTitle(f"의심 문항 확인 — {prepared.pack_id}")
         self.resize(900, 820)
         self.subjects = [s["name"] for s in prepared.profile.subjects]
         rv = prepared.review or {}
@@ -198,6 +199,7 @@ class ReviewDialog(QDialog):
             bottom.addWidget(b)
         lay.addLayout(bottom)
 
+        self.filter.setCurrentIndex(0 if only_suspect else 1)
         self.filter.currentIndexChanged.connect(self._fill)
         self._fill()
 

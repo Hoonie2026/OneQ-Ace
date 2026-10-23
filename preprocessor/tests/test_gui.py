@@ -27,10 +27,9 @@ def win(qtbot, tmp_path, monkeypatch):
     w = MainWindow()
     w.settings = QSettings(str(tmp_path / "s.ini"), QSettings.IniFormat)
     qtbot.addWidget(w)
-    w.out.setText(str(tmp_path / "packs"))
-    w.name.setText("시험")
+    w.out_dir = tmp_path / "packs"          # 저장 폴더는 기본 폴더(입력 칸 없음, ADR 021 6절)
     assert w.set_cert("SAFETY")
-    w.speed.setCurrentIndex(w.speed.findData(2))
+    w.settings.setValue("workers", 2)
     return w
 
 
@@ -45,16 +44,17 @@ def test_plan_reads_content_not_filename(win, tmp_path):
     from oneq_prep.gui.app import C_MSG
     for i in range(2):
         assert win.rows[i].status == "error" and "열 수 없" in win.table.item(i, C_MSG).text()
-    assert "만든 사람" not in (win.check_inputs(win.pdfs) or "")
+    assert "처리할 수 있는 PDF가 없" in (win.check_inputs(win.pdfs) or "")
 
 
 def test_inputs_required(win):
-    win.name.setText("")
+    """입력 칸은 종목·PDF뿐(만든 사람·출처·폴더·속도는 자동, ADR 021 6절)."""
     win.picker.current = None
     assert "종목" in win.check_inputs([Path("x.pdf")])
     win.set_cert("SAFETY")
     assert "PDF" in win.check_inputs([])
-    assert "만든 사람" in win.check_inputs([Path("x.pdf")])
+    assert win.check_inputs([Path("x.pdf")]) is None
+    assert win.spec([Path("x.pdf")]).prepared_by.startswith("원큐합격 전처리기")
 
 
 @pytest.mark.skipif(not all(p.exists() for p in PDFS), reason="건설안전 기출 PDF 없음")

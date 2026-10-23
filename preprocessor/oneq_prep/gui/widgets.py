@@ -80,6 +80,8 @@ class BadgeDelegate(QStyledItemDelegate):
         text = opt.text
         opt.text = ""
         opt.widget.style().drawControl(QStyle.CE_ItemViewItem, opt, painter, opt.widget)
+        if not text:
+            return                                   # 빈 칸엔 배지를 그리지 않음
         key = index.data(Qt.UserRole) or "waiting"
         fg, bg = theme.STATUS.get(key, theme.STATUS["waiting"])
         painter.save()
@@ -104,6 +106,38 @@ class BadgeDelegate(QStyledItemDelegate):
         return QSize(s.width() + 28, max(s.height(), 36))
 
 
+class ProgressDelegate(QStyledItemDelegate):
+    """파일별 진행 막대(ADR 021 6절): UserRole = 0~1, UserRole+1 = 상태 키, 글자 = 지금 단계."""
+
+    def paint(self, painter: QPainter, option: QStyleOptionViewItem, index) -> None:
+        opt = QStyleOptionViewItem(option)
+        self.initStyleOption(opt, index)
+        text = opt.text
+        opt.text = ""
+        opt.widget.style().drawControl(QStyle.CE_ItemViewItem, opt, painter, opt.widget)
+        v = float(index.data(Qt.UserRole) or 0.0)
+        key = index.data(Qt.UserRole + 1) or "waiting"
+        fg = {"packed": theme.OK, "review": theme.WARN, "error": theme.BAD}.get(key, theme.PRIMARY)
+        painter.save()
+        painter.setRenderHint(QPainter.Antialiasing)
+        r = opt.rect.adjusted(8, 0, -8, 0)
+        bar = QRectF(r.x(), r.center().y() + 4, r.width(), 6)
+        path = QPainterPath()
+        path.addRoundedRect(bar, 3, 3)
+        painter.fillPath(path, QColor(theme.GRAY_SOFT))
+        if v > 0:
+            done = QRectF(bar.x(), bar.y(), max(6.0, bar.width() * min(v, 1.0)), bar.height())
+            p2 = QPainterPath()
+            p2.addRoundedRect(done, 3, 3)
+            painter.fillPath(p2, QColor(fg))
+        f = QFont(opt.font)
+        f.setPixelSize(12)
+        painter.setFont(f)
+        painter.setPen(QColor(theme.MUTED))
+        painter.drawText(QRectF(r.x(), r.y() + 2, r.width(), r.height() / 2 + 2), Qt.AlignLeft | Qt.AlignVCenter, text)
+        painter.restore()
+
+
 class DropZone(QFrame):
     """PDF가 없을 때 보이는 점선 상자. 누르면 파일 고르기."""
     clicked = Signal()
@@ -122,7 +156,7 @@ class DropZone(QFrame):
         t = QLabel("기출 PDF를 여기로 끌어다 놓으세요")
         t.setObjectName("dropTitle")
         t.setAlignment(Qt.AlignCenter)
-        s = QLabel("폴더째 놓아도 됩니다 · 누르면 파일을 고를 수 있어요\n파일 이름의 시행일(예: …20220305…)로 회차를 정합니다")
+        s = QLabel("폴더째 놓아도 됩니다 · 누르면 파일을 고를 수 있어요\n종목·시행일·회차는 문서 내용에서 읽습니다(파일 이름은 상관없어요)")
         s.setObjectName("muted")
         s.setAlignment(Qt.AlignCenter)
         for w in (icon, t, s):

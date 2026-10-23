@@ -25,7 +25,7 @@ from . import __version__
 from . import lawtag
 from . import examinfo
 from . import standards as S
-from .extract import Layout, analyze
+from .extract import analyze
 from .reassign import Reference, Suggestion
 from .render import (crop_question, mark_leaks, mask_filled_labels, mask_ocr_filled, regions_for,
                      remove_highlight_near_labels, render_pages)
@@ -144,14 +144,19 @@ class Prepared:
     review: dict
     renamed: list[str] = field(default_factory=list)
     info: "examinfo.ExamInfo | None" = None   # 문서에서 읽은 종목·출처·근거(B2)
+    unchanged: bool = False       # 출력 폴더에 내용이 같은 팩이 이미 있었음(묶음에서 뺌, ADR 021 8절)
     zip_path: Path | None = None
     review_file: Path | None = None
 
 
 def prepare(pdf_path: Path, profile: S.Profile, out_dir: Path,
             date: str | None = None, round_no: int | None = None, image_quality: int = 80,
-            reference: Reference | None = None, log=print) -> Prepared:
+            reference: Reference | None = None, log=print, progress=None) -> Prepared:
+    """progress(단계) — 처리 화면의 파일별 진행 막대용(ADR 021 6절): 읽기 → 문항 나누기 → 정답 → 분류(→ 팩은 쓰는 쪽)."""
     from .ocr import needs_ocr, ocr_pdf
+
+    step = progress or (lambda _s: None)
+    step("읽기")
 
     issues: list[str] = []
     notes: list[str] = []
@@ -170,9 +175,11 @@ def prepare(pdf_path: Path, profile: S.Profile, out_dir: Path,
         log(f"  {pdf_path.name}: 텍스트층 없음 → OCR")
         ocr_pages = ocr_pdf(pdf_path)
         notes.append("스캔본: OCR로 문항 경계를 찾음 — 보기·정답을 반드시 검수")
+    step("문항 나누기")
     layout = analyze(pdf_path, ocr_pages=ocr_pages)
     issues += layout.warnings
 
+    step("정답")
     # 렌더링 + 정답 표시 제거
     if layout.highlights:
         pages, masked = render_pages(pdf_path, strip_yellow=True)
@@ -293,6 +300,7 @@ def prepare(pdf_path: Path, profile: S.Profile, out_dir: Path,
                 it.flags.append("subject-reassigned")
         items.append(it)
 
+    step("분류")
     _classify_items(items, profile, review)
     if legacy:
         if not review.get("reviewed"):
@@ -457,12 +465,29 @@ def write_pack(p: Prepared, out_dir: Path, prepared_by: str, source_type: str | 
 
     out_dir.mkdir(parents=True, exist_ok=True)
     zpath = out_dir / f"oneq-{p.pack_id}.zip"
+    # 같은 회차를 다시 만들 때(ADR 021 8절): 내용이 같으면 판 그대로(앱이 조용히 건너뜀),
+    # 다르면 이전 판보다 하나 올림(앱이 "바꿀까요?" 없이 교체하고 학습 기록은 이어짐)
+    old = _existing_manifest(zpath)
+    if old and old.get("packVersion", 0) >= pack_version:
+        same = {f["path"]: f["sha256"] for f in old.get("files", [])} == {f["path"]: f["sha256"] for f in manifest["files"]}
+        manifest["packVersion"] = old["packVersion"] if same else old["packVersion"] + 1
+        if same:
+            manifest["createdAt"] = old.get("createdAt", manifest["createdAt"])
+        p.unchanged = same
     with zipfile.ZipFile(zpath, "w", zipfile.ZIP_DEFLATED) as z:
         z.writestr("manifest.json", json.dumps(manifest, ensure_ascii=False, indent=1))
         for k, b in files.items():
             # webp는 이미 압축돼 있어 STORED로 둔다(해제 속도↑)
             z.writestr(k, b, zipfile.ZIP_STORED if k.endswith(".webp") else zipfile.ZIP_DEFLATED)
     return zpath, manifest
+
+
+def _existing_manifest(zpath: Path) -> dict | None:
+    try:
+        with zipfile.ZipFile(zpath) as z:
+            return json.loads(z.read("manifest.json"))
+    except (OSError, KeyError, ValueError, zipfile.BadZipFile):
+        return None
 
 
 def build_pack(pdf_path: Path, out_dir: Path, cert_code: str, prepared_by: str, source_origin: str = "",
@@ -506,6 +531,7 @@ def main(argv=None):
     ap.add_argument("--round", type=int, dest="round_no", help="회차 강제 지정(PDF 1개)")
     ap.add_argument("--pack-version", type=int, default=3, help="팩 판(v0.5부터 기본 3: 단원·유형이 든 판, v0.4는 2 — 앱이 낮은 판을 자동 교체, 기록은 이어짐)")
     ap.add_argument("--report-only", action="store_true", help="팩은 쓰지 않고 보고서만")
+    ap.add_argument("--no-bundle", action="store_true", help="종목 묶음(oneq-종목-bundle-….zip)을 만들지 않음")
     ap.add_argument("--workers", type=int, default=None, help="동시에 처리할 회차 수(기본: CPU 코어 수 - 1, 최대 4)")
     a = ap.parse_args(argv)
 
@@ -521,9 +547,11 @@ def main(argv=None):
             what = r.zip_path.name if r.zip_path else (r.pack_id or r.pdf.name)
             extra = f" → {r.review_file}" if r.review_file else ""
             print(f"  {mark} {what}: {STATUS_TEXT[r.status]} — {r.message}{extra}", flush=True)
+        elif ev.kind == "finish" and ev.bundle:
+            print(f"\n종목 묶음: {ev.bundle}", flush=True)
 
     spec = BatchSpec(list(a.pdf), a.cert, a.out, a.prepared_by, a.origin, a.source_type, a.date, a.round_no,
-                     a.pack_version, a.report_only, ap_workers)
+                     a.pack_version, a.report_only, ap_workers, bundle=not a.no_bundle)
     try:
         rows = run_batch(spec, show)
     except ValueError as e:
