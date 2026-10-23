@@ -23,7 +23,9 @@ v0.9.1 마무리 때 지난 세션 요약을 줄였다 — 자세한 기록은 g
 
 ## 다음 세션 시작
 
-시작 문구 예: "원큐합격 이어서 전처리기 개발. 저장소는 Hoonie2026/OneQ-Ace(PC는 C:\Users\dohwa\Downloads\OneQ-Ace), docs/SESSION.md·docs/PREP-PLAN-v0.5.md·docs/PC-TODO.md부터 확인해 줘."
+시작 문구 예: "원큐합격 전처리기 v0.5 개발 착수. 저장소는 Hoonie2026/OneQ-Ace(PC는 C:\Users\dohwa\Downloads\OneQ-Ace), docs/SESSION.md·docs/ADR/021-collect-and-classify.md·docs/PREP-PLAN-v0.5.md·docs/PC-TODO.md부터 확인하고 착수 순서대로 A1(출제기준 PDF 읽기)부터 시작해 줘. 지금 PC 환경이야."
+
+- 세션 #11은 방향 재검토만 하고 코드는 손대지 않음(시험 수치는 세션 #10 그대로). 개발은 새 세션(#12)에서 — 긴 대화의 맥락이 흐려지지 않게 문서를 기준으로 시작
 
 - **작업 방식(세션 #10부터)**: 클라우드에서 고치고·시험하고 **GitHub `main`에 바로 푸시**(앱은 Pages 자동 배포). PC 파일은 직접 쓰지 않음 → PC는 작업 전 동기화만(PC-TODO P0)
 - 클라우드는 큐넷에 접속 못 함 → 출제기준 읽기는 PC에서 받은 PDF 표본으로 개발(`preprocessor/tests/fixtures/standards/`), 큐넷 자동 받기 확인은 PC Chrome(PC-TODO P17)
