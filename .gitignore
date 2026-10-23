@@ -32,3 +32,6 @@ Thumbs.db
 .idea/
 .vscode/*
 !.vscode/extensions.json
+
+# 시험용 공개 표본(큐넷 출제기준 등)은 커밋
+!preprocessor/tests/fixtures/standards/*.pdf
