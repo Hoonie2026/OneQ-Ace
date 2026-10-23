@@ -6,6 +6,9 @@ preprocessor/standards/<종목코드>.json
   excluded  현행에 없는 과목명(팩에 넣지 않음)
   legacy    {"before": "YYYY-MM-DD", "action": "reassign"} — 그 전 회차는 문항별 과목 재배정 대상
   draft     true이면 아직 확정 안 된 프로필(팩을 만들지 않음)
+  period    {"from": "YYYY-MM-DD", "to": …} 적용 기간(큐넷 출제기준 PDF에서 읽은 프로필, ADR 021)
+  subjects[].majors  주요항목 → details(세부항목 = 단원, ADR 021 4.1) → items(세세항목). 없으면 단원 화면 비활성
+  source    {"type": "qnet-standard-pdf", "file", "readAt"} 어디서 만든 프로필인지
 """
 from __future__ import annotations
 
@@ -56,6 +59,20 @@ class Profile:
     legacy: dict | None = None
     draft: bool = False
     note: str = ""
+    period: dict | None = None
+
+    def units(self, subject: str) -> list[dict]:
+        """과목의 단원(세부항목) 목록 — id는 과목 안에서 "주요항목번호-세부항목번호"(예: "2-3").
+        출제기준에서 읽지 않은(majors 없는) 프로필이면 빈 목록."""
+        i = self.std_index(subject)
+        if i is None:
+            return []
+        out = []
+        for m in self.subjects[i - 1].get("majors", []):
+            for d in m.get("details", []):
+                out.append({"id": f"{m['no']}-{d['no']}", "major": m["name"], "name": d["name"],
+                            "items": d.get("items", [])})
+        return out
 
     def resolve(self, raw: str) -> tuple[str, int | None, str]:
         """PDF 과목명 → ("std", 과목번호(1부터), 표준이름) / ("excluded", None, raw) / ("unknown", None, raw)."""
@@ -91,7 +108,8 @@ def load(code: str, root: Path | None = None) -> Profile:
         raise FileNotFoundError(f"출제기준 프로필 없음: {p}")
     d = json.loads(p.read_text(encoding="utf-8"))
     return Profile(d["code"], d["name"], d["grade"], str(d["version"]), d["passRule"], d["subjects"],
-                   d.get("aliases", {}), d.get("excluded", []), d.get("legacy"), d.get("draft", False), d.get("note", ""))
+                   d.get("aliases", {}), d.get("excluded", []), d.get("legacy"), d.get("draft", False), d.get("note", ""),
+                   d.get("period"))
 
 
 def available(root: Path | None = None) -> list[str]:
