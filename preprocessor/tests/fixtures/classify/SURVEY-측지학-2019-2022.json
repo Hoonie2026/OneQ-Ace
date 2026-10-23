@@ -1,0 +1,967 @@
+{
+"_설명": "C2 실측 정답표(사람 분류, Claude 작성 2026-10-24) — 측량및지형공간정보기사 1과목(측지학 및 위성측위시스템) 2019-3~2022-1 8회차 160문항. 보충 낱말(unit-keywords.json SURVEY)은 이 문항들을 보기 전에 출제기준·교과 지식만으로 적음 → 맹검 실측. type: 실제로 계산하는 문항만 calc(수식 보기 포함), '최소 위성 수·궤도 경사각·축척계수'처럼 숫자를 외워 고르는 문항은 concept. 애매한 것: 높이(지오이드고·타원체고·정표고) → 1-2, 평면 간주 범위·허용오차 → 1-1, 시간(항성년·태양일) → 1-2, 자침 편차 방위각 → 1-6",
+"cert": "SURVEY",
+"subject": "측지학 및 위성측위시스템",
+"items": [
+{
+"date": "20190921",
+"no": 1,
+"unit": "2-2",
+"type": "concept"
+},
+{
+"date": "20190921",
+"no": 2,
+"unit": "1-2",
+"type": "calc"
+},
+{
+"date": "20190921",
+"no": 3,
+"unit": "2-4",
+"type": "concept"
+},
+{
+"date": "20190921",
+"no": 4,
+"unit": "1-5",
+"type": "concept"
+},
+{
+"date": "20190921",
+"no": 5,
+"unit": "1-3",
+"type": "concept"
+},
+{
+"date": "20190921",
+"no": 6,
+"unit": "2-1",
+"type": "concept"
+},
+{
+"date": "20190921",
+"no": 7,
+"unit": "2-3",
+"type": "concept"
+},
+{
+"date": "20190921",
+"no": 8,
+"unit": "1-2",
+"type": "calc"
+},
+{
+"date": "20190921",
+"no": 9,
+"unit": "1-6",
+"type": "concept"
+},
+{
+"date": "20190921",
+"no": 10,
+"unit": "1-2",
+"type": "concept"
+},
+{
+"date": "20190921",
+"no": 11,
+"unit": "2-4",
+"type": "concept"
+},
+{
+"date": "20190921",
+"no": 12,
+"unit": "2-1",
+"type": "concept"
+},
+{
+"date": "20190921",
+"no": 13,
+"unit": "2-4",
+"type": "concept"
+},
+{
+"date": "20190921",
+"no": 14,
+"unit": "1-1",
+"type": "concept"
+},
+{
+"date": "20190921",
+"no": 15,
+"unit": "1-3",
+"type": "calc"
+},
+{
+"date": "20190921",
+"no": 16,
+"unit": "1-2",
+"type": "concept"
+},
+{
+"date": "20190921",
+"no": 17,
+"unit": "1-5",
+"type": "concept"
+},
+{
+"date": "20190921",
+"no": 18,
+"unit": "1-3",
+"type": "concept"
+},
+{
+"date": "20190921",
+"no": 19,
+"unit": "2-5",
+"type": "concept"
+},
+{
+"date": "20190921",
+"no": 20,
+"unit": "1-2",
+"type": "concept"
+},
+{
+"date": "20200606",
+"no": 1,
+"unit": "2-4",
+"type": "concept"
+},
+{
+"date": "20200606",
+"no": 2,
+"unit": "2-4",
+"type": "concept"
+},
+{
+"date": "20200606",
+"no": 3,
+"unit": "1-2",
+"type": "calc"
+},
+{
+"date": "20200606",
+"no": 4,
+"unit": "1-1",
+"type": "concept"
+},
+{
+"date": "20200606",
+"no": 5,
+"unit": "2-5",
+"type": "concept"
+},
+{
+"date": "20200606",
+"no": 6,
+"unit": "2-2",
+"type": "concept"
+},
+{
+"date": "20200606",
+"no": 7,
+"unit": "1-5",
+"type": "concept"
+},
+{
+"date": "20200606",
+"no": 8,
+"unit": "2-5",
+"type": "concept"
+},
+{
+"date": "20200606",
+"no": 9,
+"unit": "2-2",
+"type": "calc"
+},
+{
+"date": "20200606",
+"no": 10,
+"unit": "2-5",
+"type": "concept"
+},
+{
+"date": "20200606",
+"no": 11,
+"unit": "1-3",
+"type": "concept"
+},
+{
+"date": "20200606",
+"no": 12,
+"unit": "1-3",
+"type": "concept"
+},
+{
+"date": "20200606",
+"no": 13,
+"unit": "2-4",
+"type": "concept"
+},
+{
+"date": "20200606",
+"no": 14,
+"unit": "1-6",
+"type": "concept"
+},
+{
+"date": "20200606",
+"no": 15,
+"unit": "1-6",
+"type": "concept"
+},
+{
+"date": "20200606",
+"no": 16,
+"unit": "2-1",
+"type": "concept"
+},
+{
+"date": "20200606",
+"no": 17,
+"unit": "1-4",
+"type": "concept"
+},
+{
+"date": "20200606",
+"no": 18,
+"unit": "1-2",
+"type": "calc"
+},
+{
+"date": "20200606",
+"no": 19,
+"unit": "1-3",
+"type": "concept"
+},
+{
+"date": "20200606",
+"no": 20,
+"unit": "1-2",
+"type": "concept"
+},
+{
+"date": "20200822",
+"no": 1,
+"unit": "2-4",
+"type": "concept"
+},
+{
+"date": "20200822",
+"no": 2,
+"unit": "1-3",
+"type": "concept"
+},
+{
+"date": "20200822",
+"no": 3,
+"unit": "2-2",
+"type": "concept"
+},
+{
+"date": "20200822",
+"no": 4,
+"unit": "1-4",
+"type": "concept"
+},
+{
+"date": "20200822",
+"no": 5,
+"unit": "2-1",
+"type": "concept"
+},
+{
+"date": "20200822",
+"no": 6,
+"unit": "2-2",
+"type": "calc"
+},
+{
+"date": "20200822",
+"no": 7,
+"unit": "1-2",
+"type": "concept"
+},
+{
+"date": "20200822",
+"no": 8,
+"unit": "1-2",
+"type": "concept"
+},
+{
+"date": "20200822",
+"no": 9,
+"unit": "1-5",
+"type": "concept"
+},
+{
+"date": "20200822",
+"no": 10,
+"unit": "1-2",
+"type": "calc"
+},
+{
+"date": "20200822",
+"no": 11,
+"unit": "1-3",
+"type": "concept"
+},
+{
+"date": "20200822",
+"no": 12,
+"unit": "1-5",
+"type": "concept"
+},
+{
+"date": "20200822",
+"no": 13,
+"unit": "1-1",
+"type": "calc"
+},
+{
+"date": "20200822",
+"no": 14,
+"unit": "2-3",
+"type": "concept"
+},
+{
+"date": "20200822",
+"no": 15,
+"unit": "1-6",
+"type": "concept"
+},
+{
+"date": "20200822",
+"no": 16,
+"unit": "1-3",
+"type": "concept"
+},
+{
+"date": "20200822",
+"no": 17,
+"unit": "1-4",
+"type": "concept"
+},
+{
+"date": "20200822",
+"no": 18,
+"unit": "2-4",
+"type": "concept"
+},
+{
+"date": "20200822",
+"no": 19,
+"unit": "2-3",
+"type": "concept"
+},
+{
+"date": "20200822",
+"no": 20,
+"unit": "1-6",
+"type": "concept"
+},
+{
+"date": "20200926",
+"no": 1,
+"unit": "1-3",
+"type": "concept"
+},
+{
+"date": "20200926",
+"no": 2,
+"unit": "1-5",
+"type": "concept"
+},
+{
+"date": "20200926",
+"no": 3,
+"unit": "1-6",
+"type": "concept"
+},
+{
+"date": "20200926",
+"no": 4,
+"unit": "2-4",
+"type": "concept"
+},
+{
+"date": "20200926",
+"no": 5,
+"unit": "1-2",
+"type": "calc"
+},
+{
+"date": "20200926",
+"no": 6,
+"unit": "1-3",
+"type": "concept"
+},
+{
+"date": "20200926",
+"no": 7,
+"unit": "1-6",
+"type": "concept"
+},
+{
+"date": "20200926",
+"no": 8,
+"unit": "2-4",
+"type": "concept"
+},
+{
+"date": "20200926",
+"no": 9,
+"unit": "2-5",
+"type": "concept"
+},
+{
+"date": "20200926",
+"no": 10,
+"unit": "2-3",
+"type": "concept"
+},
+{
+"date": "20200926",
+"no": 11,
+"unit": "1-3",
+"type": "calc"
+},
+{
+"date": "20200926",
+"no": 12,
+"unit": "2-3",
+"type": "concept"
+},
+{
+"date": "20200926",
+"no": 13,
+"unit": "2-1",
+"type": "concept"
+},
+{
+"date": "20200926",
+"no": 14,
+"unit": "1-2",
+"type": "concept"
+},
+{
+"date": "20200926",
+"no": 15,
+"unit": "2-1",
+"type": "concept"
+},
+{
+"date": "20200926",
+"no": 16,
+"unit": "1-2",
+"type": "calc"
+},
+{
+"date": "20200926",
+"no": 17,
+"unit": "1-5",
+"type": "concept"
+},
+{
+"date": "20200926",
+"no": 18,
+"unit": "2-4",
+"type": "concept"
+},
+{
+"date": "20200926",
+"no": 19,
+"unit": "1-1",
+"type": "concept"
+},
+{
+"date": "20200926",
+"no": 20,
+"unit": "1-2",
+"type": "concept"
+},
+{
+"date": "20210307",
+"no": 1,
+"unit": "1-3",
+"type": "concept"
+},
+{
+"date": "20210307",
+"no": 2,
+"unit": "1-2",
+"type": "concept"
+},
+{
+"date": "20210307",
+"no": 3,
+"unit": "2-1",
+"type": "concept"
+},
+{
+"date": "20210307",
+"no": 4,
+"unit": "2-2",
+"type": "calc"
+},
+{
+"date": "20210307",
+"no": 5,
+"unit": "2-5",
+"type": "concept"
+},
+{
+"date": "20210307",
+"no": 6,
+"unit": "1-1",
+"type": "calc"
+},
+{
+"date": "20210307",
+"no": 7,
+"unit": "1-3",
+"type": "concept"
+},
+{
+"date": "20210307",
+"no": 8,
+"unit": "2-3",
+"type": "concept"
+},
+{
+"date": "20210307",
+"no": 9,
+"unit": "2-5",
+"type": "concept"
+},
+{
+"date": "20210307",
+"no": 10,
+"unit": "1-1",
+"type": "concept"
+},
+{
+"date": "20210307",
+"no": 11,
+"unit": "1-6",
+"type": "concept"
+},
+{
+"date": "20210307",
+"no": 12,
+"unit": "1-2",
+"type": "calc"
+},
+{
+"date": "20210307",
+"no": 13,
+"unit": "1-3",
+"type": "concept"
+},
+{
+"date": "20210307",
+"no": 14,
+"unit": "1-6",
+"type": "concept"
+},
+{
+"date": "20210307",
+"no": 15,
+"unit": "1-5",
+"type": "concept"
+},
+{
+"date": "20210307",
+"no": 16,
+"unit": "2-2",
+"type": "concept"
+},
+{
+"date": "20210307",
+"no": 17,
+"unit": "2-3",
+"type": "concept"
+},
+{
+"date": "20210307",
+"no": 18,
+"unit": "1-5",
+"type": "concept"
+},
+{
+"date": "20210307",
+"no": 19,
+"unit": "2-1",
+"type": "concept"
+},
+{
+"date": "20210307",
+"no": 20,
+"unit": "2-6",
+"type": "concept"
+},
+{
+"date": "20210515",
+"no": 1,
+"unit": "1-1",
+"type": "concept"
+},
+{
+"date": "20210515",
+"no": 2,
+"unit": "2-4",
+"type": "concept"
+},
+{
+"date": "20210515",
+"no": 3,
+"unit": "1-3",
+"type": "concept"
+},
+{
+"date": "20210515",
+"no": 4,
+"unit": "2-4",
+"type": "concept"
+},
+{
+"date": "20210515",
+"no": 5,
+"unit": "1-3",
+"type": "concept"
+},
+{
+"date": "20210515",
+"no": 6,
+"unit": "2-1",
+"type": "concept"
+},
+{
+"date": "20210515",
+"no": 7,
+"unit": "1-5",
+"type": "concept"
+},
+{
+"date": "20210515",
+"no": 8,
+"unit": "1-5",
+"type": "concept"
+},
+{
+"date": "20210515",
+"no": 9,
+"unit": "1-1",
+"type": "calc"
+},
+{
+"date": "20210515",
+"no": 10,
+"unit": "1-2",
+"type": "calc"
+},
+{
+"date": "20210515",
+"no": 11,
+"unit": "2-5",
+"type": "concept"
+},
+{
+"date": "20210515",
+"no": 12,
+"unit": "2-2",
+"type": "concept"
+},
+{
+"date": "20210515",
+"no": 13,
+"unit": "2-4",
+"type": "concept"
+},
+{
+"date": "20210515",
+"no": 14,
+"unit": "1-6",
+"type": "concept"
+},
+{
+"date": "20210515",
+"no": 15,
+"unit": "2-2",
+"type": "calc"
+},
+{
+"date": "20210515",
+"no": 16,
+"unit": "1-2",
+"type": "concept"
+},
+{
+"date": "20210515",
+"no": 17,
+"unit": "2-1",
+"type": "concept"
+},
+{
+"date": "20210515",
+"no": 18,
+"unit": "1-6",
+"type": "concept"
+},
+{
+"date": "20210515",
+"no": 19,
+"unit": "2-6",
+"type": "concept"
+},
+{
+"date": "20210515",
+"no": 20,
+"unit": "1-3",
+"type": "concept"
+},
+{
+"date": "20210912",
+"no": 1,
+"unit": "1-1",
+"type": "calc"
+},
+{
+"date": "20210912",
+"no": 2,
+"unit": "1-5",
+"type": "concept"
+},
+{
+"date": "20210912",
+"no": 3,
+"unit": "1-2",
+"type": "concept"
+},
+{
+"date": "20210912",
+"no": 4,
+"unit": "2-3",
+"type": "concept"
+},
+{
+"date": "20210912",
+"no": 5,
+"unit": "1-1",
+"type": "calc"
+},
+{
+"date": "20210912",
+"no": 6,
+"unit": "2-5",
+"type": "concept"
+},
+{
+"date": "20210912",
+"no": 7,
+"unit": "2-5",
+"type": "calc"
+},
+{
+"date": "20210912",
+"no": 8,
+"unit": "2-1",
+"type": "concept"
+},
+{
+"date": "20210912",
+"no": 9,
+"unit": "1-2",
+"type": "concept"
+},
+{
+"date": "20210912",
+"no": 10,
+"unit": "1-3",
+"type": "concept"
+},
+{
+"date": "20210912",
+"no": 11,
+"unit": "2-5",
+"type": "concept"
+},
+{
+"date": "20210912",
+"no": 12,
+"unit": "2-2",
+"type": "concept"
+},
+{
+"date": "20210912",
+"no": 13,
+"unit": "2-1",
+"type": "concept"
+},
+{
+"date": "20210912",
+"no": 14,
+"unit": "1-6",
+"type": "concept"
+},
+{
+"date": "20210912",
+"no": 15,
+"unit": "1-5",
+"type": "concept"
+},
+{
+"date": "20210912",
+"no": 16,
+"unit": "1-2",
+"type": "concept"
+},
+{
+"date": "20210912",
+"no": 17,
+"unit": "2-4",
+"type": "concept"
+},
+{
+"date": "20210912",
+"no": 18,
+"unit": "1-6",
+"type": "concept"
+},
+{
+"date": "20210912",
+"no": 19,
+"unit": "1-3",
+"type": "concept"
+},
+{
+"date": "20210912",
+"no": 20,
+"unit": "1-3",
+"type": "concept"
+},
+{
+"date": "20220305",
+"no": 1,
+"unit": "1-2",
+"type": "concept"
+},
+{
+"date": "20220305",
+"no": 2,
+"unit": "1-5",
+"type": "concept"
+},
+{
+"date": "20220305",
+"no": 3,
+"unit": "2-3",
+"type": "concept"
+},
+{
+"date": "20220305",
+"no": 4,
+"unit": "2-1",
+"type": "concept"
+},
+{
+"date": "20220305",
+"no": 5,
+"unit": "1-5",
+"type": "concept"
+},
+{
+"date": "20220305",
+"no": 6,
+"unit": "2-4",
+"type": "concept"
+},
+{
+"date": "20220305",
+"no": 7,
+"unit": "1-2",
+"type": "calc"
+},
+{
+"date": "20220305",
+"no": 8,
+"unit": "1-6",
+"type": "calc"
+},
+{
+"date": "20220305",
+"no": 9,
+"unit": "1-2",
+"type": "concept"
+},
+{
+"date": "20220305",
+"no": 10,
+"unit": "1-3",
+"type": "concept"
+},
+{
+"date": "20220305",
+"no": 11,
+"unit": "1-6",
+"type": "concept"
+},
+{
+"date": "20220305",
+"no": 12,
+"unit": "2-4",
+"type": "concept"
+},
+{
+"date": "20220305",
+"no": 13,
+"unit": "2-1",
+"type": "concept"
+},
+{
+"date": "20220305",
+"no": 14,
+"unit": "2-2",
+"type": "concept"
+},
+{
+"date": "20220305",
+"no": 15,
+"unit": "1-3",
+"type": "concept"
+},
+{
+"date": "20220305",
+"no": 16,
+"unit": "1-6",
+"type": "concept"
+},
+{
+"date": "20220305",
+"no": 17,
+"unit": "2-1",
+"type": "concept"
+},
+{
+"date": "20220305",
+"no": 18,
+"unit": "1-3",
+"type": "concept"
+},
+{
+"date": "20220305",
+"no": 19,
+"unit": "1-1",
+"type": "calc"
+},
+{
+"date": "20220305",
+"no": 20,
+"unit": "2-5",
+"type": "concept"
+}
+]
+}

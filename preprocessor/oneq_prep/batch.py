@@ -29,7 +29,7 @@ class BatchSpec:
     source_type: str = "public-pbt"
     date: str | None = None          # 파일명에 시행일이 없을 때(PDF 1개)
     round_no: int | None = None      # 회차 강제(PDF 1개)
-    pack_version: int = 2            # v0.4: 법령·기준 표시(ADR 019)가 든 판 — 앱이 1판을 자동 교체
+    pack_version: int = 3            # v0.5: 단원·유형(ADR 021 4절)이 든 판(v0.4 = 2) — 앱이 낮은 판을 자동 교체, 기록은 이어짐
     report_only: bool = False
     workers: int | None = None       # None이면 코어 수에 맞춰(최대 4)
     file_dates: dict[Path, str] = field(default_factory=dict)   # 파일별 시행일(파일명에 없을 때, 창 프로그램)

@@ -18,7 +18,11 @@ export interface PackManifest {
   packVersion: number;
   cert: { code: string; name: string; grade: string };
   exam: { year: number; round: number; roundLabel?: string; date: string };
-  subjects: { no: number; name: string; count: number; examCount?: number; isLaw: boolean }[];
+  subjects: {
+    no: number; name: string; count: number; examCount?: number; isLaw: boolean;
+    /** 단원 = 출제기준 세부항목(ADR 021 4.1) — 전처리기 v0.5 팩부터 */
+    units?: { id: string; major: string; name: string }[];
+  }[];
   passRule: { subjectMin: number; avgMin: number };
   questionCount: number;
   source: { type: 'public-pbt' | 'recalled' | 'other'; origin?: string; note?: string };
@@ -50,6 +54,11 @@ export interface PackQuestion {
   lawRefs: string[];
   clusterId: string | null;
   flags: string[];
+  /** ADR 021 4절(전처리기 v0.5 팩부터, 없으면 단원·유형 화면 비활성) */
+  unit?: string;
+  qtype?: 'calc' | 'law' | 'concept';
+  sequence?: boolean;
+  classifyUnsure?: ('unit' | 'qtype')[];
 }
 
 export interface ValidResult {

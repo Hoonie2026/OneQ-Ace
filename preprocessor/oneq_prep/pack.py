@@ -92,7 +92,7 @@ def load_review(out_dir: Path, pack_id: str) -> dict:
     if not p.exists():
         return {}
     d = json.loads(p.read_text(encoding="utf-8"))
-    for k in ("answers", "acceptAlso", "exclude", "reassign", "subjectMap"):
+    for k in ("answers", "acceptAlso", "exclude", "reassign", "subjectMap", "units", "types"):
         d.setdefault(k, {})
     return d
 
@@ -104,6 +104,8 @@ REVIEW_HELP = {
     "acceptAlso": "문항번호 → [추가 인정 번호] (복수정답·전항정답)",
     "exclude": "문항번호 → 사유 (판독 불가 등으로 팩에서 뺄 문항)",
     "reassign": "문항번호 → 표준 과목명 (구기준 회차 과목 재배정). 제안을 확인·수정한 뒤 reviewed를 true로",
+    "units": "문항번호 → 단원 id(\"주요-세부\", 예 \"1-3\") 또는 \"미분류\" — 자동 판정이 확신 없던 문항(ADR 021 4.5)",
+    "types": "문항번호 → calc(계산) / law(기준·법령) / concept(개념·실무)",
     "reviewed": "사람이 검수를 마쳤으면 true → manifest.reviewedAt 기록, 재배정 반영",
 }
 
@@ -116,6 +118,7 @@ def write_review_skeleton(out_dir: Path, pack_id: str, source: str, review: dict
          "subjectMap": review.get("subjectMap", {}), "answers": review.get("answers", {}),
          "acceptAlso": review.get("acceptAlso", {}), "exclude": review.get("exclude", {}),
          "reassign": review.get("reassign") or {str(s.no): s.suggested for s in suggestions if s.suggested != s.current},
+         "units": review.get("units", {}), "types": review.get("types", {}),
          "reviewed": review.get("reviewed", False)}
     p.write_text(json.dumps(d, ensure_ascii=False, indent=1), encoding="utf-8")
     return p
@@ -143,6 +146,10 @@ class Item:
     excluded: str | None = None   # 제외 사유
     suggestion: Suggestion | None = None
     law_refs: list[str] = field(default_factory=list)   # 법령·기준 이름(ADR 019) — 팩 lawRefs
+    unit: str | None = None       # 단원(세부항목) id(ADR 021 4.1) — 확신 있거나 사람이 고른 것만
+    qtype: str | None = None      # calc / law / concept (4.2)
+    sequence: bool = False
+    unsure: list[str] = field(default_factory=list)     # 자동 판정 확신 낮음 → 몰아 고르기 대상("unit"/"qtype")
 
 
 @dataclass
@@ -304,6 +311,7 @@ def prepare(pdf_path: Path, profile: S.Profile, out_dir: Path, all_dates: list[s
                 it.flags.append("subject-reassigned")
         items.append(it)
 
+    _classify_items(items, profile, review)
     if legacy:
         if not review.get("reviewed"):
             issues.append(f"구기준 회차({exam['date']} < {profile.legacy['before']}): 문항별 과목 재배정 검수 필요 — "
@@ -316,6 +324,13 @@ def prepare(pdf_path: Path, profile: S.Profile, out_dir: Path, all_dates: list[s
             soft = layout.ocr and it.answer is not None
             issues += [f"{it.no}번: {w}" for w in it.warnings
                        if not (soft and (w.startswith("OCR:") or w.startswith("보기 번호 순서")))]
+    kept_items = [it for it in items if not it.excluded]
+    if kept_items:
+        from collections import Counter
+        tc = Counter(it.qtype for it in kept_items)
+        nu = sum(1 for it in kept_items if "unit" in it.unsure)
+        notes.append(f"유형: 계산 {tc.get('calc', 0)} · 기준·법령 {tc.get('law', 0)} · 개념·실무 {tc.get('concept', 0)}"
+                     + (f" / 단원 못 정함 {nu}문항(몰아 고르기, 건너뛰면 미분류)" if any(profile.units(s['name']) for s in profile.subjects) else ""))
     n_ex = sum(1 for it in items if it.excluded)
     if n_ex:
         notes.append(f"제외 {n_ex}문항")
@@ -323,6 +338,31 @@ def prepare(pdf_path: Path, profile: S.Profile, out_dir: Path, all_dates: list[s
         notes.append("원본은 과목마다 번호가 1부터 다시 시작 — 팩 번호(no)는 시험지 전체 순번")
     return Prepared(pdf_path, pack_id, exam, profile, method, masked, items, issues, notes,
                     layout.numbering, layout.ocr, legacy, review, renamed)
+
+
+def _classify_items(items: list[Item], profile: S.Profile, review: dict) -> None:
+    """단원·유형·순서형(ADR 021 4절). 사람이 검수 파일 units/types로 고른 것이 자동보다 우선."""
+    from . import classify as C
+    picked_u = {int(k): v for k, v in review.get("units", {}).items()}
+    picked_t = {int(k): v for k, v in review.get("types", {}).items()}
+    idx: dict[str, C.UnitIndex] = {}
+    law_subjects = {s["name"] for s in profile.subjects if s.get("isLaw")}
+    for it in items:
+        if it.excluded or not it.subject:
+            continue
+        if it.subject not in idx:
+            idx[it.subject] = C.build_index(profile, it.subject)
+        c = C.classify(it.text, idx[it.subject], is_law="law" in it.flags or it.subject in law_subjects)
+        it.qtype, it.sequence = c.qtype, c.sequence
+        it.unit = c.unit if c.unit_sure else None
+        it.unsure = [k for k, sure in (("unit", c.unit_sure or not idx[it.subject].units), ("qtype", c.type_sure)) if not sure]
+        if it.no in picked_u:
+            v = picked_u[it.no]
+            it.unit = None if v in ("미분류", "", None) else v
+            it.unsure = [k for k in it.unsure if k != "unit"]
+        if it.no in picked_t and picked_t[it.no] in ("calc", "law", "concept"):
+            it.qtype = picked_t[it.no]
+            it.unsure = [k for k in it.unsure if k != "qtype"]
 
 
 # ───────────────────────── 팩 쓰기 ─────────────────────────
@@ -362,6 +402,14 @@ def write_pack(p: Prepared, out_dir: Path, prepared_by: str, source_type: str = 
         }
         if it.accept_also:
             q["acceptAlso"] = it.accept_also
+        if it.unit:
+            q["unit"] = it.unit
+        if it.qtype:
+            q["qtype"] = it.qtype
+        if it.sequence:
+            q["sequence"] = True
+        if it.unsure:
+            q["classifyUnsure"] = it.unsure
         questions.append(q)
 
     law = {s["name"] for s in prof.subjects if s.get("isLaw")}
@@ -372,6 +420,9 @@ def write_pack(p: Prepared, out_dir: Path, prepared_by: str, source_type: str = 
         # 실제 시험 문항 수와 다르면(옛 기준 과목 합침·제외 문항) 함께 적는다 — 같으면 쓰지 않아 이전 팩과 같은 모양(ADR 016)
         if n in exam_count and exam_count[n] != s["count"]:
             s["examCount"] = exam_count[n]
+        units = prof.units(n)
+        if units:
+            s["units"] = [{"id": u["id"], "major": u["major"], "name": u["name"]} for u in units]
         subjects.append(s)
     excluded: dict[tuple[str, str], list[int]] = {}
     for it in p.items:
@@ -463,7 +514,7 @@ def main(argv=None):
     ap.add_argument("--source-type", default="public-pbt", choices=["public-pbt", "recalled", "other"])
     ap.add_argument("--date", help="시행일 YYYY-MM-DD(파일명에 없을 때, PDF 1개)")
     ap.add_argument("--round", type=int, dest="round_no", help="회차 강제 지정(PDF 1개)")
-    ap.add_argument("--pack-version", type=int, default=2, help="팩 판(v0.4부터 기본 2: 법령·기준 표시가 든 판 — 앱이 1판을 자동 교체, 기록은 이어짐)")
+    ap.add_argument("--pack-version", type=int, default=3, help="팩 판(v0.5부터 기본 3: 단원·유형이 든 판, v0.4는 2 — 앱이 낮은 판을 자동 교체, 기록은 이어짐)")
     ap.add_argument("--report-only", action="store_true", help="팩은 쓰지 않고 보고서만")
     ap.add_argument("--workers", type=int, default=None, help="동시에 처리할 회차 수(기본: CPU 코어 수 - 1, 최대 4)")
     a = ap.parse_args(argv)
