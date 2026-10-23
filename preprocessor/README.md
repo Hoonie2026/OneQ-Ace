@@ -1,5 +1,7 @@
 # oneq-prep (기출 PDF 전처리기)
 
+> 이 안내는 **v0.4.0 기준**이다. v0.5(ADR 021)에서 입력 칸·종목 목록·시행일 판정·출처 입력이 자동으로 바뀌며, 그때 다시 쓴다(PREP-PLAN-v0.5 D2).
+
 기출 PDF를 원큐합격 문제팩(`.zip`, 포맷 `oqp/1`)으로 바꾼다. 포맷은 `shared/pack-schema.json`, 결정 이유는
 `docs/ADR/001-pack-format-oqp1.md`, `005-subject-standard-in-preprocessor.md`, `012-preprocessor-mvp.md`, `016-safety-2026-merged-subjects.md`.
 
