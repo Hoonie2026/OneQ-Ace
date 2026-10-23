@@ -23,6 +23,7 @@ from pathlib import Path
 
 from . import __version__
 from . import lawtag
+from . import examinfo
 from . import standards as S
 from .extract import Layout, analyze
 from .reassign import Reference, Suggestion
@@ -34,33 +35,6 @@ REASSIGN_MIN_CONF = 0.6     # 이보다 낮은 재배정 제안은 보고서에�
 
 
 # ───────────────────────── 회차 정보 ─────────────────────────
-
-def exam_from_filename(path: Path, all_dates: list[str] | None = None, date: str | None = None,
-                       round_no: int | None = None) -> dict:
-    """파일명의 시행일(YYYYMMDD)로 연도·회차를 정한다. 회차는 같은 해 시행일 순서.
-    2020년 기사는 1·2회를 통합 시행해 첫 시행일이 1·2회, 이후가 3·4회다.
-    시행일이 없는 파일명("..._2024_3회_...")은 연도·회차를 읽고 시행일은 --date로 받는다."""
-    m = re.search(r"(20\d{2})(\d{2})(\d{2})", path.name)
-    if m:
-        y, mo, d = m.groups()
-        dte = f"{y}-{mo}-{d}"
-        same_year = sorted(x for x in (all_dates or [dte]) if x.startswith(y))
-        idx = same_year.index(dte) if dte in same_year else 0
-        exam = {"year": int(y), "round": idx + 1, "date": date or dte}
-        if y == "2020":
-            exam["round"] = [1, 3, 4][idx] if idx < 3 else idx + 1
-            if idx == 0:
-                exam["roundLabel"] = "1·2회 통합"
-        if round_no:
-            exam["round"] = round_no
-        return exam
-    m = re.search(r"(20\d{2})\D{0,3}?(\d)\s*회", path.name)
-    if not m:
-        raise ValueError(f"파일명에서 시행일(YYYYMMDD) 또는 '연도_N회'를 찾지 못함: {path.name}")
-    if not date:
-        raise ValueError(f"{path.name}: 파일명에 시행일이 없어 --date YYYY-MM-DD 가 필요함")
-    return {"year": int(m.group(1)), "round": round_no or int(m.group(2)), "date": date}
-
 
 def content_hash(text: str) -> str:
     norm = re.sub(r"\s+", "", text)
@@ -169,19 +143,26 @@ class Prepared:
     legacy: bool
     review: dict
     renamed: list[str] = field(default_factory=list)
+    info: "examinfo.ExamInfo | None" = None   # 문서에서 읽은 종목·출처·근거(B2)
     zip_path: Path | None = None
     review_file: Path | None = None
 
 
-def prepare(pdf_path: Path, profile: S.Profile, out_dir: Path, all_dates: list[str] | None = None,
+def prepare(pdf_path: Path, profile: S.Profile, out_dir: Path,
             date: str | None = None, round_no: int | None = None, image_quality: int = 80,
             reference: Reference | None = None, log=print) -> Prepared:
     from .ocr import needs_ocr, ocr_pdf
 
     issues: list[str] = []
     notes: list[str] = []
-    exam = exam_from_filename(pdf_path, all_dates, date, round_no)
-    pack_id = f"{profile.code}-{exam['year']}-{exam['round']}"
+    # 종목·시행일·회차·출처는 문서 내용에서(ADR 021 2절) — 파일 이름은 쓰지 않음
+    exam, info = examinfo.exam_of(pdf_path, profile, out_dir, date, round_no)
+    pack_id = examinfo.pack_id(profile.code, exam)
+    if info.cert_name and S.norm(info.cert_name) != S.norm(profile.name):
+        issues.append(f"이 파일은 '{info.cert_name}' 문서로 보입니다(고른 종목: {profile.name}) — 종목을 확인하세요")
+    if exam.get("dateUnknown"):
+        notes.append("시행일을 문서에서 찾지 못함 → " + (f"{exam['year']}년 {exam['round']}회(시행일 모름)" if exam["year"]
+                                                    else f"0000년 {exam['round']}회로 지정"))
     review = load_review(out_dir, pack_id)
 
     ocr_pages = None
@@ -338,7 +319,7 @@ def prepare(pdf_path: Path, profile: S.Profile, out_dir: Path, all_dates: list[s
     if layout.numbering == "per-subject":
         notes.append("원본은 과목마다 번호가 1부터 다시 시작 — 팩 번호(no)는 시험지 전체 순번")
     return Prepared(pdf_path, pack_id, exam, profile, method, masked, items, issues, notes,
-                    layout.numbering, layout.ocr, legacy, review, renamed)
+                    layout.numbering, layout.ocr, legacy, review, renamed, info=info)
 
 
 def _classify_items(items: list[Item], profile: S.Profile, review: dict) -> None:
@@ -370,8 +351,9 @@ def _classify_items(items: list[Item], profile: S.Profile, review: dict) -> None
 
 # ───────────────────────── 팩 쓰기 ─────────────────────────
 
-def write_pack(p: Prepared, out_dir: Path, prepared_by: str, source_type: str = "public-pbt",
+def write_pack(p: Prepared, out_dir: Path, prepared_by: str, source_type: str | None = None,
                source_origin: str = "", pack_version: int = 1) -> tuple[Path, dict]:
+    """source_type·source_origin을 비우면 문서에서 읽은 출처(ADR 021 6절)."""
     prof = p.profile
     kept = [it for it in p.items if not it.excluded]
     std_order = {s["name"]: i + 1 for i, s in enumerate(prof.subjects)}
@@ -437,9 +419,12 @@ def write_pack(p: Prepared, out_dir: Path, prepared_by: str, source_type: str = 
 
     qjson = json.dumps(questions, ensure_ascii=False, indent=1).encode("utf-8")
     files = {"questions.json": qjson, **files}
-    source = {"type": source_type}
-    if source_origin:
-        source["origin"] = source_origin
+    info = p.info or examinfo.ExamInfo(source_type="public-pbt", origin="")
+    source = {"type": source_type or info.source_type}
+    if source_origin or info.origin:
+        source["origin"] = source_origin or info.origin
+    if info.note and not source_type:
+        source["note"] = info.note
     manifest = {
         "format": "oqp/1",
         "packId": p.pack_id,
@@ -481,10 +466,10 @@ def write_pack(p: Prepared, out_dir: Path, prepared_by: str, source_type: str = 
 
 
 def build_pack(pdf_path: Path, out_dir: Path, cert_code: str, prepared_by: str, source_origin: str = "",
-               pack_version: int = 1, all_dates: list[str] | None = None, image_quality: int = 80) -> tuple[Path, dict]:
+               pack_version: int = 1, image_quality: int = 80) -> tuple[Path, dict]:
     """1단계 호환: 문제가 있으면 ValueError."""
     prof = S.load(cert_code)
-    p = prepare(Path(pdf_path), prof, Path(out_dir), all_dates, image_quality=image_quality)
+    p = prepare(Path(pdf_path), prof, Path(out_dir), image_quality=image_quality)
     if p.issues:
         raise ValueError("팩을 만들 수 없음:\n  " + "\n  ".join(p.issues))
     return write_pack(p, Path(out_dir), prepared_by, source_origin=source_origin, pack_version=pack_version)
@@ -514,10 +499,10 @@ def main(argv=None):
     ap.add_argument("pdf", nargs="+", type=Path, help="기출 PDF(여러 개 가능)")
     ap.add_argument("out", type=Path, help="출력 폴더(팩 zip, review/ 보고서·검수 파일)")
     ap.add_argument("--cert", default="SURVEY", choices=S.available(), help="종목 코드(출제기준 프로필)")
-    ap.add_argument("--prepared-by", required=True)
-    ap.add_argument("--origin", default="", help="원본 출처(사이트·자료명)")
-    ap.add_argument("--source-type", default="public-pbt", choices=["public-pbt", "recalled", "other"])
-    ap.add_argument("--date", help="시행일 YYYY-MM-DD(파일명에 없을 때, PDF 1개)")
+    ap.add_argument("--prepared-by", default="원큐합격 전처리기 v0.5", help="만든 사람(기본: 자동 — ADR 021 6절)")
+    ap.add_argument("--origin", default="", help="원본 출처(기본: 문서 머리말·꼬리말에서 읽음, 모르면 '직접 올림')")
+    ap.add_argument("--source-type", default=None, choices=["public-pbt", "recalled", "other"], help="기본: 문서에서 읽음")
+    ap.add_argument("--date", help="시행일 YYYY-MM-DD 직접 지정(PDF 1개) — 기본은 문서 내용에서 읽고, 못 찾으면 '0000년 nn회'")
     ap.add_argument("--round", type=int, dest="round_no", help="회차 강제 지정(PDF 1개)")
     ap.add_argument("--pack-version", type=int, default=3, help="팩 판(v0.5부터 기본 3: 단원·유형이 든 판, v0.4는 2 — 앱이 낮은 판을 자동 교체, 기록은 이어짐)")
     ap.add_argument("--report-only", action="store_true", help="팩은 쓰지 않고 보고서만")

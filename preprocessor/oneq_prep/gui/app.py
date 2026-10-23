@@ -392,18 +392,18 @@ class MainWindow(QMainWindow):
         self.table.setRowCount(len(self.rows))
         dup = {r.pack_id for r in self.rows if r.pack_id and sum(x.pack_id == r.pack_id for x in self.rows) > 1}
         for i, r in enumerate(self.rows):
-            needs_date = not re.search(r"20\d{6}", r.pdf.name)
+            # 시행일은 문서 내용에서 읽고, 못 찾으면 "0000년 nn회"로 자동(ADR 021 2절) — 사람에게 묻지 않음
+            needs_date = r.date.startswith("0000") or r.date.endswith("-00")   # 칸을 고칠 수는 있게
             key = r.status
             st_text = STATUS_TEXT.get(r.status, r.status)
             msg = r.message
-            if needs_date and not r.date and r.status in ("waiting", "error"):
-                key, st_text = "needdate", "시행일 필요"
-                msg = "파일 이름에 시행일이 없어요 — 시행일 칸을 두 번 눌러 적으세요"
+            if r.date.startswith("0000") and r.status == "waiting":
+                msg = "시행일을 문서에서 못 찾음 → 0000년 회차로 지정(시행일 칸을 두 번 눌러 바꿀 수 있음)"
             elif r.pack_id in dup and r.status == "waiting":
                 msg = "같은 팩 이름이 둘 이상 — 같은 회차 PDF가 두 번 들어갔는지 확인하세요"
             if r.status == "packed":
                 msg = f"{r.questions}문항 · {r.size / 1e6:.1f}MB"
-            cells = [r.pdf.name, r.date or ("YYYY-MM-DD" if needs_date else ""), r.pack_id,
+            cells = [r.pdf.name, ("시행일 모름" if needs_date else r.date), r.pack_id,
                      f"{r.law}" if r.law else "", st_text, msg]
             for c, text in enumerate(cells):
                 it = QTableWidgetItem(text)
@@ -421,7 +421,7 @@ class MainWindow(QMainWindow):
                 self.table.item(i, C_MSG).setToolTip(r.message)
             elif msg:
                 self.table.item(i, C_MSG).setToolTip(msg)
-            if needs_date and not r.date:
+            if needs_date:
                 self.table.item(i, C_DATE).setForeground(QColor(theme.BAD))
         self._building = False
         n = len(self.rows)

@@ -9,14 +9,14 @@ from __future__ import annotations
 
 import multiprocessing
 import os
-import re
 from concurrent.futures import FIRST_COMPLETED, Future, ProcessPoolExecutor, wait
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable
 
 from . import standards as S
-from .pack import REVIEW_DIR, Prepared, exam_from_filename, prepare, reference_from, write_pack, write_review_skeleton
+from . import examinfo
+from .pack import REVIEW_DIR, Prepared, prepare, reference_from, write_pack, write_review_skeleton
 
 
 @dataclass
@@ -26,20 +26,17 @@ class BatchSpec:
     out: Path
     prepared_by: str
     origin: str = ""
-    source_type: str = "public-pbt"
-    date: str | None = None          # 파일명에 시행일이 없을 때(PDF 1개)
+    source_type: str | None = None   # None·"" = 문서에서 읽은 출처(ADR 021 6절)
+    date: str | None = None          # 시행일 직접 지정(PDF 1개) — 보통은 문서 내용에서 읽음
     round_no: int | None = None      # 회차 강제(PDF 1개)
     pack_version: int = 3            # v0.5: 단원·유형(ADR 021 4절)이 든 판(v0.4 = 2) — 앱이 낮은 판을 자동 교체, 기록은 이어짐
     report_only: bool = False
     workers: int | None = None       # None이면 코어 수에 맞춰(최대 4)
-    file_dates: dict[Path, str] = field(default_factory=dict)   # 파일별 시행일(파일명에 없을 때, 창 프로그램)
-    context: list[Path] = field(default_factory=list)           # 회차 번호를 정할 때 함께 볼 PDF(한 회차만 다시 만들 때)
+    file_dates: dict[Path, str] = field(default_factory=dict)   # 파일별 시행일 직접 지정(창 프로그램)
+    context: list[Path] = field(default_factory=list)           # (v0.4 호환, 쓰지 않음 — 회차는 시행월로 정함)
 
     def date_of(self, p: Path) -> str | None:
         return self.file_dates.get(p) or self.date
-
-    def all_dates(self) -> list[str]:
-        return _dates(list(dict.fromkeys([*self.pdfs, *self.context])))
 
 
 @dataclass
@@ -77,30 +74,31 @@ def default_workers() -> int:
 
 
 def plan_rounds(spec: BatchSpec, prof: S.Profile) -> list[RoundResult]:
-    """파일 이름으로 시행일·회차를 미리 정한다(처리 전에 목록에 보여 줄 수 있게)."""
-    dates = spec.all_dates()
+    """문서 첫 쪽 머리말에서 시행일·회차를 미리 읽는다(처리 전에 목록에 보여 줄 수 있게, ADR 021 2절).
+    같은 팩 이름이 둘 나오면(같은 회차 파일 두 개) 뒤의 것은 오류로 둔다."""
     rows = []
+    seen: dict[str, Path] = {}
+    names = examinfo.known_cert_names()
     for p in sorted(spec.pdfs, key=lambda x: x.name):
         r = RoundResult(pdf=p)
         try:
-            ex = exam_from_filename(p, dates, spec.date_of(p), spec.round_no)
+            ex, _ = examinfo.exam_of(p, prof, spec.out, spec.date_of(p), spec.round_no, examinfo.read(p, names=names))
             r.date = ex["date"]
-            r.pack_id = f"{prof.code}-{ex['year']}-{ex['round']}"
-        except ValueError as e:
+            r.pack_id = examinfo.pack_id(prof.code, ex)
+            if r.pack_id in seen:
+                r.status, r.message = "error", f"{seen[r.pack_id].name}와 같은 회차({r.pack_id})"
+            seen.setdefault(r.pack_id, p)
+        except (ValueError, OSError) as e:
             r.status, r.message = "error", str(e)
         rows.append(r)
     return rows
 
 
-def _dates(pdfs: list[Path]) -> list[str]:
-    return ["-".join(m.groups()) for p in pdfs if (m := re.search(r"(20\d{2})(\d{2})(\d{2})", p.name))]
-
-
-def _prepare_job(pdf: Path, cert: str, out: Path, dates: list[str], date: str | None, round_no: int | None,
+def _prepare_job(pdf: Path, cert: str, out: Path, date: str | None, round_no: int | None,
                  reference=None, standards_root: str | None = None) -> Prepared:
     """작업 프로세스에서 도는 함수(모듈 맨 위에 있어야 Windows spawn에서 불러올 수 있다)."""
     prof = S.load(cert, Path(standards_root) if standards_root else None)
-    return prepare(pdf, prof, out, dates, date, round_no, reference=reference)
+    return prepare(pdf, prof, out, date, round_no, reference=reference)
 
 
 def run_batch(spec: BatchSpec, on_event: Callable[[Event], None] | None = None,
@@ -113,7 +111,6 @@ def run_batch(spec: BatchSpec, on_event: Callable[[Event], None] | None = None,
     rows = plan_rounds(spec, prof)
     total = len(rows)
     emit(Event("plan", total=total))
-    dates = spec.all_dates()
     std_root = str(standards_root) if standards_root else None
     current = [i for i, r in enumerate(rows) if r.status == "waiting" and not prof.is_legacy(r.date)]
     legacy = [i for i, r in enumerate(rows) if r.status == "waiting" and prof.is_legacy(r.date)]
@@ -145,7 +142,7 @@ def run_batch(spec: BatchSpec, on_event: Callable[[Event], None] | None = None,
                 rows[i].status = "running"
                 emit(Event("start", i, total, rows[i]))
                 try:
-                    finish(i, _prepare_job(rows[i].pdf, spec.cert, spec.out, dates, spec.date_of(rows[i].pdf), spec.round_no,
+                    finish(i, _prepare_job(rows[i].pdf, spec.cert, spec.out, spec.date_of(rows[i].pdf), spec.round_no,
                                            reference, std_root), None)
                 except Exception as e:  # noqa: BLE001 — 회차 하나의 실패가 전체를 멈추지 않게
                     finish(i, None, e)
@@ -160,7 +157,7 @@ def run_batch(spec: BatchSpec, on_event: Callable[[Event], None] | None = None,
                     i = queue.pop(0)
                     rows[i].status = "running"
                     emit(Event("start", i, total, rows[i]))
-                    running[ex.submit(_prepare_job, rows[i].pdf, spec.cert, spec.out, dates, spec.date_of(rows[i].pdf),
+                    running[ex.submit(_prepare_job, rows[i].pdf, spec.cert, spec.out, spec.date_of(rows[i].pdf),
                                       spec.round_no, reference, std_root)] = i
                 if should_stop():
                     for i in queue:

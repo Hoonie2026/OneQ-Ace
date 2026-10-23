@@ -448,6 +448,38 @@
       "expect": [
         "JSON"
       ]
+    },
+    {
+      "name": "시행일 모름 표시 없이 날짜 00",
+      "expect": [
+        "SCHEMA"
+      ],
+      "ops": [
+        {
+          "file": "manifest.json",
+          "op": "set",
+          "pointer": "/exam/date",
+          "value": "2019-00-00"
+        }
+      ]
+    },
+    {
+      "name": "연도·회차만 알고 시행일 모름(정상)",
+      "expect": [],
+      "ops": [
+        {
+          "file": "manifest.json",
+          "op": "set",
+          "pointer": "/exam/date",
+          "value": "2019-00-00"
+        },
+        {
+          "file": "manifest.json",
+          "op": "set",
+          "pointer": "/exam/dateUnknown",
+          "value": true
+        }
+      ]
     }
   ]
 }

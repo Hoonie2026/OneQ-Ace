@@ -45,7 +45,7 @@ export function PackDetail(props: { packId: string; onBack: () => void; onBackup
           </div>
           <div>
             <dt>시행일</dt>
-            <dd>{m.exam.date}</dd>
+            <dd>{m.exam.dateUnknown ? "시행일 모름" : m.exam.date}</dd>
           </div>
           <div>
             <dt>출처</dt>

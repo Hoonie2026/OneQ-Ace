@@ -17,7 +17,8 @@ export interface PackManifest {
   packId: string;
   packVersion: number;
   cert: { code: string; name: string; grade: string };
-  exam: { year: number; round: number; roundLabel?: string; date: string };
+  /** year 0·date '0000-00-00' = 시행일 모름("0000년 nn회"), 'YYYY-00-00' = 연도·회차만 앎 (ADR 021 2절) */
+  exam: { year: number; round: number; roundLabel?: string; date: string; dateUnknown?: boolean };
   subjects: {
     no: number; name: string; count: number; examCount?: number; isLaw: boolean;
     /** 단원 = 출제기준 세부항목(ADR 021 4.1) — 전처리기 v0.5 팩부터 */
@@ -116,8 +117,12 @@ export async function validateFiles(files: Record<string, Uint8Array>): Promise<
   }
 
   const pid = manifest.packId;
-  const exp = `${manifest.cert.code}-${manifest.exam.year}-${manifest.exam.round}`;
+  const ex = manifest.exam;
+  const exp = `${manifest.cert.code}-${String(ex.year).padStart(4, '0')}-${ex.round}`;
   if (pid !== exp) add('PACK_ID', `packId ${pid} ≠ 종목-연도-회차 ${exp}`);
+  // 연도 0 = 시행일 모름("0000년 nn회") — dateUnknown과 짝, 그 밖의 연도는 1990 이상(ADR 021 2절)
+  if ((ex.year === 0 && ex.dateUnknown !== true) || (ex.year > 0 && ex.year < 1990)) add('SCHEMA', `exam.year ${ex.year}: 0(시행일 모름, dateUnknown true) 또는 1990 이상`);
+  if (!ex.dateUnknown && ex.date.includes('-00')) add('SCHEMA', `exam.date ${ex.date}: 시행일을 모르면 dateUnknown true`);
   if (questions.length !== manifest.questionCount) {
     add('COUNT_MISMATCH', `문항 ${questions.length}개 ≠ questionCount ${manifest.questionCount}`);
   }

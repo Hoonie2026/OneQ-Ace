@@ -24,7 +24,8 @@ export function isCorrect(q: Pick<QuestionRow, 'answer' | 'acceptAlso'>, chosen:
 }
 
 export function examLabel(m: { exam: { year: number; round: number; roundLabel?: string } }): string {
-  return `${m.exam.year}년 ${m.exam.roundLabel ?? `${m.exam.round}회`}`;
+  // 연도 0 = 시행일 모름 → "0000년 n회"(ADR 021 2절)
+  return `${String(m.exam.year).padStart(4, '0')}년 ${m.exam.roundLabel ?? `${m.exam.round}회`}`;
 }
 
 /** 문항별 가장 최근 풀이(조건에 맞는 것만) */

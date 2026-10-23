@@ -88,9 +88,15 @@ def validate_files(files: dict[str, bytes], schema: dict | None = None, deep: bo
             issues.append(Issue("EXTRA_FILE", f"목록에 없는 파일: {path}"))
 
     pid = manifest["packId"]
-    exp = f"{manifest['cert']['code']}-{manifest['exam']['year']}-{manifest['exam']['round']}"
+    ex = manifest["exam"]
+    exp = f"{manifest['cert']['code']}-{ex['year']:04d}-{ex['round']}"
     if pid != exp:
         issues.append(Issue("PACK_ID", f"packId {pid} ≠ 종목-연도-회차 {exp}"))
+    # 연도 0 = 시행일 모름("0000년 nn회") — dateUnknown과 짝, 그 밖의 연도는 1990 이상(ADR 021 2절)
+    if (ex["year"] == 0 and ex.get("dateUnknown") is not True) or 0 < ex["year"] < 1990:
+        issues.append(Issue("SCHEMA", f"exam.year {ex['year']}: 0(시행일 모름, dateUnknown true) 또는 1990 이상"))
+    if not ex.get("dateUnknown") and "-00" in ex["date"]:
+        issues.append(Issue("SCHEMA", f"exam.date {ex['date']}: 시행일을 모르면 dateUnknown true"))
 
     if len(questions) != manifest["questionCount"]:
         issues.append(Issue("COUNT_MISMATCH", f"문항 {len(questions)}개 ≠ questionCount {manifest['questionCount']}"))

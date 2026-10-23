@@ -34,20 +34,17 @@ def win(qtbot, tmp_path, monkeypatch):
     return w
 
 
-def test_plan_and_date_entry(win, tmp_path):
+def test_plan_reads_content_not_filename(win, tmp_path):
+    """v0.5(ADR 021 2절): 시행일·회차는 파일 이름이 아니라 내용에서 — 열 수 없는 파일은 오류로 표시."""
     a = tmp_path / "토목기사_2024_3회_경향문제.pdf"
     b = tmp_path / "건설안전기사20220305(교사용).pdf"
     a.write_bytes(b"%PDF-1.4")
-    b.write_bytes(b"%PDF-1.4")
+    b.write_bytes(b"%PDF-1.4 x")
     win.add_paths([tmp_path])
     assert [r.pdf.name for r in win.rows] == sorted([a.name, b.name])
-    i = [r.pdf.name for r in win.rows].index(a.name)
-    from oneq_prep.gui.app import C_MSG, C_STATUS
-    assert win.rows[i].status == "error" and "시행일" in win.table.item(i, C_MSG).text()
-    assert win.table.item(i, C_STATUS).data(0x0100) == "needdate"
-    win.table.item(i, 1).setText("2024-07-05")
-    win.refresh_plan()
-    assert win.rows[i].pack_id == "SAFETY-2024-3" and win.rows[i].status == "waiting"
+    from oneq_prep.gui.app import C_MSG
+    for i in range(2):
+        assert win.rows[i].status == "error" and "열 수 없" in win.table.item(i, C_MSG).text()
     assert "만든 사람" not in (win.check_inputs(win.pdfs) or "")
 
 

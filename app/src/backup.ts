@@ -84,7 +84,7 @@ export async function buildBackup(appVersion: string, d: OneQDB = defaultDb): Pr
     packs: (await d.packs.toArray()).map((p) => ({
       packId: p.packId,
       packVersion: p.packVersion,
-      title: `${p.manifest.cert.name} ${p.manifest.exam.year}년 ${p.manifest.exam.roundLabel ?? `${p.manifest.exam.round}회`}`,
+      title: `${p.manifest.cert.name} ${String(p.manifest.exam.year).padStart(4, '0')}년 ${p.manifest.exam.roundLabel ?? `${p.manifest.exam.round}회`}`,
     })),
     settings: (await d.settings.toArray()).filter((s) => !(Object.values(SETTING) as string[]).includes(s.key)),
     attempts: (await d.attempts.orderBy('ts').toArray()).map(strip),

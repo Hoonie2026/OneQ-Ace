@@ -94,6 +94,8 @@ class Profile:
         return None
 
     def is_legacy(self, date: str) -> bool:
+        if not date or date.startswith("0000"):
+            return False                                  # 시행일 모름("0000년 nn회") — 옛 기준인지 알 수 없음
         return bool(self.legacy and date < self.legacy["before"])
 
 
