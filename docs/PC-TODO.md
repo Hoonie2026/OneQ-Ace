@@ -16,7 +16,7 @@
   - 현행 게시물 = 보고서 보기 창(`cst006Report(종목코드, 번호)` → Crownix HTML5 Viewer `pageLink.do?link=cst/cstReport`) → [저장] → PDF. 예전 게시물은 HWP 첨부. Claude가 자동 클릭하면 오류 페이지(`error_pop.jsp?c=-213`)
   - 사용자가 받은 토목기사 PDF(13쪽, 글자 PDF, 표 추출 잘 됨) → 저장소 `preprocessor/tests/fixtures/standards/CIVIL-qnet-2026-2027.pdf`. PC의 `preprocessor/tests/fixtures/web/3-…pdf`는 지워도 됨(커밋 안 됨)
 - [ ] **P17 보기 창 PDF 자동 받기 확인**(A2 때, Claude in Chrome): 보기 창이 PDF를 받아 오는 네트워크 요청을 보고 전처리기가 직접 부를 수 있는지. 안 되면 "보기 창에서 [저장]한 PDF를 끌어다 놓기" 안내
-- [ ] **P18 출제기준 표본 더 받기**(사용자, A1 시험용): 측량및지형공간정보기사·건설안전기사 현행 출제기준 PDF — 보기 창 [저장] → `preprocessor/tests/fixtures/web/`에 두면 Claude가 저장소로 옮김. A1 파서는 토목기사 1개로만 맞춰 놓음(2026-10-24) → 표가 다르게 생긴 종목에서 깨지는지 이 표본으로 확인. 측량 1과목 단원 실측(C2·P8)에도 측량 출제기준이 필요
+- [x] **P18 출제기준 표본 더 받기** — 2026-10-24 받음: 건설안전기사(2026.1.1~2030.12.31, 32쪽)·측량및지형공간정보기사(2025.1.1~2027.12.31) → 저장소 `fixtures/standards/SAFETY-qnet-2026-2030.pdf`·`SURVEY-qnet-2025-2027.pdf`, 파서 보완(쪽 끝에서 잘린 주요항목, 번호 없는 세세항목, 줄 잇기 규칙). PC `fixtures/web/`의 3개는 지워도 됨. 원래 요청:(사용자, A1 시험용): 측량및지형공간정보기사·건설안전기사 현행 출제기준 PDF — 보기 창 [저장] → `preprocessor/tests/fixtures/web/`에 두면 Claude가 저장소로 옮김. A1 파서는 토목기사 1개로만 맞춰 놓음(2026-10-24) → 표가 다르게 생긴 종목에서 깨지는지 이 표본으로 확인. 측량 1과목 단원 실측(C2·P8)에도 측량 출제기준이 필요
 
 ## 2. OCR 엔진 고르기 (→ 문항 글자 확보 → 모든 분류의 전제)
 - [x] **P3 Windows 내장 OCR 한국어** — 2026-10-24: 사용자 PC `Language.OCR~~~ko-KR` Installed. 사내 기본 상태인지는 동료 PC 한 대에서 같은 명령(`Get-WindowsCapability -Online | ? Name -like 'Language.OCR*'`)으로 한 번 더(P14 때 함께)

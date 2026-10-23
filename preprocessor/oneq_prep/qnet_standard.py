@@ -46,6 +46,7 @@ class Major:
     no: int
     name: str
     details: list[Detail] = field(default_factory=list)
+    raw_no: int | None = field(default=None, repr=False)   # 문서에 적힌 번호(없을 수 있음)
 
 
 @dataclass
@@ -78,28 +79,62 @@ class StandardDoc:
 
 # ───────────────────────── 칸 글자 ─────────────────────────
 
-def _is_word_char(c: str) -> bool:
-    return c.isalnum()
+class _Joiner:
+    """칸 안 줄 잇기. 보기 창은 칸 폭에서 글자 단위로 줄을 바꾸며 그 자리 띄어쓰기를 지운다.
+    줄 끝 남은 폭만으로는 못 가른다(실측: 낱말 중간 "안전과|의" 11.6pt, 낱말 사이 "체제 및|운용" 11.5pt) →
+    1) 다음 첫 글자가 확실히 들어갈 자리가 남았으면 띄움(그 자리에서 바꿀 까닭은 띄어쓰기뿐)
+    2) "및·등·또는" 앞뒤, 쉼표 뒤는 띄움
+    3) 같은 문서의 한 줄 안(띄어쓰기 믿을 수 있음)에 "앞말 뒷말"/"앞말뒷말" 중 한쪽만 나오면 그쪽
+    4) 앞 낱말이 두 글자 이상이고 "~한·~는·~된·~할·~될"로 끝나면 띄움(관한 사항, 요구되는 사항)
+    5) 나머지는 붙임(글자 단위 줄바꿈이 훨씬 흔함)"""
 
+    SPACE_WORDS = {"및", "등", "또는", "와", "과"}
+    ADNOMINAL = ("한", "는", "된", "할", "될")
 
-def _cell_text(page, bbox) -> str:
-    """칸 안 글자. 보기 창이 칸 폭에 맞춰 줄을 바꾸며 그 자리 띄어쓰기를 지운다 →
-    줄 끝에 다음 줄 첫 글자가 들어갈 자리가 남았으면 낱말 사이에서 바뀐 것(띄움), 아니면 낱말 중간(붙임)."""
-    x0, top, x1, bottom = bbox
-    crop = page.crop((x0, top, x1, bottom), strict=False)
-    lines = [ln for ln in crop.extract_text_lines(return_chars=True) if ln["text"].strip()]
-    if not lines:
-        return ""
-    inner_right = x1 - 2.0                        # 칸 안쪽 여백
-    out = lines[0]["text"].strip()
-    for prev, cur in zip(lines, lines[1:]):
-        nxt = cur["text"].strip()
+    def __init__(self):
+        self.corpus: list[str] = []
+
+    def learn(self, lines: list[dict]) -> None:
+        self.corpus.extend(re.sub(r"\s+", " ", ln["text"]).strip() for ln in lines)
+
+    def _seen(self, s: str) -> int:
+        return sum(s in c for c in self.corpus)
+
+    def spaced(self, prev: dict, cur: dict, cell_x1: float, pad: float) -> bool:
+        a, b = prev["text"].rstrip(), cur["text"].lstrip()
+        if not a or not b:
+            return False
+        if b[0] in "·)]" or a[-1] in "·([" or (b[0] == "(" and a[-1].isalnum()):
+            return False                                  # "추정|·결정", "시스템|(GIS)"
         first = next((ch for ch in cur["chars"] if ch["text"].strip()), None)
-        need = (first["x1"] - first["x0"]) if first else 8.0
-        room = inner_right - prev["x1"]
-        spaced = room >= need * 0.9 and out and _is_word_char(out[-1]) and _is_word_char(nxt[0])
-        out += (" " if spaced else "") + nxt
-    return re.sub(r"\s+", " ", out).strip()
+        need = (first["x1"] - first["x0"]) if first else 10.0
+        if cell_x1 - prev["x1"] >= need + pad + 0.5:
+            return True
+        tail, head = a.split()[-1], b.split()[0]
+        if tail in self.SPACE_WORDS or head in self.SPACE_WORDS or a.endswith(","):
+            return True
+        if not (a[-1].isalnum() and b[0].isalnum()):
+            return False
+        sp, jn = self._seen(f"{tail} {head}"), self._seen(f"{tail}{head}")
+        if sp and not jn:
+            return True
+        if jn and not sp:
+            return False
+        return len(tail) >= 2 and tail.endswith(self.ADNOMINAL)
+
+    def join(self, lines: list[dict], bbox) -> str:
+        if not lines:
+            return ""
+        pad = max(0.5, min(4.0, lines[0]["x0"] - bbox[0]))
+        out = lines[0]["text"].strip()
+        for prev, cur in zip(lines, lines[1:]):
+            out += (" " if self.spaced(prev, cur, bbox[2], pad) else "") + cur["text"].strip()
+        return re.sub(r"\s+", " ", out).strip()
+
+
+def _cell_lines(page, bbox) -> list[dict]:
+    crop = page.crop(bbox, strict=False)
+    return [ln for ln in crop.extract_text_lines(return_chars=True) if ln["text"].strip()]
 
 
 def _split_no(text: str) -> tuple[int | None, str]:
@@ -109,11 +144,8 @@ def _split_no(text: str) -> tuple[int | None, str]:
     return int(m.group(1)), text[m.end():].strip()
 
 
-def _rows(page, table) -> list[list[str | None]]:
-    rows = []
-    for r in table.rows:
-        rows.append([(_cell_text(page, c) if c else None) for c in r.cells])
-    return rows
+def _rows(page, table, joiner: _Joiner) -> list[list[str | None]]:
+    return [[(joiner.join(_cell_lines(page, c), c) if c else None) for c in r.cells] for r in table.rows]
 
 
 def _flat(text: str | None) -> str:
@@ -178,8 +210,14 @@ class _Builder:
         if major:
             no, name = _split_no(major)
             cur = s.majors[-1] if s.majors else None
-            if cur is None or not self._same(cur.name, name):
-                s.majors.append(Major(len(s.majors) + 1, name))
+            a, b = (S.norm(cur.name), S.norm(name)) if cur else ("", "")
+            if cur is not None and (a == b or (no is not None and no == cur.raw_no and (a.startswith(b) or b.startswith(a)))):
+                if len(name) > len(cur.name):
+                    cur.name = name                       # 쪽 끝에서 잘린 칸 → 긴 쪽
+            elif cur is not None and no is None and page_first and a.endswith(b):
+                pass                                      # 쪽을 넘어 잘린 칸의 나머지("…관한" | "사항")
+            else:
+                s.majors.append(Major(len(s.majors) + 1, name, raw_no=no))
                 if no is not None and no != len(s.majors):
                     self.warnings.append(f"{s.name}: 주요항목 번호 {no} ≠ 순서 {len(s.majors)} ('{name}')")
         if not s.majors:
@@ -200,9 +238,9 @@ class _Builder:
                 self.warnings.append(f"{s.name}: 세부항목 없이 세세항목이 나옴")
             d = m.details[-1]
             no, name = _split_no(item)
-            if page_first and d.items and no is not None and _split_no(d.items[-1])[0] == no:
+            if page_first and d.items and no is not None and d.item_nos[-1] == no:
                 return                                    # 쪽 첫 줄 되풀이
-            if no is None and d.items:
+            if no is None and d.items and page_first and d.item_nos[-1] is not None:
                 d.items[-1] = d.items[-1] + " " + name     # 쪽을 넘어 이어진 세세항목
             else:
                 d.items.append(name)
@@ -224,17 +262,24 @@ def parse(pdf_path: Path) -> StandardDoc:
         pdf = pdfplumber.open(str(pdf_path))
     except Exception as e:                          # 깨진 파일·PDF 아님
         raise StandardPdfError(f"PDF를 열 수 없습니다: {pdf_path.name} ({e})") from e
+    joiner = _Joiner()
     with pdf:
-        for page in pdf.pages:
+        found = [(page, page.find_tables()) for page in pdf.pages]
+        for page, tables in found:                  # 1차: 한 줄 안 글자(띄어쓰기 믿을 수 있음) 모으기
+            for t in tables:
+                for r in t.rows:
+                    for c in r.cells:
+                        if c:
+                            joiner.learn(_cell_lines(page, c))
+        for page, tables in found:
             text = _flat(page.extract_text() or "")
             if "출제기준(실기)" in text:
                 section = "practical"
             elif "출제기준(필기)" in text:
                 section = "written"
-            tables = page.find_tables()
             page_first = True
             for t in tables:
-                rows = _rows(page, t)
+                rows = _rows(page, t, joiner)
                 if not rows:
                     continue
                 hdr = [_flat(c) for c in rows[0]]
@@ -286,7 +331,7 @@ def _check(doc: StandardDoc) -> None:
             for d in m.details:
                 if not d.items:
                     w.append(f"{s.name} · {d.name}: 세세항목이 없음")
-                elif d.item_nos != list(range(1, len(d.item_nos) + 1)):
+                elif any(n is not None for n in d.item_nos) and d.item_nos != list(range(1, len(d.item_nos) + 1)):
                     w.append(f"{s.name} · {d.name}: 세세항목 번호가 1부터 이어지지 않음 {d.item_nos}")
 
 
@@ -307,11 +352,14 @@ def to_profile(doc: StandardDoc, code: str, base: S.Profile | None = None, sourc
     - 과목 이름이 바뀐 것은 note에 남긴다(별칭은 자동으로 만들지 않음 — 순서만 같다고 같은 과목이라 할 수 없음)"""
     if not S.CODE_RE.match(code):
         raise ValueError("종목 코드는 영문 대문자로 시작하는 2~16자(예: CIVIL)")
+    def loose(n: str) -> str:                       # 괄호 속 덧붙임까지 무시("…위성측위시스템(GNSS)" = "…위성측위시스템")
+        return S.norm(re.sub(r"[(（][^)）]*[)）]", "", n))
     base_by_norm = {S.norm(s["name"]): s for s in (base.subjects if base else [])}
+    base_by_norm.update({loose(s["name"]): s for s in (base.subjects if base else []) if loose(s["name"]) not in base_by_norm})
     subjects = []
     renamed = []
     for s in doc.subjects:
-        old = base_by_norm.get(S.norm(s.name))
+        old = base_by_norm.get(S.norm(s.name)) or base_by_norm.get(loose(s.name))
         name = old["name"] if old else s.name
         d: dict = {"name": name, "count": s.count}
         if old and old.get("isLaw"):
@@ -328,6 +376,8 @@ def to_profile(doc: StandardDoc, code: str, base: S.Profile | None = None, sourc
     if doc.minutes:
         note += f", {doc.minutes // 60}시간" + (f" {doc.minutes % 60}분" if doc.minutes % 60 else "")
     note += ")"
+    if base and base.note and not base.note.startswith("큐넷 출제기준"):
+        note += ". " + base.note                    # 손으로 적은 메모(옛 기준 합치기 등)는 이어 둠
     if renamed:
         note += f". 이전 프로필에만 있는 과목: {', '.join(renamed)} — 별칭·제외는 직접 확인"
     prof = {

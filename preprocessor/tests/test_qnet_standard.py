@@ -90,3 +90,66 @@ def test_not_a_standard_pdf(tmp_path):
     bad.write_bytes(b"not a pdf")
     with pytest.raises(Q.StandardPdfError):
         Q.parse(bad)
+
+
+# ── 다른 종목(2026-10-24 받은 표본): 표 모양이 토목기사와 다른 곳 ──
+
+SAFETY_PDF = Path(__file__).parent / "fixtures" / "standards" / "SAFETY-qnet-2026-2030.pdf"
+SURVEY_PDF = Path(__file__).parent / "fixtures" / "standards" / "SURVEY-qnet-2025-2027.pdf"
+
+
+@pytest.fixture(scope="module")
+def safety():
+    return Q.parse(SAFETY_PDF)
+
+
+@pytest.fixture(scope="module")
+def survey():
+    return Q.parse(SURVEY_PDF)
+
+
+def _units(doc):
+    return [(s.name, len(s.majors), sum(len(m.details) for m in s.majors)) for s in doc.subjects]
+
+
+def test_safety(safety):
+    assert (safety.cert_name, safety.period_from, safety.period_to) == ("건설안전기사", "2026-01-01", "2030-12-31")
+    assert safety.total_count == 100 and safety.minutes == 150 and safety.warnings == []
+    assert [x[1:] for x in _units(safety)] == [(6, 16), (6, 19), (2, 15), (7, 19), (6, 11)]
+    assert safety.unit_count() == 80
+
+
+def test_safety_major_split_across_pages(safety):
+    """긴 주요항목 칸이 쪽 끝에서 잘려 다음 쪽 첫 줄에 "사항"만 남는다 → 같은 주요항목으로 합침."""
+    mat = safety.subjects[2]
+    assert [m.name for m in mat.majors] == ["건설재료 일반", "각종 건설재료의 특성, 용도, 규격에 관한 사항"]
+    d = mat.majors[1].details
+    assert [x.no for x in d] == list(range(1, 12)) and d[0].name == "목재" and len(d[0].items) >= 2
+
+
+def test_wrap_spacing_other_certs(safety, survey):
+    names = {d.name for doc in (safety, survey) for s in doc.subjects for m in s.majors for d in m.details}
+    majors = {m.name for doc in (safety, survey) for s in doc.subjects for m in s.majors}
+    subjects = {s.name for doc in (safety, survey) for s in doc.subjects}
+    assert "산업재해 예방 및 안전보건교육" in subjects                  # "안|전보건교육" 붙임
+    assert {"인간의 특성과 안전과의 관계", "근골격계 유해요인 관리", "안전관리 고려사항 확인",
+            "안전보건교육계획 수립 및 실시", "시스템 위험성 추정 및 결정", "건설공사 위험성 추정·결정",
+            "단곡선 설치와 계산 및 이용방법"} <= names
+    assert {"측량학에 대한 전문적인 지식이 요구되는 사항", "위성 측위시스템(GNSS)", "지리정보 시스템(GIS)"} <= majors
+
+
+def test_survey(survey):
+    assert (survey.cert_name, survey.period_from, survey.period_to) == ("측량및지형공간정보기사", "2025-01-01", "2027-12-31")
+    assert survey.warnings == []
+    assert [x[1:] for x in _units(survey)] == [(2, 12), (8, 21), (2, 10), (2, 7), (2, 13)]
+    net = survey.subjects[0].majors[0].details[3]
+    assert net.name == "수평 및 수직 측지망" and net.items == ["평면기준측량", "수준점측량"]   # 번호 없는 세세항목
+
+
+def test_bundled_profiles_keep_old_subject_names():
+    """이미 만든 팩과 과목명이 맞아야 함 — "측지학 및 위성측위시스템(GNSS)"도 옛 표기 그대로, 옛 기준 합치기 별칭·재배정 유지."""
+    sv, sf = S.load("SURVEY"), S.load("SAFETY")
+    assert sv.subjects[0]["name"] == "측지학 및 위성측위시스템" and sv.legacy and sv.period["from"] == "2025-01-01"
+    assert sf.resolve("산업안전관리론") == ("std", 1, "산업재해 예방 및 안전보건교육")
+    assert sf.subjects[4]["name"] == "건설공사 안전관리" and "ADR 016" in sf.note
+    assert sum(len(sv.units(s["name"])) for s in sv.subjects) == 63
