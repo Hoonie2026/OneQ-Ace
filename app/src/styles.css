@@ -3781,3 +3781,45 @@ details.why summary {
   padding: 0 14px;
   font-size: 16px;
 }
+
+/* ── 단원별·유형별(ADR 021 4절, 앱 C3) ── */
+.subj-rows li { flex-wrap: wrap; }
+.btn.subj-detail-btn { flex: none; min-height: 46px; }
+.subj-detail-title { margin: 0 0 10px; font-size: 20px; }
+.tabs { display: flex; gap: 8px; margin: 4px 0 10px; flex-wrap: wrap; }
+.tab-btn {
+  flex: 1 1 0;
+  min-height: var(--tap);
+  padding: 0 12px;
+  border: 1px solid var(--primary);
+  border-radius: 12px;
+  background: transparent;
+  color: var(--primary);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+.tab-btn.on { background: var(--primary); color: var(--primary-ink); }
+.tabs-small .tab-btn { min-height: 40px; font-size: 14px; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 8px; }
+.unit-group { margin-top: 10px; }
+.unit-major { margin: 10px 0 2px; font-size: 14px; color: var(--muted); font-weight: 700; }
+.unit-rows { list-style: none; margin: 0; padding: 0; }
+.unit-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 10px 0;
+  border-top: 1px solid var(--line);
+}
+.unit-name { flex: 1 1 160px; min-width: 0; font-weight: 700; word-break: keep-all; }
+.unit-count { flex: none; font-size: 14px; }
+.law-note, .bundle-tip { font-size: 13px; margin: 10px 0 0; }
+.unit-ask { margin-top: 10px; padding-top: 8px; border-top: 1px dashed var(--line); }
+.unit-ask-q { display: block; font-size: 14px; font-weight: 700; margin-bottom: 6px; }
+.unit-ask-done { margin-top: 8px; font-size: 13px; }
+.chip-btn.ghost { opacity: 0.75; }
+.mix-tip { margin: 0 0 10px; font-size: 15px; line-height: 1.5; }
+.toggle-row { display: flex; gap: 10px; align-items: flex-start; margin-top: 10px; font-size: 15px; line-height: 1.45; }
+.toggle-row input { width: 20px; height: 20px; margin-top: 2px; flex: none; }

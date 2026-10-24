@@ -14,7 +14,8 @@ import {
   type Fingerprint,
   type RestoreReport,
 } from '../backup';
-import { db, describeError, getSetting, isStandalone, SETTING, STAGE0_DB_NAME } from '../db';
+import { db, describeError, getSetting, isStandalone, setSetting, SETTING, STAGE0_DB_NAME } from '../db';
+import { ASK_UNIT_SETTING, askUnitEnabled } from '../units';
 import { deletePacks, wipeAll, wipeCertRecords, wipeRecords } from '../wipe';
 import { deviceEnv, deviceNoun, deviceSummary, formatBytes, readStorageInfo, storagePlace, type StorageInfo } from '../util';
 import { examLabel } from '../study';
@@ -46,6 +47,10 @@ export function Settings(props: {
   onPack: (packId: string) => void;
 }) {
   const [packs, setPacks] = useState<PackRow[]>([]);
+  const [askUnit, setAskUnit] = useState(true);
+  useEffect(() => {
+    void askUnitEnabled().then(setAskUnit);
+  }, []);
   const [fp, setFp] = useState<Fingerprint | null>(null);
   const [lastBackup, setLastBackup] = useState<number | null>(null);
   const [newSince, setNewSince] = useState(0);
@@ -307,6 +312,13 @@ export function Settings(props: {
           모든 문항에서 보기 아래 줄 <b>[계산기] [메모]</b>를 누르면 열리고, 한 번 더 누르면 닫힙니다. 같은 문항에서는 오가도 내용이 그대로, 메모는 다음 문항에서 새 장입니다.
         </p>
         <p className="hint">PC 키보드: 1~4 보기, M 모름, E 쉬움, Enter 다음, ← 이전.</p>
+        <label className="toggle-row">
+          <input type="checkbox" checked={askUnit} onChange={async (e) => {
+            setAskUnit(e.target.checked);
+            await setSetting(ASK_UNIT_SETTING, e.target.checked);
+          }} data-testid="ask-unit" />
+          <span>답한 뒤 <b>단원 미정</b> 문항의 단원 묻기(후보 3개 중 고르기 — 고른 단원은 단원별 학습에 쓰여요)</span>
+        </label>
       </section>
 
       <section className="card" data-testid="pack-section">

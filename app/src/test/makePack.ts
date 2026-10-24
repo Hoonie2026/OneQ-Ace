@@ -5,6 +5,14 @@ export interface FakeQ {
   hash: string; // contentHash 뒤 16자리를 만들 씨앗
   answer?: number;
   subjectNo?: number;
+  /** 문항 글(기본 "문항 hash") — 같은 글이면 엔진이 같은 문항 묶음으로 본다 */
+  text?: string;
+  /** ADR 021 4절 선택 칸 */
+  unit?: string;
+  unitCandidates?: string[];
+  qtype?: 'calc' | 'law' | 'concept';
+  sequence?: boolean;
+  lawRefs?: string[];
 }
 
 const enc = (o: unknown) => new TextEncoder().encode(JSON.stringify(o));
@@ -22,7 +30,7 @@ const WEBP_1PX = Uint8Array.from(
   (c) => c.charCodeAt(0),
 );
 
-export async function makePack(opts: { code?: string; year?: number; round?: number; version?: number; questions: FakeQ[]; examCount?: Record<number, number> }): Promise<Uint8Array> {
+export async function makePack(opts: { code?: string; year?: number; round?: number; version?: number; questions: FakeQ[]; examCount?: Record<number, number>; units?: Record<number, { id: string; major: string; name: string }[]> }): Promise<Uint8Array> {
   const code = opts.code ?? 'TEST';
   const year = opts.year ?? 2022;
   const round = opts.round ?? 1;
@@ -47,12 +55,16 @@ export async function makePack(opts: { code?: string; year?: number; round?: num
       answerCheck: 'single',
       img,
       imgSize: [8, 8],
-      text: `문항 ${q.hash}`,
+      text: q.text ?? `문항 ${q.hash}`,
       contentHash: `t:${await hash16(q.hash)}`,
       keywords: [],
-      lawRefs: [],
+      lawRefs: q.lawRefs ?? [],
       clusterId: null,
-      flags: [],
+      flags: q.lawRefs?.length ? ['law'] : [],
+      ...(q.unit ? { unit: q.unit } : {}),
+      ...(q.unitCandidates ? { unitCandidates: q.unitCandidates } : {}),
+      ...(q.qtype ? { qtype: q.qtype } : {}),
+      ...(q.sequence ? { sequence: true } : {}),
     });
   }
   files['questions.json'] = enc(questions);
@@ -62,7 +74,7 @@ export async function makePack(opts: { code?: string; year?: number; round?: num
     packVersion: opts.version ?? 1,
     cert: { code, name: '시험용 종목', grade: '기사' },
     exam: { year, round, date: `${year}-03-05` },
-    subjects: subjectsUsed.map((no) => ({ no, name: `과목${no}`, count: counters.get(no)!, ...(opts.examCount?.[no] ? { examCount: opts.examCount[no] } : {}), isLaw: false })),
+    subjects: subjectsUsed.map((no) => ({ no, name: `과목${no}`, count: counters.get(no)!, ...(opts.examCount?.[no] ? { examCount: opts.examCount[no] } : {}), isLaw: false, ...(opts.units?.[no] ? { units: opts.units[no] } : {}) })),
     passRule: { subjectMin: 40, avgMin: 60 },
     questionCount: questions.length,
     source: { type: 'other', note: 'test' },

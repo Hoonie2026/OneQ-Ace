@@ -1,3 +1,4 @@
+import { UnitAsk } from './UnitAsk';
 import { useEffect, useRef, useState } from 'react';
 import { db, type AttemptRow, type QuestionRow } from '../db';
 import { deadlineOf, easyToUnknown, examLabel, finishRun, firstUnanswered, loadSession, pauseRun, recordAnswer, resumeRun, saveNote, type Session, type Target } from '../study';
@@ -425,6 +426,7 @@ export function Solve(props: { target: Target; /** 나가기 — 과목별 학�
                   </button>
                 )}
               </div>
+              <UnitAsk certCode={s!.run?.certCode ?? s!.pack.manifest.cert.code} q={q} />
               {noteOpen && (
                 <textarea
                   className="note"

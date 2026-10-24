@@ -7,6 +7,7 @@ import { CoachCard } from './CoachCard';
 import { MockPanel } from './MockPanel';
 import { PackPicker } from './PackPicker';
 import { SubjectList } from './SubjectList';
+import { SubjectDetail } from './SubjectDetail';
 import { ForecastView } from './ForecastView';
 import { Principles } from './Principles';
 import { computeInsight, type Insight } from '../insight';
@@ -15,11 +16,12 @@ import { InstallGuide } from './InstallGuide';
 import { BackButton, BrandLogo, Icon } from './Icon';
 
 /** 홈 안의 보기: 홈 / 과목 골라서 / 모의고사(ADR 010 — 홈에는 오늘 학습만, 나머지는 한 번 더 들어가서) */
-type View = 'home' | 'recommend' | 'subjects' | 'mock' | 'forecast' | 'principles';
+type View = 'home' | 'recommend' | 'subjects' | 'subject' | 'mock' | 'forecast' | 'principles';
 
 const TITLES: Record<Exclude<View, 'home'>, string> = {
   recommend: '시스템 추천 학습',
   subjects: '과목별 학습',
+  subject: '단원별·유형별',
   mock: '모의고사',
   forecast: '예상 점수 계산',
   principles: '학습 원리',
@@ -57,6 +59,7 @@ export function Home(props: {
   const [view, setView] = useState<View>(props.initialView ?? 'home');
   const [lastMock, setLastMock] = useState<{ date: string; score: number } | null>(null);
   const [starting, setStarting] = useState(false);
+  const [detailKey, setDetailKey] = useState<string | null>(null);
   const [insight, setInsight] = useState<Insight | null>(null);
 
   // 보기를 바꾸면 맨 위부터(학습 원리 단추는 홈 맨 아래에 있다)
@@ -202,14 +205,29 @@ export function Home(props: {
           )}
           {view !== 'home' && (
             <header className="page-head sub-head">
-              <BackButton label="홈" aria="홈으로" onClick={() => setView('home')} testId="back-home" />
+              {view === 'subject' ? (
+                <BackButton label="과목" aria="과목별 학습으로" onClick={() => setView('subjects')} testId="back-subjects" />
+              ) : (
+                <BackButton label="홈" aria="홈으로" onClick={() => setView('home')} testId="back-home" />
+              )}
               <h1>{TITLES[view]}</h1>
             </header>
           )}
           {view === 'recommend' && <RecommendView coach={coach} busy={starting} onStart={() => start('today')} />}
           {view === 'forecast' && <ForecastView coach={coach} />}
           {view === 'principles' && <Principles />}
-          {view === 'subjects' && <SubjectList coach={coach} busy={starting} onStudy={(k) => start('subject', k)} />}
+          {view === 'subjects' && (
+            <SubjectList
+              coach={coach}
+              busy={starting}
+              onStudy={(k) => start('subject', k)}
+              onDetail={(k) => {
+                setDetailKey(k);
+                setView('subject');
+              }}
+            />
+          )}
+          {view === 'subject' && detailKey && <SubjectDetail certCode={cert} subjectKey={detailKey} version={props.version} onSolve={props.onSolve} toast={props.toast} />}
           {view === 'mock' && (
             <MockPanel
               certCode={cert}

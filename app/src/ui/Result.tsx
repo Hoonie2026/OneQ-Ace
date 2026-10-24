@@ -18,6 +18,7 @@ export function Result(props: { target: Target; /** 'subjects' = 과목별 학�
   const [history, setHistory] = useState<PassRecord[]>([]);
   const [set, setSet] = useState<{ certCode: string; mode: string; finished: boolean } | null>(null);
   const [subjectKey, setSubjectKey] = useState<string | null>(null);
+  const [bundle, setBundle] = useState<string | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -30,6 +31,7 @@ export function Result(props: { target: Target; /** 'subjects' = 과목별 학�
       setRes(r);
       // 과목을 골라 시작한 학습이면 "이 과목 계속"
       if (s.target.kind === 'set' && s.run.subjectKey) setSubjectKey(s.run.subjectKey);
+      if (s.target.kind === 'set' && s.run.bundle) setBundle(s.run.bundle);
       if (props.target.kind === 'pass' && !props.target.subjectNo) setHistory(await passHistory(s.pack.packId));
     })();
   }, [JSON.stringify(props.target)]);
@@ -168,7 +170,25 @@ export function Result(props: { target: Target; /** 'subjects' = 과목별 학�
             이어서 풀기 ({res.total - res.answered}문항 남음)
           </button>
         )}
-        {set?.mode === 'today' && res.complete && (
+        {set?.mode === 'today' && res.complete && bundle && (
+          <>
+            {/* 몰아 풀기 묶음을 마치면 섞어 풀기로(ADR 021 4.3 — 섞기 72% 대 몰기 38%, Rohrer·Dedrick·Burgess 2014) */}
+            <p className="mix-tip card" data-testid="mix-tip">
+              <b>몰아 풀기 끝!</b> 같은 유형을 몰아 풀면 처음 익히기에 좋고, 실제 시험처럼 <b>섞어서</b> 풀면 어떤 공식을 쓸지 고르는 힘이 붙어 오래 갑니다.
+            </p>
+            <button className="btn btn-primary btn-block" onClick={async () => {
+              const t = set ? await startToday(set.certCode) : null;
+              if (t) props.onSolve(t);
+              else props.onHome();
+            }} data-testid="mix-next">
+              섞어서 풀기(시스템 추천)
+            </button>
+            <button className="btn btn-block" onClick={() => props.onHome('subjects')} data-testid="result-home">
+              다른 묶음 고르기
+            </button>
+          </>
+        )}
+        {set?.mode === 'today' && res.complete && !bundle && (
           <>
             {/* v0.11(ADR 020): "오늘 학습 마치기" 없음 — 계속하거나 홈으로 */}
             <button className="btn btn-primary btn-block" onClick={next} data-testid="today-next">

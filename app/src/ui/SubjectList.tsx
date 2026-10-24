@@ -6,7 +6,7 @@ import { GoalTitle } from './GoalTitle';
  * "학습할 과목을 선택하세요", 과목마다 [학습하기 (n문항)]. 막대·과락선·점수·푼 문항 수는 뺐다(점수는 홈의 누적 점수·예상 점수에서).
  * 오늘 목표는 시스템 추천과 **같은 숫자** — 오늘 푼 문항(어느 쪽에서 풀었든) 만큼 줄어든다. n = 남은 문항과 그 과목에 지금 낼 문항 중 적은 쪽
  */
-export function SubjectList(props: { coach: Coach; busy: boolean; onStudy: (subjectKey: string) => void }) {
+export function SubjectList(props: { coach: Coach; busy: boolean; onStudy: (subjectKey: string) => void; /** 단원별·유형별 몰아 풀기(ADR 021 4절) */ onDetail?: (subjectKey: string) => void }) {
   const { coach } = props;
   const per = Math.max(1, coach.today.left);
   return (
@@ -23,6 +23,11 @@ export function SubjectList(props: { coach: Coach; busy: boolean; onStudy: (subj
               <button className="btn btn-primary subj-go" disabled={props.busy || n === 0} onClick={() => props.onStudy(s.key)} data-testid="subject-study">
                 {n ? `학습하기 (${n}문항)` : '낼 문항 없음'}
               </button>
+              {props.onDetail && (
+                <button className="btn btn-small subj-detail-btn" disabled={props.busy} onClick={() => props.onDetail!(s.key)} data-testid="subject-detail-open">
+                  단원·유형별 ›
+                </button>
+              )}
             </li>
           );
         })}
