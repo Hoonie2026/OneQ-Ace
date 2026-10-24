@@ -20,7 +20,7 @@
 
 - [ ] **P19 큐넷 자동 받기 PC 실측**(A2·A3 코드 뒤, 사용자): ① P0 → `cd preprocessor` → `py -3 -m oneq_prep.qnet 측량및지형공간정보기사 --list` (목록이 나오면 됨) ② `py -3 -m oneq_prep.qnet 토목기사` (받음·프로필 경로 출력) ③ 창 프로그램에서 종목 고르기 → "큐넷 확인/받았어요" 안내가 뜨는지. 클라우드는 큐넷 접속이 막혀 실제 요청은 PC에서만 확인 가능. 받은 PDF·프로필은 사용자 폴더(`%APPDATA%\OneQ-Ace\qnet`, `…\standards`)
 
-- [ ] **P20 comcbt 첫 쪽 받기 PC 실측**(사용자): ① P0 → `cd preprocessor` → `py -3 -m oneq_prep.comcbt 토목기사 C:\Temp\comcbt --list` (최근 회차 목록이 나오면 됨) ② `py -3 -m oneq_prep.comcbt 토목기사 C:\Temp\comcbt` (교사용 PDF가 받아지는지 — 받기 주소가 다른 곳으로 넘겨줘 클라우드·브라우저 시험으로는 확인 못 함) ③ 창 프로그램 [comcbt 최근 기출 받기]
+- [~] **P20 comcbt 첫 쪽 받기 PC 실측** — 2026-10-24 ①② 통과: 첫 판은 메뉴 링크의 작은따옴표를 못 읽어 멈춤 → 고친 뒤(69ac9c6) 토목기사 게시판 n1 첫 쪽 19회차(2016-05-08 ~ 2022-04-24) 목록·교사용 PDF 19개 모두 받음, 실패 0. ③ 창 프로그램 단추는 남음. 원래 요청: ① P0 → `cd preprocessor` → `py -3 -m oneq_prep.comcbt 토목기사 C:\Temp\comcbt --list` (최근 회차 목록이 나오면 됨) ② `py -3 -m oneq_prep.comcbt 토목기사 C:\Temp\comcbt` (교사용 PDF가 받아지는지 — 받기 주소가 다른 곳으로 넘겨줘 클라우드·브라우저 시험으로는 확인 못 함) ③ 창 프로그램 [comcbt 최근 기출 받기]
 
 ## 2. OCR 엔진 고르기 (→ 문항 글자 확보 → 모든 분류의 전제)
 - [x] **P3 Windows 내장 OCR 한국어** — 2026-10-24: 사용자 PC `Language.OCR~~~ko-KR` Installed. 사내 기본 상태인지는 동료 PC 한 대에서 같은 명령(`Get-WindowsCapability -Online | ? Name -like 'Language.OCR*'`)으로 한 번 더(P14 때 함께)
