@@ -55,3 +55,31 @@ class QnetWorker(QObject):
         except Exception as e:  # noqa: BLE001 — 출제기준 PDF 모양이 달라 읽지 못한 경우 등
             self.failed.emit(f"큐넷 출제기준을 읽지 못했습니다({type(e).__name__}: {e}). "
                              "보기 창에서 [저장]한 PDF를 끌어다 놓거나 [과목 직접 입력]을 쓰세요.")
+
+
+class ComcbtWorker(QObject):
+    """comcbt 게시판 첫 쪽의 최근 기출 받기 — 다른 스레드(요청 사이 1초 쉼이 있어 수십 초 걸림)."""
+    progress = Signal(int, int, str)   # 지금 번호, 전체, 글 제목
+    done = Signal(object)              # comcbt.Result
+    failed = Signal(str)
+
+    def __init__(self, cert_name: str, dest, have_dates: set[str]):
+        super().__init__()
+        self.cert_name, self.dest, self.have = cert_name, dest, have_dates
+        self._stop = False
+
+    def stop(self) -> None:
+        self._stop = True
+
+    @Slot()
+    def run(self) -> None:
+        from .. import comcbt
+        try:
+            res = comcbt.fetch_recent(self.cert_name, self.dest, self.have,
+                                      progress=lambda i, n, p: self.progress.emit(i, n, p.title),
+                                      should_stop=lambda: self._stop)
+            self.done.emit(res)
+        except comcbt.ComcbtError as e:
+            self.failed.emit(str(e))
+        except Exception as e:  # noqa: BLE001
+            self.failed.emit(f"{type(e).__name__}: {e}")

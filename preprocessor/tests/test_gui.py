@@ -146,3 +146,25 @@ def test_qnet_result_messages(win):
     from oneq_prep import qnet
     win.on_qnet_failed(str(qnet.QnetChanged()))
     assert "화면이 바뀌어" in win.picker.fail.title.text() and "직접 내려받아" in win.picker.fail.text.text()
+
+
+def test_comcbt_button_adds_files_and_guides(win, qtbot, tmp_path, monkeypatch):
+    """[comcbt 최근 기출 받기] → 받은 PDF가 목록에 들어가고, 이전·최신 회차는 직접 올리라는 안내(사용자 결정 2026-10-24)."""
+    from oneq_prep import comcbt
+    src = ROOT / "source_pdf" / "safety_기출_2003_2022" / "건설안전기사20220424(교사용).pdf"
+    if not src.exists():
+        pytest.skip("건설안전 기출 PDF 없음")
+
+    def fake(name, dest, have, progress=None, should_stop=None):
+        dest.mkdir(parents=True, exist_ok=True)
+        out = dest / src.name
+        out.write_bytes(src.read_bytes())
+        post = comcbt.Post("건설안전기사 필기 기출문제 및 CBT 2022년 04월 24일(2회)", "u", "2022-04-24", "2회")
+        progress and progress(1, 1, post)
+        return comcbt.Result("nj", [post], [out], more_pages=True)
+    monkeypatch.setattr(comcbt, "fetch_recent", fake)
+    win.comcbt_fetch()
+    qtbot.waitUntil(lambda: win.comcbt_thread is None, timeout=30_000)
+    assert [r.pack_id for r in win.rows] == ["SAFETY-2022-2"]
+    assert "1회차" in win.comcbt_note.title.text() and "직접 내려받아" in win.comcbt_note.text.text()
+    assert (tmp_path / "packs" / "기출 PDF" / "건설안전기사" / src.name).exists()

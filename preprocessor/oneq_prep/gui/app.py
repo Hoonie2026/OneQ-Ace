@@ -29,7 +29,7 @@ from .profile_dialog import ProfileDialog
 from .result_dialog import ResultDialog
 from .review_dialog import ReviewDialog
 from .widgets import BadgeDelegate, Card, DropZone, Note, ProgressDelegate
-from .worker import BatchWorker, QnetWorker
+from .worker import BatchWorker, ComcbtWorker, QnetWorker
 
 APP_NAME = "원큐합격 전처리기"
 COLS = ["PDF 파일", "종류", "회차", "진행", "상태", "결과"]
@@ -85,6 +85,7 @@ class MainWindow(QMainWindow):
         self.rows: list[RoundResult] = []
         self.thread: QThread | None = None
         self.qnet_thread: QThread | None = None
+        self.comcbt_thread: QThread | None = None
         self.worker: BatchWorker | None = None
         self.peek_thread: QThread | None = None
         self.peek_cache: dict[Path, list[str]] = {}
@@ -238,6 +239,13 @@ class MainWindow(QMainWindow):
             bar.addWidget(b)
             self.pdf_buttons.append(b)
         bar.addStretch(1)
+        # comcbt 게시판 첫 쪽의 최근 기출 받기(사용자 결정 2026-10-24 — 이전·최신 회차는 직접 올림)
+        self.comcbt_btn = QPushButton("comcbt 최근 기출 받기")
+        self.comcbt_btn.setObjectName("primarySmall")
+        self.comcbt_btn.setToolTip("comcbt.com 종목 게시판 첫 쪽의 최근 기출(정답 표시된 교사용 PDF)을 받아 목록에 넣습니다")
+        self.comcbt_btn.clicked.connect(self.comcbt_fetch)
+        bar.addWidget(self.comcbt_btn)
+        self.pdf_buttons.append(self.comcbt_btn)
         c.body.addLayout(bar)
 
         self.stack = QStackedWidget()
@@ -275,6 +283,9 @@ class MainWindow(QMainWindow):
         self.law_note.setVisible(False)
         self.bundle_note = Note("ok")
         self.bundle_note.setVisible(False)
+        self.comcbt_note = Note("info")
+        self.comcbt_note.setVisible(False)
+        c.body.addWidget(self.comcbt_note)
         c.body.addWidget(self.bundle_note)
         c.body.addWidget(self.change_note)
         c.body.addWidget(self.law_note)
@@ -384,6 +395,57 @@ class MainWindow(QMainWindow):
         self.picker.show_failed(msg)
         self.update_ready()
 
+    # ── comcbt 첫 쪽 기출 받기 ──
+    def comcbt_dir(self) -> Path:
+        name = self.picker.current.name if self.picker.current else "기출"
+        return self.out_dir / "기출 PDF" / re.sub(r'[\\/:*?"<>|]+', "_", name)
+
+    def comcbt_fetch(self) -> None:
+        if self.comcbt_thread is not None or not self.picker.current:
+            return
+        from .. import comcbt
+        dest = self.comcbt_dir()
+        have = {r.date for r in self.rows if r.date}
+        if dest.exists():          # 전에 받아 둔 파일(이름의 시행일 8자리)은 다시 받지 않음
+            have |= {f"{m[0:4]}-{m[4:6]}-{m[6:8]}" for f in dest.glob("*.pdf") if (m := (re.findall(r"(\d{8})", f.name) or [""])[0])}
+        self.comcbt_note.set("info", "comcbt.com에서 최근 기출을 받는 중…", comcbt.guide(None, self.picker.current.name))
+        self.comcbt_thread = QThread(self)
+        w = ComcbtWorker(self.picker.current.name, dest, have)
+        w.moveToThread(self.comcbt_thread)
+        self.comcbt_thread.started.connect(w.run)
+        w.progress.connect(self.on_comcbt_progress)
+        w.done.connect(self.on_comcbt_done)
+        w.failed.connect(self.on_comcbt_failed)
+        w.done.connect(self.comcbt_thread.quit)
+        w.failed.connect(self.comcbt_thread.quit)
+        self.comcbt_thread.finished.connect(self._comcbt_finished)
+        self._comcbt_worker = w
+        self.comcbt_thread.start()
+        self.update_ready()
+
+    def _comcbt_finished(self) -> None:
+        self.comcbt_thread.deleteLater()
+        self.comcbt_thread = None
+        self.update_ready()
+
+    def on_comcbt_progress(self, i: int, n: int, title: str) -> None:
+        self.comcbt_note.title.setText(f"comcbt.com에서 최근 기출을 받는 중… ({i}/{n}) {title}")
+
+    def on_comcbt_done(self, res) -> None:
+        from .. import comcbt
+        if res.saved:
+            self.add_paths(res.saved)
+        head = f"comcbt.com에서 {len(res.saved)}회차를 받아 목록에 넣었어요" if res.saved else "새로 받을 회차가 없어요"
+        lines = comcbt.guide(res, self.picker.current.name if self.picker.current else "")
+        if res.skipped:
+            lines.insert(0, f"이미 목록·폴더에 있는 {len(res.skipped)}회차는 건너뜀")
+        lines += [f"받지 못함: {x}" for x in res.failed[:3]]
+        self.comcbt_note.set("ok" if res.saved and not res.failed else "info", head, lines)
+
+    def on_comcbt_failed(self, msg: str) -> None:
+        from .. import comcbt
+        self.comcbt_note.set("warn", "comcbt.com에서 기출을 받지 못했어요", [msg] + comcbt.guide(None, ""))
+
     def pick_standard_pdf(self) -> None:
         f, _ = QFileDialog.getOpenFileName(self, "출제기준 PDF 고르기", self.settings.value("last_dir", ""), "PDF (*.pdf)")
         if f:
@@ -411,7 +473,8 @@ class MainWindow(QMainWindow):
 
     def update_ready(self) -> None:
         """② 기출 PDF는 출제기준이 정해진 뒤에(ADR 021 — 과목·단원이 출제기준에서 오므로)."""
-        ready = bool(self.picker.code) and self.qnet_thread is None and self.worker is None
+        ready = bool(self.picker.code) and self.qnet_thread is None and self.worker is None and \
+            getattr(self, "comcbt_thread", None) is None
         for b in self.pdf_buttons:
             b.setEnabled(ready)
         self.drop.setEnabled(ready)
@@ -766,6 +829,10 @@ class MainWindow(QMainWindow):
         if self.qnet_thread:
             self.qnet_thread.quit()
             self.qnet_thread.wait(10_000)
+        if self.comcbt_thread:
+            self._comcbt_worker.stop()
+            self.comcbt_thread.quit()
+            self.comcbt_thread.wait(10_000)
         self.save_settings()
         e.accept()
 
