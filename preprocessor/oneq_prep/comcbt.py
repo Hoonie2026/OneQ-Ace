@@ -24,10 +24,11 @@ from pathlib import Path
 
 BASE = "https://www.comcbt.com"
 UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) OneQ-Prep"
-MENU_RE = re.compile(r"<a[^>]+href=\"(?:https?:)?//www\.comcbt\.com/xe/([A-Za-z0-9]+)\"[^>]*>\s*([^<]+?)\s*</a>")
-POST_RE = re.compile(r"<a[^>]+href=\"(?:https?://www\.comcbt\.com)?/xe/([A-Za-z0-9]+)/(\d+)\"[^>]*>\s*([^<]*?필기\s*기출문제[^<]*?)\s*</a>")
+# 따옴표는 둘 다 받음 — 첫 화면 메뉴는 href='//www.comcbt.com/xe/n1'(작은따옴표), 게시판·글은 큰따옴표(2026-10-24 PC 실측)
+MENU_RE = re.compile(r"<a[^>]+href=[\"'](?:https?:)?//www\.comcbt\.com/xe/([A-Za-z0-9]+)[\"'][^>]*>\s*([^<]+?)\s*</a>")
+POST_RE = re.compile(r"<a[^>]+href=[\"'](?:https?://www\.comcbt\.com)?/xe/([A-Za-z0-9]+)/(\d+)[\"'][^>]*>\s*([^<]*?필기\s*기출문제[^<]*?)\s*</a>")
 TITLE_RE = re.compile(r"(\d{4})년\s*(\d{1,2})월\s*(\d{1,2})일\s*\(([^)]*)\)")
-FILE_RE = re.compile(r"<a[^>]+href=\"([^\"]*procFileDownload[^\"]*)\"[^>]*>\s*([^<]+?\.pdf)\s*</a>", re.I)
+FILE_RE = re.compile(r"<a[^>]+href=[\"']([^\"']*procFileDownload[^\"']*)[\"'][^>]*>\s*([^<]+?\.pdf)\s*</a>", re.I)
 PAGES_RE = re.compile(r"Board Pagination|pagination", re.I)
 DELAY = 1.0
 

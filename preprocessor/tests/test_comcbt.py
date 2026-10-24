@@ -7,7 +7,9 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from oneq_prep import comcbt  # noqa: E402
 
-MENU = '<li><a href="//www.comcbt.com/xe/n1">토목기사</a></li><li><a href="//www.comcbt.com/xe/cdf">철도토목산업기사</a></li>'
+# 실제 첫 화면 메뉴는 작은따옴표(2026-10-24 PC 실측 — 큰따옴표만 보던 첫 판이 "첫 화면 모양이 바뀌어"로 멈췄음)
+MENU = ("<li><a href='//www.comcbt.com/xe/n1' target='_blank' style=\"font-size:10pt\">토목기사</a></li>"
+        '<li><a href="//www.comcbt.com/xe/cdf">철도토목산업기사</a></li>')
 BOARD = """
 <a href="https://www.comcbt.com/xe/n1/100">전자문제집 CBT 최신 기출문제, 복원중, 해설, 자주 하는 질문 모음</a>
 <a href="https://www.comcbt.com/xe/n1/5855371">토목기사 필기 기출문제 및 CBT 2022년 04월 24일(2회)</a>
