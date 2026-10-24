@@ -155,6 +155,7 @@ class DropZone(QFrame):
         icon.setStyleSheet("font-size: 40px;")
         t = QLabel("기출 PDF를 여기로 끌어다 놓으세요")
         t.setObjectName("dropTitle")
+        self.title = t
         t.setAlignment(Qt.AlignCenter)
         s = QLabel("폴더째 놓아도 됩니다 · 누르면 파일을 고를 수 있어요\n종목·시행일·회차는 문서 내용에서 읽습니다(파일 이름은 상관없어요)")
         s.setObjectName("muted")

@@ -84,6 +84,7 @@ class MainWindow(QMainWindow):
         self.file_dates: dict[Path, str] = {}
         self.rows: list[RoundResult] = []
         self.thread: QThread | None = None
+        self.qnet_thread: QThread | None = None
         self.worker: BatchWorker | None = None
         self.peek_thread: QThread | None = None
         self.peek_cache: dict[Path, list[str]] = {}
@@ -134,9 +135,12 @@ class MainWindow(QMainWindow):
         self.peek_timer.setInterval(400)
         self.peek_timer.timeout.connect(self.start_peek)
         self.load_settings()
+        self.update_ready()
         self.picker.changed.connect(lambda _c: self.refresh_plan())
         self.picker.want_profile.connect(self.make_profile)
         self.picker.want_qnet.connect(self.qnet_check)
+        self.picker.want_upload.connect(self.pick_standard_pdf)
+        self.picker.changed.connect(lambda _c: self.update_ready())
         self.qnet_thread: QThread | None = None
 
     # ───────────────── 화면 만들기 ─────────────────
@@ -226,17 +230,20 @@ class MainWindow(QMainWindow):
         c.head.addWidget(self.summary)
         bar = QHBoxLayout()
         bar.setSpacing(8)
+        self.pdf_buttons = []
         for text, fn in (("PDF 추가", self.add_files), ("폴더 추가", self.add_folder), ("선택 빼기", self.remove_selected),
                          ("모두 비우기", self.clear_files)):
             b = QPushButton(text)
             b.clicked.connect(fn)
             bar.addWidget(b)
+            self.pdf_buttons.append(b)
         bar.addStretch(1)
         c.body.addLayout(bar)
 
         self.stack = QStackedWidget()
         self.drop = DropZone()
-        self.drop.clicked.connect(self.add_files)
+        self.drop.clicked.connect(lambda: self.drop.isEnabled() and self.add_files())
+        self.drop_hint = self.drop.title
         self.table = QTableWidget(0, len(COLS))
         self.table.setHorizontalHeaderLabels(COLS)
         self.table.setAlternatingRowColors(True)
@@ -330,18 +337,18 @@ class MainWindow(QMainWindow):
     def set_cert(self, code: str) -> bool:
         return self.picker.select_code(code)
 
-    # ── 큐넷 출제기준(A2·A3) ──
-    def qnet_check(self, cert, force: bool = False) -> None:
-        """종목을 고르면: 프로필이 없거나 기간이 지났으면 받고, 아니면 하루 한 번 목록만 확인(다음 기준 게시 안내)."""
-        from .. import qnet
-        if self.qnet_thread is not None or os.environ.get("ONEQ_NO_NETWORK"):
+    # ── Q-Net 출제기준(A2·A3) — 종목명 입력 → [조회] → 받기, 못 받으면 올리기 상자(사용자 흐름 2026-10-24) ──
+    def qnet_check(self, cert) -> None:
+        """[조회]: 매번 Q-Net 목록에서 현행 출제기준을 확인하고, 가진 것과 다른 게시물이면 PDF를 받아 프로필로."""
+        if self.qnet_thread is not None:
             return
-        code = cert.profile
-        fetch = force or qnet.needs_fetch(code)
-        self.picker.set_qnet("info", "큐넷에서 현행 출제기준을 받는 중…" if fetch else "큐넷에서 출제기준을 확인하는 중…",
-                             [], busy=True)
+        if os.environ.get("ONEQ_NO_NETWORK"):            # 시험·오프라인 모드: 묻지 않고 실패 안내와 올리기 상자
+            self.picker.show_failed("Q-Net 조회를 끈 상태입니다. Q-Net에서 출제기준을 직접 내려받아 아래 상자에 올려 주세요.")
+            return
+        self.picker.set_busy(True)
+        self.update_ready()
         self.qnet_thread = QThread(self)
-        w = QnetWorker(cert.name, code, fetch)
+        w = QnetWorker(cert.name, cert.profile, True)
         w.moveToThread(self.qnet_thread)
         self.qnet_thread.started.connect(w.run)
         w.done.connect(self.on_qnet)
@@ -356,52 +363,59 @@ class MainWindow(QMainWindow):
         self.qnet_thread.deleteLater()
         self.qnet_thread = None
 
+    def _use_profile(self, code: str) -> None:
+        self.picker.reload()
+        self.picker.blockSignals(True)
+        self.picker.select_code(code)
+        self.picker.blockSignals(False)
+        self.refresh_plan()
+        self.update_ready()
+
     def on_qnet(self, r: dict) -> None:
         post, up = r.get("post"), r.get("upcoming")
-        lines = []
-        if up:
-            lines.append(f"다음 기준이 게시돼 있어요: {up.title} — 그날부터 과목·단원이 바뀔 수 있어요")
+        lines = [f"다음 기준도 게시돼 있어요: {up.title} — 그날부터 과목·단원이 바뀔 수 있어요"] if up else []
         lines += [f"읽다가 확인할 것: {w}" for w in r.get("warnings", [])[:3]]
-        if r["kind"] == "fetched":
-            self.picker.reload()
-            self.picker.blockSignals(True)
-            self.picker.select_code(r["code"])
-            self.picker.blockSignals(False)
-            self.refresh_plan()
-            self.picker.set_qnet("ok", f"큐넷 현행 출제기준을 받았어요 — {post.title}", lines)
-        elif post:
-            self.picker.set_qnet("ok" if not up else "info", f"큐넷 확인: 현행 {post.title}", lines)
-        else:
-            self.picker.set_qnet("warn", "큐넷 자료실에서 이 종목의 현행 출제기준을 찾지 못했어요", lines)
+        self._use_profile(r["code"])
+        title = (f"Q-Net 최신 출제기준과 같아요 — {post.title}" if r.get("same")
+                 else f"Q-Net에서 최신 출제기준을 받았어요 — {post.title}")
+        self.picker.set_qnet("ok" if not up else "info", title, lines)
 
     def on_qnet_failed(self, msg: str) -> None:
-        self.picker.set_qnet("warn", "큐넷 출제기준을 받지 못했어요", [msg])
+        self.picker.show_failed(msg)
+        self.update_ready()
+
+    def pick_standard_pdf(self) -> None:
+        f, _ = QFileDialog.getOpenFileName(self, "출제기준 PDF 고르기", self.settings.value("last_dir", ""), "PDF (*.pdf)")
+        if f:
+            self.import_standard_pdf(Path(f))
 
     def import_standard_pdf(self, pdf: Path) -> None:
-        """끌어다 놓은 출제기준 PDF(보기 창 [저장]) → 고른 종목의 프로필(A2 실패 시 대안, ADR 021 1절)."""
+        """올리기 상자·끌어다 놓기로 들어온 출제기준 PDF(Q-Net 보기 창 [저장]) → 종목 출제기준(ADR 021 1절)."""
         from .. import qnet
+        from ..certs import Cert
         from ..qnet_standard import StandardPdfError, parse
         try:
             doc = parse(pdf)
         except StandardPdfError as e:
-            QMessageBox.warning(self, APP_NAME, str(e))
+            self.picker.show_failed(f"이 PDF에서 출제기준 표를 읽지 못했습니다 — {e}")
             return
-        cert = self.picker.current
-        if cert is None or re.sub(r"\s+", "", cert.name) != re.sub(r"\s+", "", doc.cert_name):
-            match = next((c for c in self.picker.certs if re.sub(r"\s+", "", c.name) == re.sub(r"\s+", "", doc.cert_name)), None)
-            if match is None:
-                QMessageBox.warning(self, APP_NAME, f"'{doc.cert_name}' 출제기준입니다. 종목 목록에서 찾지 못했어요.")
-                return
-            cert = match
+        key = re.sub(r"\s+", "", doc.cert_name)
+        cert = self.picker.current if self.picker.current and re.sub(r"\s+", "", self.picker.current.name) == key else \
+            next((c for c in self.picker.certs if re.sub(r"\s+", "", c.name) == key), None) or Cert(doc.cert_name)
         code = cert.profile or qnet.code_for(cert.name, cert.jm_code or None)
-        path, warns = qnet.save_profile_from_pdf(pdf, code, pdf.name, {"dropped": True})
-        self.picker.reload()
-        self.picker.blockSignals(True)
-        self.picker.select_code(path.stem)
-        self.picker.blockSignals(False)
-        self.refresh_plan()
+        path, warns = qnet.save_profile_from_pdf(pdf, code, pdf.name, {"uploaded": True})
+        self._use_profile(path.stem)
+        self.picker.fail.setVisible(False)
         self.picker.set_qnet("ok", f"출제기준 PDF를 읽었어요 — {doc.cert_name} {doc.period_from} ~ {doc.period_to}",
                              [f"읽다가 확인할 것: {w}" for w in warns[:3]])
+
+    def update_ready(self) -> None:
+        """② 기출 PDF는 출제기준이 정해진 뒤에(ADR 021 — 과목·단원이 출제기준에서 오므로)."""
+        ready = bool(self.picker.code) and self.qnet_thread is None and self.worker is None
+        for b in self.pdf_buttons:
+            b.setEnabled(ready)
+        self.drop.setEnabled(ready)
+        self.drop_hint.setText("기출 PDF를 여기로 끌어다 놓으세요" if ready else "먼저 ①에서 자격종목을 조회하세요")
 
     def make_profile(self, cert) -> None:
         dlg = ProfileDialog(cert, self)
@@ -425,6 +439,8 @@ class MainWindow(QMainWindow):
                 c = c.resolve()
                 if looks_like_standard(c):          # 출제기준 PDF는 기출 목록이 아니라 종목 출제기준으로
                     self.import_standard_pdf(c)
+                    continue
+                if not self.picker.code:            # 출제기준이 정해지기 전엔 기출을 받지 않음
                     continue
                 if c not in self.pdfs:
                     self.pdfs.append(c)
@@ -649,6 +665,7 @@ class MainWindow(QMainWindow):
         self.run_btn.setEnabled(not on)
         self.stop_btn.setEnabled(on)
         self.picker.setEnabled(not on)
+        self.update_ready()
         self.setAcceptDrops(not on)
 
     def tick(self) -> None:
@@ -685,9 +702,9 @@ class MainWindow(QMainWindow):
 
     def on_finished(self, rows) -> None:
         self.timer.stop()
-        self.set_running(False)
         self.worker = None
         self.thread = None
+        self.set_running(False)
         self.open_report_btn.setEnabled(bool(self.report))
         sec = int(time.monotonic() - self.started)
         ok = sum(r.status == "packed" for r in rows)

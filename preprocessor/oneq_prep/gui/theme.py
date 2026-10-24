@@ -100,6 +100,10 @@ QPushButton#primary {{ background: {PRIMARY}; color: white; border: 0; font-size
                        padding: 12px 28px; border-radius: 10px; }}
 QPushButton#primary:hover {{ background: {PRIMARY_DARK}; }}
 QPushButton#primary:disabled {{ background: #9db3e0; color: white; }}
+QPushButton#primarySmall {{ background: {PRIMARY}; color: white; border: 0; padding: 8px 18px; border-radius: 8px; }}
+QPushButton#primarySmall:hover {{ background: {PRIMARY_DARK}; }}
+QPushButton#primarySmall:disabled {{ background: #9db3e0; color: white; }}
+QFrame#dropZone:disabled {{ background: {GRAY_SOFT}; border-color: {LINE}; }}
 QPushButton#link {{ background: transparent; border: 0; color: {PRIMARY}; padding: 4px 6px; font-weight: 600; }}
 QPushButton#link:hover {{ text-decoration: underline; }}
 QPushButton#danger {{ color: {BAD}; }}

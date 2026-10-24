@@ -102,7 +102,7 @@ def test_cert_search_and_profile_dialog(win, qtbot, tmp_path, monkeypatch):
     from oneq_prep.gui.profile_dialog import ProfileDialog
     win.picker.reload()
     elec = search("전기", win.picker.certs)[0]
-    win.picker.select(elec)
+    win.picker.select(elec, query=True)          # 오프라인 시험 → 못 받음 안내 + 올리기 상자
     assert win.picker.code is None and win.picker.missing.isVisibleTo(win.picker)
     dlg = ProfileDialog(elec, win)
     qtbot.addWidget(dlg)
@@ -125,3 +125,24 @@ def test_drop_standard_pdf_makes_profile(win, tmp_path):
     assert (tmp_path / "home" / "standards" / "SURVEY.json").exists()
     assert win.picker.code == "SURVEY" and "2025" in win.picker.qnet.title.text()
     assert "단원 63개" in win.picker.info.text()
+
+
+def test_query_flow_offline_shows_upload_box(win, qtbot, tmp_path):
+    """[조회] → Q-Net에 못 닿으면 안내 + 출제기준 PDF 올리기 상자, ② 기출 PDF는 출제기준이 정해질 때까지 막힘(사용자 흐름 2026-10-24)."""
+    win.picker.edit.setText("전기기사")
+    win.picker.query()
+    assert win.picker.fail.isVisibleTo(win.picker) and win.picker.upload.isVisibleTo(win.picker)
+    assert "직접 내려받아" in win.picker.fail.text.text() and "끈 상태" in win.picker.fail.title.text()
+    assert not win.pdf_buttons[0].isEnabled() and "조회" in win.drop_hint.text()
+    win.import_standard_pdf(Path(__file__).parent / "fixtures" / "standards" / "CIVIL-qnet-2026-2027.pdf")
+    assert win.picker.code == "CIVIL" and not win.picker.fail.isVisibleTo(win.picker) and win.pdf_buttons[0].isEnabled()
+
+
+def test_qnet_result_messages(win):
+    from oneq_prep.qnet import Post
+    post = Post("토목기사", "토목기사(2026.1.1~2027.12.31)", "1250", "1004", "2026-01-01", "2027-12-31")
+    win.on_qnet({"code": "CIVIL", "post": post, "upcoming": None, "warnings": [], "same": True})
+    assert "최신 출제기준과 같아요" in win.picker.qnet.title.text() and not win.picker.busy.isVisibleTo(win.picker)
+    from oneq_prep import qnet
+    win.on_qnet_failed(str(qnet.QnetChanged()))
+    assert "화면이 바뀌어" in win.picker.fail.title.text() and "직접 내려받아" in win.picker.fail.text.text()

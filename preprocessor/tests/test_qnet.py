@@ -52,19 +52,33 @@ def test_fetch_standard_saves_user_profile(tmp_path, monkeypatch):
     p = S.load("CIVIL")                                   # 사용자 폴더 것이 우선
     assert p.period == {"from": "2026-01-01", "to": "2027-12-31"} and len(p.units("응용역학")) == 10
     assert p.subjects[2]["name"] == "수리학 및 수문학"     # 함께 배포한 프로필의 과목 표기 이어받음
-    # 같은 날 다시: 목록은 저장해 둔 것(큐넷에 목록을 다시 묻지 않음)
+    # 다시 조회: 목록은 매번 묻고(최신 확인), 같은 게시물이면 PDF는 다시 받지 않음
     n = len(calls)
-    qnet.check_today("토목기사", fake(calls), dt.date(2026, 10, 24))
-    assert len(calls) == n
+    again = qnet.fetch_standard("토목기사", "CIVIL", fake(calls), dt.date(2026, 10, 24))
+    assert again.same and len(calls) == n + 1 and "ReportingServer" not in calls[-1][0]
 
 
 def test_not_pdf_is_friendly_error(tmp_path):
     post = qnet.Post("토목기사", "t", "1250", "1004", "2026-01-01", "2027-12-31")
-    with pytest.raises(qnet.QnetError, match="끌어다 놓"):
+    with pytest.raises(qnet.QnetChanged, match="화면이 바뀌어.*직접 내려받아"):
         qnet.download_pdf(post, tmp_path / "x.pdf", lambda *a, **k: (b"<html>", "text/html"))
 
 
 def test_no_current_standard(tmp_path, monkeypatch):
     monkeypatch.setenv("ONEQ_PREP_HOME", str(tmp_path))
-    with pytest.raises(qnet.QnetError, match="현행 출제기준을 찾지 못"):
-        qnet.fetch_standard("전기기사", "ELEC", lambda *a, **k: (b"<table></table>", "text/html"))
+    with pytest.raises(qnet.QnetNotFound, match="현행 출제기준을 찾지 못"):
+        qnet.fetch_standard("전기기사", "ELEC", lambda *a, **k: ("<p>등록된 게시물이 없습니다.</p>".encode(), "text/html"))
+
+
+def test_list_page_changed(tmp_path, monkeypatch):
+    """게시물도 '없음' 안내도 없는 목록 → 화면이 바뀐 것으로 보고 직접 올리기 안내."""
+    monkeypatch.setenv("ONEQ_PREP_HOME", str(tmp_path))
+    with pytest.raises(qnet.QnetChanged):
+        qnet.fetch_standard("토목기사", "CIVIL", lambda *a, **k: (b"<html><body>new design</body></html>", "text/html"))
+
+
+def test_offline_message():
+    def boom(*a, **k):
+        raise qnet.QnetOffline("URLError")
+    with pytest.raises(qnet.QnetOffline, match="연결하지 못했습니다"):
+        qnet.search("토목기사", boom)

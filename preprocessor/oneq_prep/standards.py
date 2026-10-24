@@ -60,6 +60,7 @@ class Profile:
     draft: bool = False
     note: str = ""
     period: dict | None = None
+    source: dict | None = None        # {"type": "qnet-standard-pdf", "qnet": {"jmCd", "no"}, …}
 
     def units(self, subject: str) -> list[dict]:
         """과목의 단원(세부항목) 목록 — id는 과목 안에서 "주요항목번호-세부항목번호"(예: "2-3").
@@ -111,7 +112,7 @@ def load(code: str, root: Path | None = None) -> Profile:
     d = json.loads(p.read_text(encoding="utf-8"))
     return Profile(d["code"], d["name"], d["grade"], str(d["version"]), d["passRule"], d["subjects"],
                    d.get("aliases", {}), d.get("excluded", []), d.get("legacy"), d.get("draft", False), d.get("note", ""),
-                   d.get("period"))
+                   d.get("period"), d.get("source"))
 
 
 def available(root: Path | None = None) -> list[str]:

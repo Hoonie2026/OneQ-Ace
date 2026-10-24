@@ -12,13 +12,13 @@ from __future__ import annotations
 
 import datetime as dt
 import html
-import json
+import urllib.error
 import re
 import ssl
 import urllib.parse
 import urllib.request
 import uuid
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
 from pathlib import Path
 
 BASE = "https://www.q-net.or.kr"
@@ -30,7 +30,33 @@ PERIOD_RE = re.compile(r"\((\d{4})\.(\d{1,2})\.(\d{1,2})\s*~\s*(\d{4})\.(\d{1,2}
 
 
 class QnetError(RuntimeError):
-    """큐넷에서 받지 못함(사용자에게 그대로 보여 줄 문장)."""
+    """Q-Net에서 받지 못함(사용자에게 그대로 보여 줄 문장). 화면은 이 문장 + 직접 올리기 상자를 보여 준다."""
+    kind = "error"
+
+
+class QnetOffline(QnetError):
+    kind = "offline"
+
+    def __init__(self, detail: str = ""):
+        super().__init__("Q-Net에 연결하지 못했습니다. 인터넷 연결을 확인한 뒤 다시 조회하거나, "
+                         "Q-Net에서 출제기준을 직접 내려받아 아래 상자에 올려 주세요." + (f" ({detail})" if detail else ""))
+
+
+class QnetChanged(QnetError):
+    kind = "changed"
+
+    def __init__(self, detail: str = ""):
+        super().__init__("Q-Net 웹페이지 화면이 바뀌어 출제기준을 자동으로 가져오지 못했습니다. "
+                         "Q-Net에서 출제기준을 직접 내려받아 아래 상자에 올려 주세요." + (f" ({detail})" if detail else ""))
+
+
+class QnetNotFound(QnetError):
+    kind = "notfound"
+
+    def __init__(self, name: str, upcoming: str = ""):
+        super().__init__(f"Q-Net 출제기준 자료실에서 '{name}'의 현행 출제기준을 찾지 못했습니다"
+                         + (f"(다음 기준 {upcoming}만 있음)" if upcoming else "")
+                         + ". 종목명을 확인하거나, 출제기준을 직접 내려받아 아래 상자에 올려 주세요.")
 
 
 @dataclass
@@ -86,16 +112,21 @@ def _get(url: str, data: bytes | None = None, timeout: float = 30) -> tuple[byte
     try:
         with urllib.request.urlopen(req, timeout=timeout, context=_ctx()) as r:
             return r.read(), r.headers.get("Content-Type", "")
-    except Exception as e:  # noqa: BLE001 — 네트워크·인증서·시간 초과 모두 같은 안내
-        raise QnetError(f"큐넷에 접속하지 못했습니다({type(e).__name__}). 인터넷 연결을 확인하거나, 큐넷 출제기준 "
-                        "보기 창에서 [저장]한 PDF를 끌어다 놓으세요.") from e
+    except urllib.error.HTTPError as e:      # 주소는 닿았는데 거절·없음 → 화면(주소)이 바뀐 것으로 봄
+        raise QnetChanged(f"HTTP {e.code}") from e
+    except Exception as e:  # noqa: BLE001 — 네트워크·인증서·시간 초과
+        raise QnetOffline(type(e).__name__) from e
 
 
 def search(cert_name: str, fetch=_get) -> list[Post]:
     q = urllib.parse.urlencode({"id": "cst00601s01", "gSite": "Q", "gId": "", "page": 1, "schText": cert_name,
                                 "schType": "T", "brdId": "Q006", "code": "1202"})
     body, _ = fetch(f"{LIST_URL}?{q}")
-    return parse_list(body.decode("utf-8", "replace"))
+    page = body.decode("utf-8", "replace")
+    posts = parse_list(page)
+    if not posts and "등록된 게시물이 없습니다" not in page:
+        raise QnetChanged("자료실 목록 모양이 다름")        # 게시물도 '없음' 안내도 없으면 화면이 바뀐 것
+    return posts
 
 
 def report_params(jm_cd: str, no: str) -> dict:
@@ -110,8 +141,7 @@ def report_params(jm_cd: str, no: str) -> dict:
 def download_pdf(post: Post, dest: Path, fetch=_get) -> Path:
     body, ctype = fetch(REPORT_URL, urllib.parse.urlencode(report_params(post.jm_cd, post.no)).encode("utf-8"), 120)
     if not body.startswith(b"%PDF"):
-        raise QnetError("큐넷 보기 창이 PDF를 주지 않았습니다(큐넷 화면이 바뀌었을 수 있음). "
-                        "보기 창에서 [저장]한 PDF를 끌어다 놓으세요.")
+        raise QnetChanged("보기 창이 PDF를 주지 않음")
     dest = Path(dest)
     dest.parent.mkdir(parents=True, exist_ok=True)
     dest.write_bytes(body)
@@ -127,6 +157,7 @@ class Fetched:
     post: Post
     upcoming: Post | None
     warnings: list[str]
+    same: bool = False            # 이미 같은 게시물로 만든 프로필이 있어 받지 않음
 
 
 def cache_dir() -> Path:
@@ -135,22 +166,8 @@ def cache_dir() -> Path:
 
 
 def check_today(cert_name: str, fetch=_get, today: dt.date | None = None) -> Choice:
-    """목록 확인(하루 한 번만 큐넷에 물음 — 같은 날 다시 고르면 저장해 둔 결과)."""
-    day = (today or dt.date.today()).isoformat()
-    p = cache_dir() / "list-cache.json"
-    try:
-        cache = json.loads(p.read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        cache = {}
-    hit = cache.get(cert_name)
-    if hit and hit.get("day") == day:
-        posts = [Post(**x) for x in hit["posts"]]
-    else:
-        posts = search(cert_name, fetch)
-        cache[cert_name] = {"day": day, "posts": [asdict(x) for x in posts]}
-        p.parent.mkdir(parents=True, exist_ok=True)
-        p.write_text(json.dumps(cache, ensure_ascii=False, indent=1), encoding="utf-8")
-    return choose(posts, cert_name, today)
+    """목록 확인(매번 Q-Net에 물음 — [조회]를 누를 때마다 최신을 확인, 사용자 2026-10-24)."""
+    return choose(search(cert_name, fetch), cert_name, today)
 
 
 def code_for(cert_name: str, jm_cd: str | None = None) -> str:
@@ -181,12 +198,23 @@ def fetch_standard(cert_name: str, code: str | None, fetch=_get, today: dt.date 
     code가 없으면(출제기준 프로필이 없던 종목) 큐넷 종목코드로 만든다."""
     ch = check_today(cert_name, fetch, today)
     if ch.current is None:
-        raise QnetError(f"큐넷 출제기준 자료실에서 '{cert_name}'의 현행 출제기준을 찾지 못했습니다"
-                        + (f"(다음 기준 {ch.upcoming.title}만 있음)" if ch.upcoming else "") + ".")
+        raise QnetNotFound(cert_name, ch.upcoming.title if ch.upcoming else "")
     post = ch.current
     code = code or code_for(cert_name, post.jm_cd)
+    from . import standards as S
+    try:                                   # 이미 같은 게시물에서 만든 프로필이면 다시 받지 않음
+        old = S.load(code)
+        q = (old.source or {}).get("qnet", {})
+        if q.get("no") == post.no and q.get("jmCd") == post.jm_cd and old.period:
+            return Fetched(S.user_root() / f"{code}.json", Path(), post, ch.upcoming, [], same=True)
+    except FileNotFoundError:
+        pass
     pdf = download_pdf(post, cache_dir() / f"{code}-{post.jm_cd}-{post.no}.pdf", fetch)
-    path, warns = save_profile_from_pdf(pdf, code, f"큐넷 {post.title}", {"qnet": {"jmCd": post.jm_cd, "no": post.no}})
+    from .qnet_standard import StandardPdfError
+    try:
+        path, warns = save_profile_from_pdf(pdf, code, f"Q-Net {post.title}", {"qnet": {"jmCd": post.jm_cd, "no": post.no}})
+    except StandardPdfError as e:
+        raise QnetChanged("받은 출제기준 PDF의 표 모양이 다름") from e
     return Fetched(path, pdf, post, ch.upcoming, warns)
 
 
