@@ -6,6 +6,7 @@
 """
 from __future__ import annotations
 
+import os
 import re
 import sys
 import time
@@ -28,7 +29,7 @@ from .profile_dialog import ProfileDialog
 from .result_dialog import ResultDialog
 from .review_dialog import ReviewDialog
 from .widgets import BadgeDelegate, Card, DropZone, Note, ProgressDelegate
-from .worker import BatchWorker
+from .worker import BatchWorker, QnetWorker
 
 APP_NAME = "원큐합격 전처리기"
 COLS = ["PDF 파일", "종류", "회차", "진행", "상태", "결과"]
@@ -135,6 +136,8 @@ class MainWindow(QMainWindow):
         self.load_settings()
         self.picker.changed.connect(lambda _c: self.refresh_plan())
         self.picker.want_profile.connect(self.make_profile)
+        self.picker.want_qnet.connect(self.qnet_check)
+        self.qnet_thread: QThread | None = None
 
     # ───────────────── 화면 만들기 ─────────────────
     def _header(self) -> QFrame:
@@ -327,6 +330,79 @@ class MainWindow(QMainWindow):
     def set_cert(self, code: str) -> bool:
         return self.picker.select_code(code)
 
+    # ── 큐넷 출제기준(A2·A3) ──
+    def qnet_check(self, cert, force: bool = False) -> None:
+        """종목을 고르면: 프로필이 없거나 기간이 지났으면 받고, 아니면 하루 한 번 목록만 확인(다음 기준 게시 안내)."""
+        from .. import qnet
+        if self.qnet_thread is not None or os.environ.get("ONEQ_NO_NETWORK"):
+            return
+        code = cert.profile
+        fetch = force or qnet.needs_fetch(code)
+        self.picker.set_qnet("info", "큐넷에서 현행 출제기준을 받는 중…" if fetch else "큐넷에서 출제기준을 확인하는 중…",
+                             [], busy=True)
+        self.qnet_thread = QThread(self)
+        w = QnetWorker(cert.name, code, fetch)
+        w.moveToThread(self.qnet_thread)
+        self.qnet_thread.started.connect(w.run)
+        w.done.connect(self.on_qnet)
+        w.failed.connect(self.on_qnet_failed)
+        w.done.connect(self.qnet_thread.quit)
+        w.failed.connect(self.qnet_thread.quit)
+        self.qnet_thread.finished.connect(self._qnet_finished)
+        self._qnet_worker = w
+        self.qnet_thread.start()
+
+    def _qnet_finished(self) -> None:
+        self.qnet_thread.deleteLater()
+        self.qnet_thread = None
+
+    def on_qnet(self, r: dict) -> None:
+        post, up = r.get("post"), r.get("upcoming")
+        lines = []
+        if up:
+            lines.append(f"다음 기준이 게시돼 있어요: {up.title} — 그날부터 과목·단원이 바뀔 수 있어요")
+        lines += [f"읽다가 확인할 것: {w}" for w in r.get("warnings", [])[:3]]
+        if r["kind"] == "fetched":
+            self.picker.reload()
+            self.picker.blockSignals(True)
+            self.picker.select_code(r["code"])
+            self.picker.blockSignals(False)
+            self.refresh_plan()
+            self.picker.set_qnet("ok", f"큐넷 현행 출제기준을 받았어요 — {post.title}", lines)
+        elif post:
+            self.picker.set_qnet("ok" if not up else "info", f"큐넷 확인: 현행 {post.title}", lines)
+        else:
+            self.picker.set_qnet("warn", "큐넷 자료실에서 이 종목의 현행 출제기준을 찾지 못했어요", lines)
+
+    def on_qnet_failed(self, msg: str) -> None:
+        self.picker.set_qnet("warn", "큐넷 출제기준을 받지 못했어요", [msg])
+
+    def import_standard_pdf(self, pdf: Path) -> None:
+        """끌어다 놓은 출제기준 PDF(보기 창 [저장]) → 고른 종목의 프로필(A2 실패 시 대안, ADR 021 1절)."""
+        from .. import qnet
+        from ..qnet_standard import StandardPdfError, parse
+        try:
+            doc = parse(pdf)
+        except StandardPdfError as e:
+            QMessageBox.warning(self, APP_NAME, str(e))
+            return
+        cert = self.picker.current
+        if cert is None or re.sub(r"\s+", "", cert.name) != re.sub(r"\s+", "", doc.cert_name):
+            match = next((c for c in self.picker.certs if re.sub(r"\s+", "", c.name) == re.sub(r"\s+", "", doc.cert_name)), None)
+            if match is None:
+                QMessageBox.warning(self, APP_NAME, f"'{doc.cert_name}' 출제기준입니다. 종목 목록에서 찾지 못했어요.")
+                return
+            cert = match
+        code = cert.profile or qnet.code_for(cert.name, cert.jm_code or None)
+        path, warns = qnet.save_profile_from_pdf(pdf, code, pdf.name, {"dropped": True})
+        self.picker.reload()
+        self.picker.blockSignals(True)
+        self.picker.select_code(path.stem)
+        self.picker.blockSignals(False)
+        self.refresh_plan()
+        self.picker.set_qnet("ok", f"출제기준 PDF를 읽었어요 — {doc.cert_name} {doc.period_from} ~ {doc.period_to}",
+                             [f"읽다가 확인할 것: {w}" for w in warns[:3]])
+
     def make_profile(self, cert) -> None:
         dlg = ProfileDialog(cert, self)
         if dlg.exec() and dlg.code:
@@ -341,11 +417,15 @@ class MainWindow(QMainWindow):
             self.save_settings()
 
     def add_paths(self, paths: list[Path]) -> None:
+        from ..qnet_standard import looks_like_standard
         added = 0
         for p in paths:
             cand = sorted(p.rglob("*.pdf")) if p.is_dir() else ([p] if p.suffix.lower() == ".pdf" else [])
             for c in cand:
                 c = c.resolve()
+                if looks_like_standard(c):          # 출제기준 PDF는 기출 목록이 아니라 종목 출제기준으로
+                    self.import_standard_pdf(c)
+                    continue
                 if c not in self.pdfs:
                     self.pdfs.append(c)
                     added += 1
@@ -666,6 +746,9 @@ class MainWindow(QMainWindow):
         if self.peek_thread:
             self.peek_thread.quit()
             self.peek_thread.wait(10_000)
+        if self.qnet_thread:
+            self.qnet_thread.quit()
+            self.qnet_thread.wait(10_000)
         self.save_settings()
         e.accept()
 

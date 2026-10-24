@@ -22,6 +22,8 @@ PDFS = [SAFETY / "건설안전기사20220305(교사용).pdf", SAFETY / "건설�
 @pytest.fixture
 def win(qtbot, tmp_path, monkeypatch):
     monkeypatch.setenv("HOME", str(tmp_path))          # QSettings를 시험 폴더에
+    monkeypatch.setenv("ONEQ_NO_NETWORK", "1")          # 큐넷에 묻지 않음(A3 — 시험은 네트워크 없이)
+    monkeypatch.setenv("ONEQ_PREP_HOME", str(tmp_path / "home"))
     from PySide6.QtCore import QSettings
     QSettings.setPath(QSettings.IniFormat, QSettings.UserScope, str(tmp_path / "settings"))
     w = MainWindow()
@@ -113,3 +115,13 @@ def test_cert_search_and_profile_dialog(win, qtbot, tmp_path, monkeypatch):
     win.picker.reload()
     assert win.set_cert("ELEC") and win.picker.code == "ELEC"
     assert "5과목 100문항" in win.picker.info.text()
+
+
+def test_drop_standard_pdf_makes_profile(win, tmp_path):
+    """큐넷 보기 창에서 [저장]한 출제기준 PDF를 끌어다 놓으면 기출 목록이 아니라 종목 출제기준으로(A3)."""
+    pdf = Path(__file__).parent / "fixtures" / "standards" / "SURVEY-qnet-2025-2027.pdf"
+    win.add_paths([pdf])
+    assert win.pdfs == []                                          # 기출 목록에 들어가지 않음
+    assert (tmp_path / "home" / "standards" / "SURVEY.json").exists()
+    assert win.picker.code == "SURVEY" and "2025" in win.picker.qnet.title.text()
+    assert "단원 63개" in win.picker.info.text()

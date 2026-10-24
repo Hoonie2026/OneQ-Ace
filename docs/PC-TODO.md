@@ -15,8 +15,10 @@
   - 종목코드: 토목기사 1250, 철도토목기사 1760, 측량 1380
   - 현행 게시물 = 보고서 보기 창(`cst006Report(종목코드, 번호)` → Crownix HTML5 Viewer `pageLink.do?link=cst/cstReport`) → [저장] → PDF. 예전 게시물은 HWP 첨부. Claude가 자동 클릭하면 오류 페이지(`error_pop.jsp?c=-213`)
   - 사용자가 받은 토목기사 PDF(13쪽, 글자 PDF, 표 추출 잘 됨) → 저장소 `preprocessor/tests/fixtures/standards/CIVIL-qnet-2026-2027.pdf`. PC의 `preprocessor/tests/fixtures/web/3-…pdf`는 지워도 됨(커밋 안 됨)
-- [ ] **P17 보기 창 PDF 자동 받기 확인**(A2 때, Claude in Chrome): 보기 창이 PDF를 받아 오는 네트워크 요청을 보고 전처리기가 직접 부를 수 있는지. 안 되면 "보기 창에서 [저장]한 PDF를 끌어다 놓기" 안내
+- [x] **P17 보기 창 PDF 자동 받기 확인** — 2026-10-24 Claude in Chrome으로 확인: **된다**. 목록 GET `cst006.do?id=cst00601s01&…&schText=종목명&schType=T&brdId=Q006&code=1202`(줄마다 `cst006Report('종목코드','게시번호')`, 칸 title = 정확한 종목명), PDF는 보기 창 [PDF 저장]과 같은 POST `ReportingServer/service`(opcode 500 · HRD_QSC.mrd · jmCd·mcrtrNo·rcgnMthdCd[A] · protocol=file) — 쿠키·로그인 불필요, 받은 파일이 직접 저장한 토목(104,637B)·건설안전(180,372B)과 같은 크기. 공개 API가 아니라 바뀌면 끌어다 놓기로 안내. 구현 `oneq_prep/qnet.py`. 원래 요청: 보기 창이 PDF를 받아 오는 네트워크 요청을 보고 전처리기가 직접 부를 수 있는지. 안 되면 "보기 창에서 [저장]한 PDF를 끌어다 놓기" 안내
 - [x] **P18 출제기준 표본 더 받기** — 2026-10-24 받음: 건설안전기사(2026.1.1~2030.12.31, 32쪽)·측량및지형공간정보기사(2025.1.1~2027.12.31) → 저장소 `fixtures/standards/SAFETY-qnet-2026-2030.pdf`·`SURVEY-qnet-2025-2027.pdf`, 파서 보완(쪽 끝에서 잘린 주요항목, 번호 없는 세세항목, 줄 잇기 규칙). PC `fixtures/web/`의 3개는 지워도 됨. 원래 요청:(사용자, A1 시험용): 측량및지형공간정보기사·건설안전기사 현행 출제기준 PDF — 보기 창 [저장] → `preprocessor/tests/fixtures/web/`에 두면 Claude가 저장소로 옮김. A1 파서는 토목기사 1개로만 맞춰 놓음(2026-10-24) → 표가 다르게 생긴 종목에서 깨지는지 이 표본으로 확인. 측량 1과목 단원 실측(C2·P8)에도 측량 출제기준이 필요
+
+- [ ] **P19 큐넷 자동 받기 PC 실측**(A2·A3 코드 뒤, 사용자): ① P0 → `cd preprocessor` → `py -3 -m oneq_prep.qnet 측량및지형공간정보기사 --list` (목록이 나오면 됨) ② `py -3 -m oneq_prep.qnet 토목기사` (받음·프로필 경로 출력) ③ 창 프로그램에서 종목 고르기 → "큐넷 확인/받았어요" 안내가 뜨는지. 클라우드는 큐넷 접속이 막혀 실제 요청은 PC에서만 확인 가능. 받은 PDF·프로필은 사용자 폴더(`%APPDATA%\OneQ-Ace\qnet`, `…\standards`)
 
 ## 2. OCR 엔진 고르기 (→ 문항 글자 확보 → 모든 분류의 전제)
 - [x] **P3 Windows 내장 OCR 한국어** — 2026-10-24: 사용자 PC `Language.OCR~~~ko-KR` Installed. 사내 기본 상태인지는 동료 PC 한 대에서 같은 명령(`Get-WindowsCapability -Online | ? Name -like 'Language.OCR*'`)으로 한 번 더(P14 때 함께)

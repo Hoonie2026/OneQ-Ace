@@ -252,6 +252,16 @@ def _flat_name(s: str) -> str:
     return re.sub(r"\s+", " ", s).strip()
 
 
+def looks_like_standard(pdf_path: Path) -> bool:
+    """첫 쪽에 "출제기준(필기)" 표가 있으면 출제기준 PDF(기출 목록에 넣지 않음)."""
+    try:
+        with pdfplumber.open(str(pdf_path)) as pdf:
+            t = _flat((pdf.pages[0].extract_text() or "")[:400]) if pdf.pages else ""
+    except Exception:  # noqa: BLE001
+        return False
+    return "출제기준(필기)" in t or ("출제기준" in t and "자격종목" in t and "적용기간" in t)
+
+
 def parse(pdf_path: Path) -> StandardDoc:
     pdf_path = Path(pdf_path)
     head: dict = {}

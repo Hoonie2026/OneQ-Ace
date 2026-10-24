@@ -27,3 +27,31 @@ class BatchWorker(QObject):
             self.failed.emit(f"{type(e).__name__}: {e}")
             rows = []
         self.finished.emit(rows)
+
+
+class QnetWorker(QObject):
+    """큐넷 출제기준 확인·받기(A2·A3) — 화면이 멈추지 않게 다른 스레드에서. fetch=True면 PDF를 받아 프로필 저장, 아니면 목록만."""
+    done = Signal(object)         # dict(kind="fetched"|"checked", ...)
+    failed = Signal(str)
+
+    def __init__(self, cert_name: str, code: str | None, fetch: bool):
+        super().__init__()
+        self.cert_name, self.code, self.fetch = cert_name, code, fetch
+
+    @Slot()
+    def run(self) -> None:
+        from .. import qnet
+        try:
+            if self.fetch:
+                got = qnet.fetch_standard(self.cert_name, self.code)
+                self.done.emit({"kind": "fetched", "code": got.profile_path.stem, "post": got.post,
+                                "upcoming": got.upcoming, "warnings": got.warnings})
+            else:
+                ch = qnet.check_today(self.cert_name)
+                self.done.emit({"kind": "checked", "code": self.code, "post": ch.current, "upcoming": ch.upcoming,
+                                "warnings": []})
+        except qnet.QnetError as e:
+            self.failed.emit(str(e))
+        except Exception as e:  # noqa: BLE001 — 출제기준 PDF 모양이 달라 읽지 못한 경우 등
+            self.failed.emit(f"큐넷 출제기준을 읽지 못했습니다({type(e).__name__}: {e}). "
+                             "보기 창에서 [저장]한 PDF를 끌어다 놓거나 [과목 직접 입력]을 쓰세요.")

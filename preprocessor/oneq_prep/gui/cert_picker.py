@@ -14,6 +14,7 @@ MARK = "  ✓ 출제기준 있음"
 class CertPicker(QWidget):
     changed = Signal(object)          # Cert | None
     want_profile = Signal(object)     # Cert — [과목 직접 입력]
+    want_qnet = Signal(object, bool)  # Cert, 강제로 받기 — 큐넷 출제기준 확인·받기(A3)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -51,6 +52,30 @@ class CertPicker(QWidget):
         self.missing.layout().addLayout(row)
         self.missing.setVisible(False)
         lay.addWidget(self.missing)
+        # 큐넷 출제기준 자동 받기 상태(ADR 021 1절 — 종목을 고르면 현행 기준을 확인·받음)
+        self.qnet = Note("info")
+        qrow = QHBoxLayout()
+        self.b_qnet = QPushButton("큐넷에서 다시 받기")
+        self.b_qnet.clicked.connect(lambda: self.current and self.want_qnet.emit(self.current, True))
+        self.b_open = QPushButton("출제기준 자료실 열기")
+        self.b_open.setObjectName("link")
+        self.b_open.clicked.connect(self._open_qnet)
+        qrow.addWidget(self.b_qnet)
+        qrow.addWidget(self.b_open)
+        qrow.addStretch(1)
+        self.qnet.layout().addLayout(qrow)
+        self.qnet.setVisible(False)
+        lay.addWidget(self.qnet)
+
+    def _open_qnet(self) -> None:
+        from PySide6.QtCore import QUrl
+        from PySide6.QtGui import QDesktopServices
+        QDesktopServices.openUrl(QUrl("https://www.q-net.or.kr/cst006.do?id=cst00601&gSite=Q&gId="))
+
+    def set_qnet(self, kind: str, title: str, lines: list[str], busy: bool = False) -> None:
+        self.qnet.set(kind, title, lines)
+        self.b_qnet.setVisible(not busy)
+        self.b_open.setVisible(kind in ("warn", "bad"))
 
     # ── 검색 ──
     def reload(self) -> None:
@@ -101,9 +126,10 @@ class CertPicker(QWidget):
         else:
             self.info.setVisible(False)
             self.missing.set("warn", "출제기준(과목 구성)이 아직 없습니다",
-                             ["팩은 현행 과목 기준으로 만들어지므로 먼저 과목명과 문항 수를 등록해야 합니다.",
-                              "큐넷의 종목 정보에서 필기 과목을 확인해 [과목 직접 입력]으로 한 번만 적으면 됩니다."])
+                             ["큐넷 출제기준 자료실에서 현행 기준을 받아 옵니다(아래).",
+                              "받지 못하면 보기 창에서 [저장]한 출제기준 PDF를 끌어다 놓거나 [과목 직접 입력]을 쓰세요."])
         self.changed.emit(cert)
+        self.want_qnet.emit(cert, False)
 
     @property
     def code(self) -> str | None:
