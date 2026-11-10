@@ -41,7 +41,7 @@ v0.9.1 마무리 때 지난 세션 요약을 줄였다 — 자세한 기록은 g
 ## 세션 #15 (2026-11-10, 폰) — D1 배포 페이지
 
 - **앱 v0.12.0**: `src/prep.ts`·`ui/PrepCard.tsx` — Windows PC면 홈(팩 없을 때)·설정에 [전처리기 받기(zip)] + 압축 풀기·「Windows의 PC 보호」 → 추가 정보 → 실행 안내. 맥 "Windows 전용", 폰·태블릿은 설정에 "PC로 이 주소를 열면 받기". 받는 곳 = `github.com/Hoonie2026/OneQ-Ace/releases/latest/download/OneQ-Prep-win64.zip`(이름 고정)
-- **`.github/workflows/release-prep.yml`**: 태그 `prep-v*` 푸시 → GitHub Windows 기계가 pytest → PyInstaller → zip → 릴리스. 손으로 돌리면 결과물만 14일 보관. PC 빌드(🖥P9)는 기출 점검·Defender만 남음
+- **`.github/workflows/release-prep.yml`**: GitHub 웹 Releases에서 새 릴리스(태그 `prep-v…`)를 Publish → GitHub Windows 기계가 pytest → PyInstaller → zip을 그 릴리스에 붙임. 손으로 돌리면 결과물만 14일 보관. (이 세션에서 태그 푸시는 막혀 있어 첫 릴리스는 아직 없음 — 사용자 결정 대기) PC 빌드(🖥P9)는 기출 점검·Defender만 남음
 - **전처리기**: 첫 화면 왼쪽 "휴대폰에 학습앱 설치" 카드(QR, `oneq_prep/appinfo.py`, segno BSD-3) + [주소 복사]·도움말 메뉴. `version_info.txt` 0.3.0 → 0.5.0(어긋나 있었음). `tests/test_appinfo.py`가 앱 주소·받기 이름·버전 정보 일치 확인
 - 시험: vitest **136**(+2) · tsc · 빌드 · pytest 107 통과·20 건너뜀(이 클라우드엔 기출 PDF 없음 — PC 연결 시 114+5)
 - 화면 확인: Windows PC·안드로이드 화면 캡처, 전처리기 창 화면 없이 그려 봄(왼쪽 열은 스크롤 — QR 카드가 아래로 일부 가려짐, 디자인은 E에서)
@@ -87,6 +87,7 @@ C1~C4·D1 끝. 남은 순서: B1 OCR(🖥P4 스캔본·P5 엔진 비교 — PC �
 
 - **PC 앞에서 시작할 때**: "원큐합격 전처리기 개발 이어서. 저장소 Hoonie2026/OneQ-Ace. docs/SESSION.md(세션 #15)·docs/PREP-PLAN-v0.5.md 2절·docs/PC-TODO.md P4·P5 확인하고 B1 OCR부터 시작해 줘." (먼저 P0 동기화)
 - **폰에서 시작할 때**(PC 연결 없음): B1·P 항목은 PC가 필요 → B3 남은 것(조건 샘플 이미지, 처리 중 결과 보기) 중 클라우드에서 되는 것부터
+- 첫 릴리스: 사용자가 GitHub Releases에서 `prep-v0.5.0-dev.1` Publish(시험판) → Actions 성공·zip 붙음 확인 → [전처리기 받기] 동작
 - 선택: 🖥P23 임베딩 모델(단원 확정 더 올리기), 🖥P24 팩 다시 만들기(C4·C2 반영), 🖥P14 사내 PC에서 [전처리기 받기]로 받아 실행(경고·백신 캡처)
 
 - 세션 #11은 방향 재검토만 하고 코드는 손대지 않음(시험 수치는 세션 #10 그대로). 개발은 새 세션(#12)에서 — 긴 대화의 맥락이 흐려지지 않게 문서를 기준으로 시작
