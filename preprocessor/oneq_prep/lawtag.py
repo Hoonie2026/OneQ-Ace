@@ -7,6 +7,9 @@
 1. 법령 이름이 문항 글에 있음: "산업안전보건법령상", "…에 관한 규칙에 따라", "…시방서" 등 → refs
 2. 종목별 법정 제도 낱말(standards/law-terms.json): 안전관리자·안전보건관리비·도급·측량업 …
 3. 지정 과목에서 "수치+단위 + 이상·이하·이내·초과·미만" 기준을 묻는 문항(비계 간격·난간 높이 등)
+C2 실측(2026-11-10, 건설안전 1과목 160문항): 정밀도 92%·재현율 96% → "…처리규정상" 이름 인식, 수치 기준에서 사람 수(명·인)
+빼기(조직 규모 "1000명 이상" 같은 이론 문항), 7글자 이상 제도 이름은 띄어쓰기 무시("유해 · 위험 방지 계획서"), "안전보건교육" 대신
+"특별안전보건교육"(교육기법 문항에 걸림)
 """
 from __future__ import annotations
 
@@ -20,13 +23,13 @@ from pathlib import Path
 # ① "…에 관한 특별법/법률/규칙/기준"  ② "…법·법령·시행령·시행규칙" + 법령 문맥(상, 에 따른/따라/의한, 에서 정한, 의 규정, 시행)
 # ③ "…시방서", "…지침"(4글자 이상)  ④ 띄어쓰기가 든 이름·고시는 law-terms.json knownLaws
 REL = re.compile(r"((?:[가-힣·ㆍ]+\s){0,5}?[가-힣·ㆍ]+)에\s?관한\s?(특별법|법률|규칙|기준)")
-ACT = re.compile(r"((?:[가-힣·ㆍ]+\s)?[가-힣·ㆍ]+?(?:법령|시행령|시행규칙|법))"
+ACT = re.compile(r"((?:[가-힣·ㆍ]+\s)?[가-힣·ㆍ]+?(?:법령|시행령|시행규칙|법|처리규정|업무규정))"
                  r"(?=\s?(?:상|에\s?(?:따른|따라|의한|의하여|의하면|규정|정한)|에서\s?(?:정한|규정)|의\s?규정|\s시행))")
 DOC = re.compile(r"([가-힣·ㆍ]*시방서|[가-힣·ㆍ]{4,}지침)")   # "…고시"는 knownLaws로만("냉장창고시" 같은 낱말 때문)
 PARTICLE = ("는", "은", "를", "을", "가", "로", "서", "와", "과", "도", "에", "중")
 STOP = {"다음", "다음은", "다음의", "아래", "및", "또는", "그", "이", "각", "중"}
 LEAD = re.compile(r"^(?:다음\s?중|다음은|다음의|다음|아래)\s*")
-NUM_STD = re.compile(r"\d+(?:\.\d+)?\s?(?:m|㎝|cm|㎜|mm|㎏|kg|kN|N|t|톤|미터|센티미터|밀리미터|킬로그램|도|°|%|퍼센트|시간|일|개월|년|명|인)"
+NUM_STD = re.compile(r"\d+(?:\.\d+)?\s?(?:m|㎝|cm|㎜|mm|㎏|kg|kN|N|t|톤|미터|센티미터|밀리미터|킬로그램|도|°|%|퍼센트|시간|일|개월|년)"
                      r"[^\n]{0,12}?(?:이상|이하|이내|초과|미만)")
 
 
@@ -91,7 +94,9 @@ def tag(text: str, cert: str, subject: str | None, root: str | None = None) -> t
     if refs:
         return True, refs
     terms = t.get("common", {}).get("terms", []) + t.get(cert, {}).get("terms", [])
-    if any(k in head for k in terms):
+    flat = re.sub(r"\s+", "", head)
+    # 긴 제도 이름(7글자 이상)만 띄어쓰기 무시 — 짧은 낱말은 낱말 경계를 넘어 걸림("…하고 시공" → 고시, "관리 감독자")
+    if any(k in head or (len(re.sub(r"\s+", "", k)) >= 7 and re.sub(r"\s+", "", k) in flat) for k in terms):
         return True, []
     if subject and subject in t.get(cert, {}).get("numericSubjects", []) and NUM_STD.search(head):
         return True, []

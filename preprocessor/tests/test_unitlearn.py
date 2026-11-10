@@ -54,3 +54,43 @@ def test_c4_civil_precision_first():
     assert len(sure) / len(d) >= 0.55
     assert sum(x.unit == g["unit"] for x, g in sure) / len(sure) >= 0.88
     assert all(len(x.candidates) <= 3 for x in d if not x.sure)
+
+
+# ───────────────────────── C2 법령 판정(lawtag) ─────────────────────────
+
+def test_lawtag_rule_names_and_spaced_terms():
+    from oneq_prep import lawtag
+    subj = "산업재해 예방 및 안전보건교육"
+    assert lawtag.tag("산업재해통계업무처리규정상 재해 통계 관련 용어로 옳은 것은?", "SAFETY", subj)[0]
+    assert lawtag.tag("유해 · 위험방지계획서 제출 시 첨부서류가 아닌 것은?", "SAFETY", "건설공사 안전관리")[0]
+    assert lawtag.tag("건설업 산업안전 보건관리비의 사용내역에 대하여 옳은 것은?", "SAFETY", "건설공사 안전관리")[0]
+    # 이론 문항(조직 규모·교육기법)은 아님 — C2 실측 오판정
+    assert not lawtag.tag("1000명 이상의 대규모 사업장에서 가장 적합한 안전관리조직의 형태는?", "SAFETY", subj)[0]
+    assert not lawtag.tag("안전보건교육에 있어 역할 연기법의 장점이 아닌 것은?", "SAFETY", subj)[0]
+    # 짧은 낱말은 띄어쓰기를 넘어 걸리지 않음("…하고 시공" ≠ 고시)
+    assert not lawtag.tag("콘크리트를 부어 넣은 후 다지고 시공하는 방법은?", "SAFETY", "건설시공")[0]
+
+
+def test_c2_safety_law_measure():
+    """건설안전 1과목 160문항(2026-11-10): 정밀도 92%·재현율 96% → 고친 뒤 98%·100%."""
+    gt = json.loads((ROOT / "preprocessor/tests/fixtures/classify/SAFETY-안전보건교육-2021-2022.json").read_text(encoding="utf-8"))
+    d = ROOT / "source_pdf" / "safety_기출_2003_2022"
+    pdfs = {g["date"]: d / f"건설안전기사{g['date']}(교사용).pdf" for g in gt["items"]}
+    if not all(p.exists() for p in pdfs.values()):
+        pytest.skip("건설안전 기출 PDF 없음")
+    from oneq_prep import lawtag
+    from oneq_prep.extract import analyze
+    prof = S.load("SAFETY")
+    txt = {}
+    for dt, f in pdfs.items():
+        lay = analyze(f)
+        for q in lay.questions:
+            if prof.resolve(lay.subjects.get(q.subject_no, ""))[2] == gt["subject"]:
+                txt[(dt, q.no)] = q.text()
+    tp = fp = fn = 0
+    for g in gt["items"]:
+        law = lawtag.tag(txt[(g["date"], g["no"])], "SAFETY", gt["subject"])[0]
+        tp += law and g["law"]
+        fp += law and not g["law"]
+        fn += (not law) and g["law"]
+    assert tp / (tp + fp) >= 0.95 and tp / (tp + fn) >= 0.95
