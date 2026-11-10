@@ -1,0 +1,81 @@
+# 원큐합격 전처리기 Windows 실행파일을 GitHub에서 빌드해 릴리스로 올린다(PREP-PLAN-v0.5 D1, ADR 021 7절).
+# 학습앱의 [전처리기 받기]는 .../releases/latest/download/OneQ-Prep-win64.zip 을 가리킨다(이름 고정 — app/src/prep.ts).
+# 올리는 법: 태그 prep-v<버전>(예: prep-v0.5.0-dev.1)을 푸시. 손으로 돌리면(workflow_dispatch) 릴리스 없이 빌드 결과만 보관.
+# PC의 packaging/build_exe.ps1과 같은 순서(시험 → PyInstaller → zip). 기출 PDF 점검과 Defender 검사는 PC에서만(🖥P9·P14).
+name: Release preprocessor (Windows)
+
+on:
+  push:
+    tags: ['prep-v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-prep-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: preprocessor
+        shell: pwsh
+    env:
+      PYTHONUTF8: '1'
+      ASSET: OneQ-Prep-win64.zip
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: |
+            preprocessor/requirements.txt
+            preprocessor/requirements-gui.txt
+            preprocessor/requirements-build.txt
+      - name: 패키지 설치
+        run: python -m pip install -r requirements-build.txt
+      - name: 시험(창 프로그램 포함, 화면 없이)
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: python -m pytest -q tests
+      - name: 실행파일 만들기(PyInstaller, 폴더형)
+        run: python -m PyInstaller --noconfirm --clean --distpath dist --workpath build packaging\oneq-prep.spec
+      - name: zip 만들기
+        id: zip
+        run: |
+          if (-not (Test-Path dist\OneQ-Prep\OneQ-Prep.exe)) { throw "OneQ-Prep.exe 없음" }
+          Compress-Archive -Path dist\OneQ-Prep -DestinationPath $env:ASSET
+          $ver = python -c "import oneq_prep; print(oneq_prep.__version__)"
+          $sha = (Get-FileHash $env:ASSET -Algorithm SHA256).Hash.ToLower()
+          $mb = "{0:N0}" -f ((Get-Item $env:ASSET).Length / 1MB)
+          "version=$ver" >> $env:GITHUB_OUTPUT
+          "sha=$sha" >> $env:GITHUB_OUTPUT
+          "mb=$mb" >> $env:GITHUB_OUTPUT
+      - name: 빌드 결과 보관(손으로 돌렸을 때)
+        if: ${{ !startsWith(github.ref, 'refs/tags/prep-v') }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: OneQ-Prep-win64
+          path: preprocessor/${{ env.ASSET }}
+          retention-days: 14
+      - name: 릴리스 만들기
+        if: ${{ startsWith(github.ref, 'refs/tags/prep-v') }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          $notes = @"
+          원큐합격 전처리기 v${{ steps.zip.outputs.version }} — Windows 64비트, 설치 없이 압축만 풀어 실행합니다.
+
+          1. $env:ASSET 을 받아 압축을 풉니다
+          2. 풀린 폴더의 OneQ-Prep.exe 를 엽니다
+          3. 「Windows의 PC 보호」 창이 뜨면 추가 정보 → 실행 (서명하지 않은 프로그램이라 처음 한 번 나옵니다)
+
+          크기 약 ${{ steps.zip.outputs.mb }}MB · SHA-256 ${{ steps.zip.outputs.sha }}
+          학습앱: https://hoonie2026.github.io/OneQ-Ace/
+          "@
+          gh release create $env:TAG $env:ASSET --title "원큐합격 전처리기 v${{ steps.zip.outputs.version }}" --notes $notes --latest

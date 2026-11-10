@@ -168,3 +168,13 @@ def test_comcbt_button_adds_files_and_guides(win, qtbot, tmp_path, monkeypatch):
     assert [r.pack_id for r in win.rows] == ["SAFETY-2022-2"]
     assert "1회차" in win.comcbt_note.title.text() and "직접 내려받아" in win.comcbt_note.text.text()
     assert (tmp_path / "packs" / "기출 PDF" / "건설안전기사" / src.name).exists()
+
+
+def test_phone_qr_card(win):
+    """D1(ADR 021 7절): 첫 화면에 휴대폰 앱 설치 QR — 앱 주소만 보여 주고 [주소 복사]."""
+    from PySide6.QtWidgets import QApplication
+
+    from oneq_prep.appinfo import APP_URL
+    assert win.qr.pixmap() is not None and not win.qr.pixmap().isNull()
+    win.copy_app_url()
+    assert QApplication.clipboard().text() == APP_URL

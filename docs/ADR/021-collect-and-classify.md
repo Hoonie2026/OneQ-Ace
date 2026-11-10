@@ -190,6 +190,7 @@
 - 배경 사실(사용자에게 설명함): 학습앱은 서버·계정 없이 기기마다 브라우저 안에 저장 → PC↔폰 어느 쪽으로도 팩이 저절로 옮겨지지 않음. 풀이 기록은 백업 파일로 합칠 수 있으나(ADR 002·015) 백업에 문항·그림이 없어 **팩은 기기마다 넣어야 함**. iPhone은 Safari와 홈 화면 앱도 따로
 - **통합 배포 = 주소 하나**: 앱 주소(GitHub Pages) 하나로 배포. PC로 열면 [전처리기 받기] + [이 PC에 학습앱 설치], 폰으로 열면 앱 설치. 전처리기 첫 화면에 "폰에 앱 설치" QR(앱 주소를 보여 줄 뿐, 팩 전송 아님)
 - 폐기: 전처리기 설치에 학습앱을 넣는 방안(B), 전처리기를 웹앱에 흡수(불가 — 큐넷 수집·OCR)
+- **구현(세션 #15, 2026-11-10, PREP-PLAN D1)**: ① 앱 v0.12.0 `src/prep.ts`·`ui/PrepCard.tsx` — Windows PC면 홈(팩 없을 때)·설정에 [전처리기 받기(zip)] + 압축 풀기·「Windows의 PC 보호」 넘기기 안내, 맥은 "Windows 전용", 폰·태블릿은 설정에 "PC에서 이 주소를 열면 받기" ② 받는 곳 = GitHub Releases `releases/latest/download/OneQ-Prep-win64.zip`(이름 고정 → 새 판을 올려도 앱 주소 그대로) ③ `.github/workflows/release-prep.yml` — 태그 `prep-v*`를 푸시하면 GitHub의 Windows 기계가 시험 → PyInstaller → zip → 릴리스(PC 없이 빌드). 기출 PDF 점검·Defender 검사는 PC(🖥P9·P14) ④ 전처리기 첫 화면 왼쪽 "휴대폰에 학습앱 설치" 카드(QR = 앱 주소, `oneq_prep/appinfo.py`, segno BSD-3) + [주소 복사]·도움말 메뉴. 앱 주소·받기 파일 이름·실행파일 버전 정보가 어긋나면 `tests/test_appinfo.py`가 실패
 - 남은 걸림: 서명 안 된 exe의 "Windows의 PC 보호" 경고 — 사내 IT 배포 시스템 / Microsoft Store(MSIX) / OV 인증서(연 수십만 원, 바로 해제 안 됨). 먼저 PC-TODO P14
 
 ## 8. 팩 단위 = 종목 묶음 (사용자 2026-10-24, 조건부)

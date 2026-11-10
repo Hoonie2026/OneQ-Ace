@@ -3139,6 +3139,13 @@ details.why summary {
 .install-steps li + li {
   margin-top: 2px;
 }
+.prep-card .btn {
+  margin: 8px 0 4px;
+}
+a.btn {
+  text-decoration: none;
+  box-sizing: border-box;
+}
 .install-later {
   display: inline-flex;
   margin-top: 4px;

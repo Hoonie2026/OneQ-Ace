@@ -12,6 +12,7 @@ import { ForecastView } from './ForecastView';
 import { Principles } from './Principles';
 import { computeInsight, type Insight } from '../insight';
 import { resetPageZoom } from '../util';
+import { PrepCard } from './PrepCard';
 import { InstallGuide } from './InstallGuide';
 import { BackButton, BrandLogo, Icon } from './Icon';
 
@@ -185,6 +186,8 @@ export function Home(props: {
           <PackPicker busy={props.busy} onFiles={props.onImport} onPickFailed={props.onPickFailed} primary />
         </section>
       )}
+      {/* v0.12.0(D1): Windows PC에서 팩이 없으면 전처리기 받기 */}
+      {packs && packs.length === 0 && <PrepCard compact />}
 
       {coach && cert && packs && packs.length > 0 && (
         <>

@@ -24,6 +24,7 @@ import { askConfirm, showNotice } from './Dialog';
 import type { PackRow } from '../db';
 import { BackButton, Icon } from './Icon';
 import { InstallGuide } from './InstallGuide';
+import { PrepCard } from './PrepCard';
 
 /** 3분 전 · 2시간 전 · 5일 전 */
 function ago(ts: number): string {
@@ -542,6 +543,8 @@ export function Settings(props: {
           </button>
         </div>
       </section>
+
+      <PrepCard testId="prep-card-settings" />
 
       <section className="card address">
         <h2>앱 주소 · 설치 안내</h2>

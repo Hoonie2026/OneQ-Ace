@@ -16,6 +16,7 @@
 ■ pypdfium2 (Apache-2.0 또는 BSD-3-Clause), PDFium (BSD-3-Clause 등)
 ■ pdfplumber (MIT), pdfminer.six (MIT)
 ■ Pillow (MIT-CMU / HPND)
+■ segno (BSD-3-Clause) — 첫 화면 앱 주소 QR
 ■ NumPy (BSD-3-Clause)
 ■ jsonschema (MIT), referencing·jsonschema-specifications·rpds-py (MIT)
 ■ Python (PSF License)

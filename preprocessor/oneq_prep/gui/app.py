@@ -21,6 +21,7 @@ from PySide6.QtWidgets import (QAbstractItemView, QApplication, QFileDialog, QFr
 
 from .. import __version__
 from .. import standards as S
+from ..appinfo import APP_URL, qr_png
 from ..batch import STATUS_TEXT, BatchSpec, RoundResult, plan_rounds
 from ..summary import law_summary, peek_subjects, subject_change
 from . import theme
@@ -110,6 +111,7 @@ class MainWindow(QMainWindow):
         left.setSpacing(16)
         left.addWidget(self._card_cert())
         left.addWidget(self._card_conditions())
+        left.addWidget(self._card_phone())
         left.addStretch(1)
         lw = QWidget()
         lw.setLayout(left)
@@ -185,6 +187,7 @@ class MainWindow(QMainWindow):
         speed = m.addMenu("처리 속도")
         for v, t in ((0, "자동(코어 수 − 1, 최대 4)"), (1, "천천히 — 1회차씩(오래된 PC)")):
             speed.addAction(t, lambda v=v: self.settings.setValue("workers", v))
+        m.addAction("휴대폰에 학습앱 설치(앱 주소 복사)", self.copy_app_url)
         m.addAction("라이선스·사용한 오픈소스", self.show_licenses)
         m.addAction(f"{APP_NAME} 정보", lambda: QMessageBox.about(
             self, APP_NAME, f"{APP_NAME} v{__version__}\n기출 PDF → 원큐합격 문제팩(.zip)"))
@@ -223,6 +226,41 @@ class MainWindow(QMainWindow):
         tip.setWordWrap(True)
         c.body.addWidget(tip)
         return c
+
+    def _card_phone(self) -> Card:
+        """휴대폰에 학습앱 설치 QR(PREP-PLAN-v0.5 D1, ADR 021 7절) — 앱 주소만 보여 줌, 팩은 보내지 않음."""
+        c = Card("휴대폰에 학습앱 설치", "", "휴대폰 카메라로 찍으면 원큐합격 앱 주소가 열립니다.")
+        row = QHBoxLayout()
+        row.setSpacing(12)
+        self.qr = QLabel()
+        self.qr.setObjectName("appQr")
+        png = qr_png()
+        pm = QPixmap()
+        if png and pm.loadFromData(png, "PNG"):
+            self.qr.setPixmap(pm.scaled(132, 132, Qt.KeepAspectRatio, Qt.FastTransformation))
+            row.addWidget(self.qr, 0, Qt.AlignTop)
+        v = QVBoxLayout()
+        v.setSpacing(6)
+        url = QLabel(APP_URL)
+        url.setObjectName("muted")
+        url.setWordWrap(True)
+        url.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        v.addWidget(url)
+        copy = QPushButton("주소 복사")
+        copy.clicked.connect(self.copy_app_url)
+        v.addWidget(copy, 0, Qt.AlignLeft)
+        how = QLabel("만든 문제팩은 휴대폰으로 옮겨(카카오톡 나에게 보내기·드라이브 등) 앱의 [문제팩 가져오기]로 넣으세요.")
+        how.setObjectName("hint")
+        how.setWordWrap(True)
+        v.addWidget(how)
+        v.addStretch(1)
+        row.addLayout(v, 1)
+        c.body.addLayout(row)
+        return c
+
+    def copy_app_url(self) -> None:
+        QApplication.clipboard().setText(APP_URL)
+        self.status.setText(f"앱 주소를 복사했습니다: {APP_URL}")
 
     def _card_pdfs(self) -> Card:
         c = Card("기출 PDF", "2")
