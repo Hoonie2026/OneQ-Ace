@@ -95,13 +95,13 @@ def _corpus(cert: str, folder: str, subject: str):
     return prof, texts, raws, {k: i for i, k in enumerate(keys)}
 
 
-def test_c4_civil_self_learning_raises_coverage():
-    """토목 응용역학 전 32회차, 보충 낱말·웹 없이(2026-11-10: 규칙 확정 68%·89% → 자기 학습 86%·84%)."""
+def test_c4_civil_precision_first():
+    """토목 응용역학 전 32회차, 보충 낱말·웹 없이, 정답률 우선(사용자 2026-11-10): 확정 63%·정답 90% 실측."""
     gt = json.loads((ROOT / "preprocessor/tests/fixtures/classify/CIVIL-응용역학-2020-2022.json").read_text(encoding="utf-8"))
     prof, texts, raws, pos = _corpus("CIVIL", "civil_기출_2012_2022", gt["subject"])
     dec = UL.learn(texts, prof, gt["subject"], raws)
     d = [dec[pos[(g["date"], g["no"])]] for g in gt["items"]]
     sure = [(x, g) for x, g in zip(d, gt["items"]) if x.sure]
-    assert len(sure) / len(d) >= 0.80
-    assert sum(x.unit == g["unit"] for x, g in sure) / len(sure) >= 0.80
+    assert len(sure) / len(d) >= 0.55
+    assert sum(x.unit == g["unit"] for x, g in sure) / len(sure) >= 0.88
     assert all(len(x.candidates) <= 3 for x in d if not x.sure)

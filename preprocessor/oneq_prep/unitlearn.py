@@ -4,7 +4,8 @@
 1. 씨앗: 출제기준 세부·세세항목 낱말(+ 있으면 웹 용어, webterms.py)로 확신 있게 판정된 문항
 2. 학습: 씨앗 문항의 글자 조각(2·3글자)과 원래 시험지 과목명으로 나이브 베이즈를 세우고, 나머지 문항을
    판정해 다시 세우기를 되풀이(EM — Nigam et al. 2000, 씨앗 낱말 약지도 분류)
-3. 확정: 씨앗은 그대로 확정, 나머지는 1·2위 차이가 TAU 이상일 때만 확정. 못 하면 "미정" + 후보 3개(4.5)
+3. 확정(정답률 우선, 사용자 2026-11-10): 아주 확실한 규칙 판정 + 교차 검증으로 다시 맞힌 씨앗 중 확신 큰 것만.
+   나머지는 "미정" + 후보 3개(4.5) — 학습자가 답한 뒤 고름
 
 종목 정보는 저장하지 않는다(사용자 결정 2026-11-10) — 학습 결과는 이번 처리 안에서만 쓰고 버린다.
 수작업 보충 낱말(standards/unit-keywords.json)은 쓰지 않는다.
@@ -27,7 +28,11 @@ NGRAMS = (2, 3)
 ALPHA = 1.0         # 라플라스 평활
 ITERS = 8
 UNLAB_W = 0.3       # 씨앗이 아닌 문항의 학습 무게
-TAU = 0.5           # 씨앗이 아닌 문항 확정: 조각당 1·2위 로그 우도 차이 ≥ TAU(C4 실측 2026-11-10, NB 확률은 과신이라 안 씀)
+STRONG = 4.0        # ⓐ 바로 확정하는 규칙 판정: 점수 ≥ 4, 2위의 4배 이상(실측 정답률 86~100%)
+FOLDS = 5           # ⓑ 씨앗 가리고 다시 맞히기(교차 검증) 겹 수
+CONSIST = 0.93      # 씨앗 일관성이 이 이상인 과목(실측 토목 95%, 측량 88%·건설안전 86%)은
+TAU_HI_CONSIST = 0.3    # 학습 확신 문턱을 낮게(토목 확정 63%·정답 90%)
+TAU_LO_CONSIST = 1.2    # 아니면 높게(측량 16%·88%, 건설안전 16%·72%) — M = 조각당 1·2위 로그 우도 차이
 MAX_DF = 0.5        # 문항 절반 넘게 나오는 조각은 버림
 SEED_MIN = 1.5      # 씨앗: 규칙 점수 ≥ SEED_MIN 이고
 SEED_RATIO = 2.0    # 2위 단원의 SEED_RATIO 배 이상
@@ -90,34 +95,60 @@ def _nb_em(docs: list[Counter], n_units: int, seeds: dict[int, int]) -> tuple[np
     return P, M
 
 
+def _mix_candidates(rule_cands: list[str], nb_order: list[str]) -> list[str]:
+    """미정 후보 3개: 규칙 1위·학습 1위를 번갈아(실측: 후보 적중이 각각보다 높음)."""
+    out: list[str] = []
+    for a, b in zip(rule_cands + [None] * len(nb_order), nb_order):
+        for x in (a, b):
+            if x and x not in out:
+                out.append(x)
+    return out[:C.N_CANDIDATES]
+
+
 def learn(texts: list[str], profile: S.Profile, subject: str, raw_subjects: list[str] | None = None,
           extra: dict[str, dict[str, float]] | None = None) -> list[Decision]:
-    """같은 과목 문항 전부(여러 회차) → 문항마다 단원 판정. extra = 웹 용어(단원 id → {낱말: 무게})."""
+    """같은 과목 문항 전부(여러 회차) → 문항마다 단원 판정. extra = 웹 용어(단원 id → {낱말: 무게}).
+
+    정답률 우선(사용자 2026-11-10): 확정은 ⓐ 아주 확실한 규칙 판정(점수 ≥ STRONG, 2위의 STRONG배) 또는
+    ⓑ 씨앗 중 "가려 놓고 다시 학습해도 같은 단원"(5겹 교차)이고 학습 확신 M ≥ 문턱인 것. 문턱은 과목의 씨앗
+    일관성(가린 씨앗 맞힘 비율)이 CONSIST 이상이면 TAU_HI_CONSIST, 아니면 TAU_LO_CONSIST. 나머지는 미정 + 후보 3개."""
     idx = C.build_index(profile, subject, corpus=texts, extra=extra, use_keywords=False)
     if not idx.units:
         return [Decision(None, True) for _ in texts]
     units = [u["id"] for u in idx.units]
     uix = {u: i for i, u in enumerate(units)}
     rule = [C.judge_unit(t, idx) for t in texts]
+
+    def strong(r) -> bool:
+        return bool(r.unit) and r.score >= STRONG and r.score >= STRONG * max(r.runner_score, 1e-9)
+
     seeds = {i: uix[r.unit] for i, r in enumerate(rule)
              if r.unit in uix and r.score >= SEED_MIN and r.score >= SEED_RATIO * max(r.runner_score, 1e-9)}
-    if len(texts) < 20 or len(seeds) < max(3, len(units) // 3):
-        # 문항이 적거나 씨앗이 모자라면 학습하지 않음(규칙 판정 그대로)
-        return [Decision(r.unit if r.sure else None, r.sure, [] if r.sure else r.candidates, "seed" if r.sure else "")
-                for r in rule]
+    if len(texts) < 20 or len(seeds) < max(3 * FOLDS, len(units) // 3):
+        # 문항이 적거나 씨앗이 모자라면 학습하지 않음 — 아주 확실한 규칙 판정만 확정
+        return [Decision(r.unit, True, [], "rule") if strong(r) else Decision(None, False, r.candidates, "") for r in rule]
     raws = raw_subjects or [None] * len(texts)
-    P, M = _nb_em([features(t, rw) for t, rw in zip(texts, raws)], len(units), seeds)
+    docs = [features(t, rw) for t, rw in zip(texts, raws)]
+    P, M = _nb_em(docs, len(units), seeds)
+    keys = sorted(seeds)
+    np.random.default_rng(0).shuffle(keys)
+    oof: dict[int, int] = {}
+    for fold in np.array_split(np.array(keys, dtype=int), FOLDS):
+        held = set(fold.tolist())
+        Pf, _ = _nb_em(docs, len(units), {i: u for i, u in seeds.items() if i not in held})
+        for i in held:
+            oof[i] = int(Pf[i].argmax())
+    consist = sum(oof[i] == seeds[i] for i in seeds) / len(seeds)
+    tau = TAU_HI_CONSIST if consist >= CONSIST else TAU_LO_CONSIST
     out = []
     for i, r in enumerate(rule):
-        if i in seeds:
-            out.append(Decision(r.unit, True, [], "seed"))
-            continue
-        order = np.argsort(-P[i])
-        cands = [units[j] for j in order[:C.N_CANDIDATES]]
-        if M[i] >= TAU:
-            out.append(Decision(units[order[0]], True, [], "learn"))
+        if strong(r):
+            out.append(Decision(r.unit, True, [], "rule"))
+        elif i in seeds and oof[i] == seeds[i] and M[i] >= tau:
+            out.append(Decision(r.unit, True, [], "learn"))
         else:
-            out.append(Decision(None, False, cands or r.candidates, ""))
+            nb = [units[j] for j in np.argsort(-P[i])]
+            out.append(Decision(None, False, _mix_candidates(r.candidates, nb), ""))
     return out
 
 

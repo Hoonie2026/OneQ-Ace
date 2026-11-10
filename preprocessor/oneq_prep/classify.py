@@ -206,6 +206,8 @@ class UnitResult:
 
 N_CANDIDATES = 3    # 미정 문항에 남기는 후보 수(사용자 결정 2026-10-24 — 실측: 후보 3개 안에 정답 토목 89%·측량 78%)
 SURE_MIN = 1.5      # 확신: 점수가 이 이상이고
+CONFIRM_MIN = 4.0   # 팩에 단원을 확정하는 기준(classify) — 정답률 우선(C4 실측 86~100%), unitlearn.STRONG과 같음
+CONFIRM_RATIO = 4.0
 SURE_RATIO = 2.0    # 둘째 단원 점수의 이 배 이상(C2 실측 2026-10-24: 토목 응용역학 확신 84%·정답 98%, 측량 1과목 맹검 61%·89% — ADR 021 4.5)
 
 
@@ -256,4 +258,6 @@ def classify(text: str, idx: UnitIndex | None, is_law: bool = False) -> Classifi
     if idx is None or not idx.units:
         return Classified(None, True, t.qtype, t.sure, t.sequence)   # 출제기준 단원이 없는 프로필: 단원 판정 안 함
     u = judge_unit(text, idx)
-    return Classified(u.unit, u.sure, t.qtype, t.sure, t.sequence, [] if u.sure else u.candidates)
+    # 회차 하나만 볼 때(여러 회차 자기 학습 전·명령줄 PDF 1개)도 정답률 우선(사용자 2026-11-10): 아주 확실한 것만 확정
+    sure = bool(u.unit) and u.score >= CONFIRM_MIN and u.score >= CONFIRM_RATIO * max(u.runner_score, 1e-9)
+    return Classified(u.unit, sure, t.qtype, t.sure, t.sequence, [] if sure else u.candidates)
