@@ -262,11 +262,27 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--no-web", action="store_true", help="웹 용어 검색 안 함")
     ap.add_argument("--root", default=str(Path(__file__).resolve().parents[2]), help="저장소 폴더")
     ap.add_argument("--json", help="결과를 JSON 파일로도 저장")
+    ap.add_argument("--dump-web", help="(개발 실측용) 위키백과 검색 응답을 이 파일에 기록 — 전처리기 자체는 저장하지 않음")
+    ap.add_argument("--replay-web", help="(개발 실측용) --dump-web 파일의 응답을 웹 대신 사용")
     a = ap.parse_args(argv)
     if not a.measure:
         ap.print_help()
         return 0
-    rows = measure(Path(a.root), web=not a.no_web)
+    fetch, rec = None, {}
+    if a.replay_web:
+        rec = json.loads(Path(a.replay_web).read_text(encoding="utf-8"))
+        fetch = lambda q: rec[q] if q in rec else {"batchcomplete": True}   # noqa: E731
+    elif a.dump_web:
+        from . import webterms
+
+        def fetch(q):
+            r = webterms._http(webterms.search_url(q))
+            rec[q] = r
+            return r
+    rows = measure(Path(a.root), web=not a.no_web, fetch=fetch)
+    if a.dump_web and not a.replay_web:
+        Path(a.dump_web).write_text(json.dumps(rec, ensure_ascii=False), encoding="utf-8")
+        print(f"\n위키백과 응답 {len(rec)}건 기록: {a.dump_web}")
     _print(rows)
     if a.json:
         Path(a.json).write_text(json.dumps(rows, ensure_ascii=False, indent=1), encoding="utf-8")
