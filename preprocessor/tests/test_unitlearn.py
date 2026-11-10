@@ -1,4 +1,4 @@
-"""C4 단원 자동 확정(ADR 021 4.8): 기출 자기 학습(unitlearn) + 실시간 웹 용어(webterms)."""
+"""C4 단원 자동 확정(ADR 021 4.8): 기출 자기 학습(unitlearn), 정답률 우선."""
 import json
 from pathlib import Path
 
@@ -7,7 +7,6 @@ import pytest
 from oneq_prep import classify as C
 from oneq_prep import standards as S
 from oneq_prep import unitlearn as UL
-from oneq_prep import webterms as W
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -18,56 +17,6 @@ def test_build_index_ignores_keyword_file_by_default():
     assert not any("세장비" in t for t in idx.terms.values())
     idx2 = C.build_index(S.load("CIVIL"), "응용역학", use_keywords=True)
     assert any("세장비" in t for t in idx2.terms.values())
-
-
-def test_build_index_takes_web_terms():
-    prof = S.load("CIVIL")
-    uid = prof.units("응용역학")[6]["id"]
-    idx = C.build_index(prof, "응용역학", extra={uid: {"세장비": 1.2}})
-    assert "세장비" in idx.terms[uid]
-    assert C.judge_unit("양단 힌지 기둥의 세장비는?", idx).unit == uid
-
-
-def _fake_wiki(pages: dict[str, list[tuple[str, str]]]):
-    def fetch(q):
-        hit = pages.get(q)
-        if hit is None:
-            return {"batchcomplete": True}
-        return {"query": {"pages": [{"title": t, "extract": x} for t, x in hit]}}
-    return fetch
-
-
-def test_webterms_filters_by_corpus_and_specificity():
-    units = [{"id": "1-1", "name": "안전관리", "items": ["안전보건관리 제이론"]},
-             {"id": "4-3", "name": "집단관리와 리더십", "items": ["리더십의 유형"]},
-             {"id": "5-2", "name": "교육방법", "items": ["교육훈련기법"]}]
-    fetch = _fake_wiki({
-        "안전관리": [("하인리히 법칙", "하인리히 법칙은 1:29:300 법칙으로 재해와 도미노 이론을 설명한다. 관리")],
-        "집단관리와 리더십": [("리더십", "헤드십과 리더십, 민주적 리더십과 권위적 리더십. 관리")],
-        "리더십의 유형": [("리더십 유형", "자유방임형 리더십. 관리")],
-        "교육방법": [("현장 훈련", "OJT는 직장 내 교육훈련이다. 관리")],
-    })
-    corpus = ["하인리히의 1:29:300 법칙에서 29는?", "도미노 이론에서 직접원인은?", "헤드십에 해당하는 것은?",
-              "자유방임형 리더십의 특징은?", "OJT의 장점은?", "옳은 것은?"] + [f"관리 문항 {i}" for i in range(30)]
-    wt = W.gather(units, corpus, fetch=fetch)
-    assert wt is not None and wt.failed == 0
-    assert "하인리히" in wt.terms["1-1"] and "도미노" in wt.terms["1-1"]
-    assert "헤드십" in wt.terms["4-3"] and "자유방임형" in wt.terms["4-3"]
-    assert "ojt" in wt.terms["5-2"]
-    assert not any("관리" in t for t in wt.terms.values())          # 문항 5% 넘게 나옴 → 버림
-    assert not any("직장" in t for t in wt.terms.values())          # 기출에 안 나옴 → 버림
-
-
-def test_webterms_offline_returns_none():
-    def boom(q):
-        raise OSError("offline")
-    units = [{"id": "1-1", "name": "안전관리", "items": []}]
-    assert W.gather(units, ["문항"], fetch=boom) is None
-
-
-def test_webterms_disabled_by_env(monkeypatch):
-    monkeypatch.setenv("ONEQ_NO_WEB", "1")
-    assert W.gather([{"id": "1-1", "name": "가", "items": []}], ["x"]) is None
 
 
 def test_learn_small_corpus_falls_back_to_rule():

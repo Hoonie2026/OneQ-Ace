@@ -1,7 +1,7 @@
 """단원 자동 확정 높이기 — 기출 자기 학습(ADR 021 4.8 방법 ①, PREP-PLAN-v0.5 C4).
 
 이번에 올린 기출의 같은 과목 문항을 한꺼번에 놓고:
-1. 씨앗: 출제기준 세부·세세항목 낱말(+ 있으면 웹 용어, webterms.py)로 확신 있게 판정된 문항
+1. 씨앗: 출제기준 세부·세세항목 낱말로 확신 있게 판정된 문항
 2. 학습: 씨앗 문항의 글자 조각(2·3글자)과 원래 시험지 과목명으로 나이브 베이즈를 세우고, 나머지 문항을
    판정해 다시 세우기를 되풀이(EM — Nigam et al. 2000, 씨앗 낱말 약지도 분류)
 3. 확정(정답률 우선, 사용자 2026-11-10): 아주 확실한 규칙 판정 + 교차 검증으로 다시 맞힌 씨앗 중 확신 큰 것만.
@@ -105,14 +105,13 @@ def _mix_candidates(rule_cands: list[str], nb_order: list[str]) -> list[str]:
     return out[:C.N_CANDIDATES]
 
 
-def learn(texts: list[str], profile: S.Profile, subject: str, raw_subjects: list[str] | None = None,
-          extra: dict[str, dict[str, float]] | None = None) -> list[Decision]:
-    """같은 과목 문항 전부(여러 회차) → 문항마다 단원 판정. extra = 웹 용어(단원 id → {낱말: 무게}).
+def learn(texts: list[str], profile: S.Profile, subject: str, raw_subjects: list[str] | None = None) -> list[Decision]:
+    """같은 과목 문항 전부(여러 회차) → 문항마다 단원 판정.
 
     정답률 우선(사용자 2026-11-10): 확정은 ⓐ 아주 확실한 규칙 판정(점수 ≥ STRONG, 2위의 STRONG배) 또는
     ⓑ 씨앗 중 "가려 놓고 다시 학습해도 같은 단원"(5겹 교차)이고 학습 확신 M ≥ 문턱인 것. 문턱은 과목의 씨앗
     일관성(가린 씨앗 맞힘 비율)이 CONSIST 이상이면 TAU_HI_CONSIST, 아니면 TAU_LO_CONSIST. 나머지는 미정 + 후보 3개."""
-    idx = C.build_index(profile, subject, corpus=texts, extra=extra, use_keywords=False)
+    idx = C.build_index(profile, subject, corpus=texts, use_keywords=False)
     if not idx.units:
         return [Decision(None, True) for _ in texts]
     units = [u["id"] for u in idx.units]
@@ -160,24 +159,19 @@ class ApplyStats:
     items: int = 0
     sure_before: int = 0
     sure_after: int = 0
-    web_terms: int = 0
-    web_ok: bool | None = None       # None = 웹 안 씀, False = 연결 실패
-    notes: list[str] = field(default_factory=list)
 
     def summary(self) -> str:
         if not self.items:
             return ""
-        web = {None: "", False: " · 웹 용어 연결 실패(기출만으로 학습)", True: f" · 웹 용어 {self.web_terms}개"}[self.web_ok]
         return (f"단원 확정 {self.sure_after / self.items:.0%}({self.sure_after}/{self.items}문항, "
-                f"자기 학습 전 {self.sure_before / self.items:.0%}){web}")
+                f"자기 학습 전 {self.sure_before / self.items:.0%})")
 
 
-def apply(prepared: list, profile: S.Profile, web: bool = True, log: Callable[[str], None] = lambda *_: None,
-          fetch=None) -> ApplyStats:
+def apply(prepared: list, profile: S.Profile, log: Callable[[str], None] = lambda *_: None) -> ApplyStats:
     """이번에 준비한 회차(pack.Prepared) 전부를 과목별로 모아 단원을 다시 판정해 문항(it.unit 등)을 고친다.
-    사람이 검수 파일 units로 고른 문항은 건드리지 않는다. 학습 결과·웹 용어는 저장하지 않는다."""
+    사람이 검수 파일 units로 고른 문항은 건드리지 않는다. 학습 결과는 저장하지 않는다."""
     from .pack import classify_note
-    st = ApplyStats(web_ok=None if not web else True)
+    st = ApplyStats()
     groups: dict[str, list] = {}
     for p in prepared:
         picked = {int(k) for k in p.review.get("units", {})}
@@ -189,18 +183,7 @@ def apply(prepared: list, profile: S.Profile, web: bool = True, log: Callable[[s
         if not profile.units(subject):
             continue
         st.subjects += 1
-        texts = [it.text for it in items]
-        extra = None
-        if web:
-            from . import webterms
-            wt = webterms.gather(profile.units(subject), texts, fetch=fetch, log=log)
-            if wt is None:
-                st.web_ok = False
-            else:
-                extra = wt.terms
-                st.web_terms += wt.total
-                st.notes += wt.notes
-        dec = learn(texts, profile, subject, [it.pdf_subject for it in items], extra)
+        dec = learn([it.text for it in items], profile, subject, [it.pdf_subject for it in items])
         for it, d in zip(items, dec):
             st.items += 1
             st.sure_before += "unit" not in it.unsure
@@ -210,15 +193,14 @@ def apply(prepared: list, profile: S.Profile, web: bool = True, log: Callable[[s
             it.unsure = [k for k in it.unsure if k != "unit"] + ([] if d.sure else ["unit"])
     for p in prepared:
         p.notes = [n for n in p.notes if not n.startswith("유형:")] + ([classify_note(p.items, profile)] if p.items else [])
-    if st.web_ok is False:
-        log("웹 용어를 받지 못해 기출 자기 학습만으로 단원을 정했습니다(인터넷 연결 확인)")
+    log(st.summary())
     return st
 
 
 # ───────────────────────── 실측(PC에서 사용자가 실행) ─────────────────────────
 
-def measure(root: Path, web: bool = True, fetch=None) -> list[dict]:
-    """정답표(tests/fixtures/classify/*.json)와 source_pdf/의 기출로 ① 규칙 · ② 자기 학습 · ③ 자기 학습+웹 비교."""
+def measure(root: Path) -> list[dict]:
+    """정답표(tests/fixtures/classify/*.json)와 source_pdf/의 기출로 출제기준 낱말만 · 기출 자기 학습 비교."""
     from .extract import analyze
     fix = root / "preprocessor" / "tests" / "fixtures" / "classify"
     folders = {"SAFETY": "safety_*", "SURVEY": "survey_*", "CIVIL": "civil_기출*"}
@@ -249,7 +231,7 @@ def measure(root: Path, web: bool = True, fetch=None) -> list[dict]:
             print(f"{gt_file.name}: 정답표 문항 일부를 기출에서 못 찾음 — 건너뜀")
             continue
 
-        def score(dec: list[Decision], how: str, extra_note: str = "") -> dict:
+        def score(dec: list[Decision], how: str) -> dict:
             d = [dec[i] for i in gi]
             sure = [(x, g) for x, g in zip(d, gt["items"]) if x.sure]
             ok = sum(x.unit == g["unit"] for x, g in sure)
@@ -257,63 +239,35 @@ def measure(root: Path, web: bool = True, fetch=None) -> list[dict]:
             cand = sum(g["unit"] in x.candidates for x, g in uns)
             return {"set": gt_file.stem, "how": how, "n": len(d), "sure": len(sure) / len(d),
                     "precision": ok / max(len(sure), 1), "cand3": cand / max(len(uns), 1),
-                    "sure_all": sum(x.sure for x in dec) / len(dec), "corpus": len(texts), "note": extra_note}
+                    "sure_all": sum(x.sure for x in dec) / len(dec), "corpus": len(texts)}
 
         idx = C.build_index(prof, gt["subject"], corpus=texts)
         rule = [C.judge_unit(t, idx) for t in texts]
         rows.append(score([Decision(r.unit if r.sure else None, r.sure, [] if r.sure else r.candidates) for r in rule],
                           "출제기준 낱말만"))
-        rows.append(score(learn(texts, prof, gt["subject"], raws), "① 기출 자기 학습"))
-        if web:
-            from . import webterms
-            wt = webterms.gather(prof.units(gt["subject"]), texts, fetch=fetch, log=print)
-            if wt is None:
-                rows.append({"set": gt_file.stem, "how": "①+② 웹 용어", "note": "위키백과 연결 실패"})
-            else:
-                rows.append(score(learn(texts, prof, gt["subject"], raws, wt.terms), "①+② 웹 용어",
-                                  f"검색 {wt.queries}건(실패 {wt.failed}) · 문서 {wt.pages} · 낱말 {wt.total}"))
+        rows.append(score(learn(texts, prof, gt["subject"], raws), "기출 자기 학습"))
     return rows
 
 
 def _print(rows: list[dict]) -> None:
     print()
-    print(f"{'정답표':34} {'방식':14} {'확정':>6} {'확정 정답률':>10} {'미정 후보3 적중':>14} {'전체 확정':>9}  비고")
+    print(f"{'정답표':34} {'방식':14} {'확정':>6} {'확정 정답률':>10} {'미정 후보3 적중':>14} {'전체 확정':>9}")
     for r in rows:
-        if "sure" not in r:
-            print(f"{r['set']:34} {r['how']:14} {'-':>6} {'-':>10} {'-':>14} {'-':>9}  {r.get('note', '')}")
-            continue
-        print(f"{r['set']:34} {r['how']:14} {r['sure']:6.0%} {r['precision']:10.0%} {r['cand3']:14.0%} {r['sure_all']:9.0%}  {r['note']}")
-    print("\n목표(ADR 021 4.8): 확정 80% 이상 · 확정 정답률 90% 이상")
+        print(f"{r['set']:34} {r['how']:14} {r['sure']:6.0%} {r['precision']:10.0%} {r['cand3']:14.0%} {r['sure_all']:9.0%}")
+    print("\n기준(ADR 021 4.8.3): 정답률 우선 — 확정분 정답률을 지키고 나머지는 미정 + 후보 3개")
 
 
 def main(argv: list[str] | None = None) -> int:
     import argparse
     ap = argparse.ArgumentParser(prog="python -m oneq_prep.unitlearn", description="단원 자동 확정 실측(C4)")
     ap.add_argument("--measure", action="store_true", help="정답표와 source_pdf 기출로 실측")
-    ap.add_argument("--no-web", action="store_true", help="웹 용어 검색 안 함")
     ap.add_argument("--root", default=str(Path(__file__).resolve().parents[2]), help="저장소 폴더")
     ap.add_argument("--json", help="결과를 JSON 파일로도 저장")
-    ap.add_argument("--dump-web", help="(개발 실측용) 위키백과 검색 응답을 이 파일에 기록 — 전처리기 자체는 저장하지 않음")
-    ap.add_argument("--replay-web", help="(개발 실측용) --dump-web 파일의 응답을 웹 대신 사용")
     a = ap.parse_args(argv)
     if not a.measure:
         ap.print_help()
         return 0
-    fetch, rec = None, {}
-    if a.replay_web:
-        rec = json.loads(Path(a.replay_web).read_text(encoding="utf-8"))
-        fetch = lambda q: rec[q] if q in rec else {"batchcomplete": True}   # noqa: E731
-    elif a.dump_web:
-        from . import webterms
-
-        def fetch(q):
-            r = webterms._http(webterms.search_url(q))
-            rec[q] = r
-            return r
-    rows = measure(Path(a.root), web=not a.no_web, fetch=fetch)
-    if a.dump_web and not a.replay_web:
-        Path(a.dump_web).write_text(json.dumps(rec, ensure_ascii=False), encoding="utf-8")
-        print(f"\n위키백과 응답 {len(rec)}건 기록: {a.dump_web}")
+    rows = measure(Path(a.root))
     _print(rows)
     if a.json:
         Path(a.json).write_text(json.dumps(rows, ensure_ascii=False, indent=1), encoding="utf-8")

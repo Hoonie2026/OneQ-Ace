@@ -1,7 +1,7 @@
 """여러 기출 PDF를 한 번에 처리한다 — 명령줄과 창 프로그램이 함께 쓰는 핵심(ADR 018).
 
 - 회차마다 따로 처리한다. 한 회차가 실패해도 나머지는 계속한다.
-- 모든 회차를 준비한 뒤 과목별로 단원을 한꺼번에 다시 판정하고(기출 자기 학습 + 웹 용어, unitlearn — ADR 021 4.8) 팩을 쓴다.
+- 모든 회차를 준비한 뒤 과목별로 단원을 한꺼번에 다시 판정하고(기출 자기 학습, unitlearn — ADR 021 4.8) 팩을 쓴다.
 - 여러 회차를 CPU 코어에 나눠 동시에 처리한다(workers). 구기준 회차(재배정)는 현행 회차가 끝난 뒤.
 - 진행은 on_event로 알리고, should_stop()이 참이면 아직 시작하지 않은 회차는 건너뛴다.
 - 화면(Qt)에 의존하지 않는다.
@@ -37,7 +37,6 @@ class BatchSpec:
     file_dates: dict[Path, str] = field(default_factory=dict)   # 파일별 시행일 직접 지정(창 프로그램)
     context: list[Path] = field(default_factory=list)           # (v0.4 호환, 쓰지 않음 — 회차는 시행월로 정함)
     learn_units: bool = True         # 여러 회차를 함께 놓고 단원 자기 학습(ADR 021 4.8 ①)
-    web_terms: bool = False          # 위키백과 단원 용어(4.8 ②) — PC 실측에서 정답률을 떨어뜨려 기본 끔(4.8.2)
 
     def date_of(self, p: Path) -> str | None:
         return self.file_dates.get(p) or self.date
@@ -218,7 +217,7 @@ def run_batch(spec: BatchSpec, on_event: Callable[[Event], None] | None = None,
         for i in ready:
             on_stage(str(rows[i].pdf), "단원 학습")
         from . import unitlearn
-        st = unitlearn.apply([rows[i].prepared for i in ready], prof, web=spec.web_terms)
+        st = unitlearn.apply([rows[i].prepared for i in ready], prof)
         unit_summary = st.summary()
     for i in ready:
         on_stage(str(rows[i].pdf), "팩")

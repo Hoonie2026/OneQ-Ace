@@ -151,10 +151,9 @@ class UnitIndex:
 
 
 def build_index(profile: S.Profile, subject: str, kw_root: str | None = None,
-                corpus: list[str] | None = None, extra: dict[str, dict[str, float]] | None = None,
-                use_keywords: bool = False) -> UnitIndex:
+                corpus: list[str] | None = None, use_keywords: bool = False) -> UnitIndex:
     """corpus = 같은 과목 문항 글(여러 회차). 주면 문항 대부분에 나오는 낱말("지구"·"위치"·"GNSS")의 무게를 낮춘다(tf-idf).
-    extra = 웹 용어(webterms, 단원 id → {낱말: 무게}). use_keywords = 수작업 보충 낱말(unit-keywords.json) —
+    use_keywords = 수작업 보충 낱말(unit-keywords.json) —
     "종목 정보 저장 안 함"(ADR 021 4.8)으로 기본 끔, 옛 실측 비교용으로만 켬."""
     units = profile.units(subject)
     sub_kw = _keywords(kw_root).get(profile.code, {}).get(subject, {}) if use_keywords else {}
@@ -172,10 +171,6 @@ def build_index(profile: S.Profile, subject: str, kw_root: str | None = None,
             strong = k.startswith("!")
             k = _flat(k.lstrip("!"))
             t[k] = max(t.get(k, 0), 3.0 if strong else 1.5)
-        for k, w in (extra or {}).get(u["id"], {}).items():
-            k = _flat(k)
-            if len(k) >= 2:
-                t[k] = max(t.get(k, 0), w)
         raw[u["id"]] = t
     n = max(1, len(units))
     df: dict[str, int] = {}
