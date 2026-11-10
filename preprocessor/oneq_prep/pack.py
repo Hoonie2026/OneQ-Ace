@@ -541,7 +541,7 @@ def main(argv=None):
     ap.add_argument("--report-only", action="store_true", help="팩은 쓰지 않고 보고서만")
     ap.add_argument("--no-bundle", action="store_true", help="종목 묶음(oneq-종목-bundle-….zip)을 만들지 않음")
     ap.add_argument("--workers", type=int, default=None, help="동시에 처리할 회차 수(기본: CPU 코어 수 - 1, 최대 4)")
-    ap.add_argument("--no-web", action="store_true", help="단원 학습 때 위키백과 용어 검색을 하지 않음(기출 자기 학습만)")
+    ap.add_argument("--web", action="store_true", help="(실험) 단원 학습 때 위키백과 용어 검색 — 실측에서 정답률이 떨어져 기본 끔(ADR 021 4.8.2)")
     ap.add_argument("--no-learn", action="store_true", help="단원 자기 학습을 하지 않음(회차마다 출제기준 낱말로만 판정)")
     a = ap.parse_args(argv)
 
@@ -565,7 +565,7 @@ def main(argv=None):
 
     spec = BatchSpec(list(a.pdf), a.cert, a.out, a.prepared_by, a.origin, a.source_type, a.date, a.round_no,
                      a.pack_version, a.report_only, ap_workers, bundle=not a.no_bundle,
-                     learn_units=not a.no_learn, web_terms=not a.no_web)
+                     learn_units=not a.no_learn, web_terms=a.web)
     try:
         rows = run_batch(spec, show)
     except ValueError as e:

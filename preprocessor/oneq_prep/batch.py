@@ -37,7 +37,7 @@ class BatchSpec:
     file_dates: dict[Path, str] = field(default_factory=dict)   # 파일별 시행일 직접 지정(창 프로그램)
     context: list[Path] = field(default_factory=list)           # (v0.4 호환, 쓰지 않음 — 회차는 시행월로 정함)
     learn_units: bool = True         # 여러 회차를 함께 놓고 단원 자기 학습(ADR 021 4.8 ①)
-    web_terms: bool = True           # 단원 학습 때 위키백과에서 단원 용어 검색(4.8 ②) — 안 되면 ①만
+    web_terms: bool = False          # 위키백과 단원 용어(4.8 ②) — PC 실측에서 정답률을 떨어뜨려 기본 끔(4.8.2)
 
     def date_of(self, p: Path) -> str | None:
         return self.file_dates.get(p) or self.date
