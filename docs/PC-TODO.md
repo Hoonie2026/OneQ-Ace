@@ -8,6 +8,8 @@
 ## 0. 늘 먼저
 - [ ] **P0 동기화**(작업 전마다): `cd C:\Users\dohwa\Downloads\OneQ-Ace` → `git fetch` → `git reset --hard origin/main`. 팩(`packs/`)·기출(`source_pdf/`)은 커밋 대상이 아니라 지워지지 않음
 
+- [ ] **P21 PC 연결(세션 #14 시작 때, C4 전제)**: P0 동기화 → Claude 데스크톱 앱에서 이 작업 열기 → "Link to this computer"(없으면 데스크톱 앱에서 PC 선택해 새 작업) → "PC 연결했어". Claude가 `source_pdf/`의 측량·토목·건설안전 기출을 읽음. 웹 용어 검색(C4 ②) 실측도 PC에서 사용자가 명령 실행
+
 ## 1. 큐넷 출제기준 (A1·A2의 전제)
 - [x] **P2 큐넷 출제기준 자료실 화면** — 2026-10-24 확인:
   - 목록 검색 `schType=T&schText=종목명`(부분 일치 → "토목기사"로 토목기사·철도토목기사 둘 다 → 정확한 이름으로 고름), 제목에 적용 기간
