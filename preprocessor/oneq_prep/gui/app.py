@@ -759,6 +759,7 @@ class MainWindow(QMainWindow):
         if ev.kind == "finish":
             self.report = ev.report
             self.bundle = ev.bundle
+            self.unit_summary = getattr(ev, "units", "")
 
     def on_failed(self, msg: str) -> None:
         QMessageBox.critical(self, APP_NAME, f"처리를 시작하지 못했습니다.\n\n{msg}")
@@ -776,7 +777,8 @@ class MainWindow(QMainWindow):
         skip = sum(r.status == "skipped" for r in rows)
         text = f"끝 — 팩 {ok}개 · 검수 필요 {rev}개 · 오류 {err}개" + (f" · 건너뜀 {skip}개" if skip else "") + \
                f" · {sec // 60}분 {sec % 60}초"
-        self.status.setText(text + ("  — '검수 필요' 파일을 눌러 확인하세요" if rev else ""))
+        units = getattr(self, "unit_summary", "")
+        self.status.setText(text + (f" · {units}" if units else "") + ("  — '검수 필요' 파일을 눌러 확인하세요" if rev else ""))
         if self.bundle:
             self.bundle_note.set("ok", f"종목 묶음 저장: {self.bundle.name}",
                                  [f"이번에 새로 만든 회차 {ok - sum(1 for r in rows if r.prepared and r.prepared.unchanged)}개를 파일 하나에 담았어요.",

@@ -314,13 +314,9 @@ def prepare(pdf_path: Path, profile: S.Profile, out_dir: Path,
             soft = layout.ocr and it.answer is not None
             issues += [f"{it.no}번: {w}" for w in it.warnings
                        if not (soft and (w.startswith("OCR:") or w.startswith("보기 번호 순서")))]
-    kept_items = [it for it in items if not it.excluded]
-    if kept_items:
-        from collections import Counter
-        tc = Counter(it.qtype for it in kept_items)
-        nu = sum(1 for it in kept_items if "unit" in it.unsure)
-        notes.append(f"유형: 계산 {tc.get('calc', 0)} · 기준·법령 {tc.get('law', 0)} · 개념·실무 {tc.get('concept', 0)}"
-                     + (f" / 단원 미정 {nu}문항(학습 중 후보 3개에서 고름)" if any(profile.units(s['name']) for s in profile.subjects) else ""))
+    note = classify_note(items, profile)
+    if note:
+        notes.append(note)
     n_ex = sum(1 for it in items if it.excluded)
     if n_ex:
         notes.append(f"제외 {n_ex}문항")
@@ -328,6 +324,18 @@ def prepare(pdf_path: Path, profile: S.Profile, out_dir: Path,
         notes.append("원본은 과목마다 번호가 1부터 다시 시작 — 팩 번호(no)는 시험지 전체 순번")
     return Prepared(pdf_path, pack_id, exam, profile, method, masked, items, issues, notes,
                     layout.numbering, layout.ocr, legacy, review, renamed, info=info)
+
+
+def classify_note(items: list[Item], profile: S.Profile) -> str:
+    """보고서 "유형: … / 단원 미정 n문항" 한 줄(단원 자기 학습 뒤 다시 계산 — unitlearn.apply)."""
+    from collections import Counter
+    kept = [it for it in items if not it.excluded]
+    if not kept:
+        return ""
+    tc = Counter(it.qtype for it in kept)
+    nu = sum(1 for it in kept if "unit" in it.unsure)
+    return (f"유형: 계산 {tc.get('calc', 0)} · 기준·법령 {tc.get('law', 0)} · 개념·실무 {tc.get('concept', 0)}"
+            + (f" / 단원 미정 {nu}문항(학습 중 후보 3개에서 고름)" if any(profile.units(s['name']) for s in profile.subjects) else ""))
 
 
 def _classify_items(items: list[Item], profile: S.Profile, review: dict) -> None:
@@ -533,6 +541,8 @@ def main(argv=None):
     ap.add_argument("--report-only", action="store_true", help="팩은 쓰지 않고 보고서만")
     ap.add_argument("--no-bundle", action="store_true", help="종목 묶음(oneq-종목-bundle-….zip)을 만들지 않음")
     ap.add_argument("--workers", type=int, default=None, help="동시에 처리할 회차 수(기본: CPU 코어 수 - 1, 최대 4)")
+    ap.add_argument("--no-web", action="store_true", help="단원 학습 때 위키백과 용어 검색을 하지 않음(기출 자기 학습만)")
+    ap.add_argument("--no-learn", action="store_true", help="단원 자기 학습을 하지 않음(회차마다 출제기준 낱말로만 판정)")
     a = ap.parse_args(argv)
 
     ap_workers = a.workers
@@ -547,11 +557,15 @@ def main(argv=None):
             what = r.zip_path.name if r.zip_path else (r.pack_id or r.pdf.name)
             extra = f" → {r.review_file}" if r.review_file else ""
             print(f"  {mark} {what}: {STATUS_TEXT[r.status]} — {r.message}{extra}", flush=True)
-        elif ev.kind == "finish" and ev.bundle:
-            print(f"\n종목 묶음: {ev.bundle}", flush=True)
+        elif ev.kind == "finish":
+            if ev.units:
+                print(f"\n{ev.units}", flush=True)
+            if ev.bundle:
+                print(f"\n종목 묶음: {ev.bundle}", flush=True)
 
     spec = BatchSpec(list(a.pdf), a.cert, a.out, a.prepared_by, a.origin, a.source_type, a.date, a.round_no,
-                     a.pack_version, a.report_only, ap_workers, bundle=not a.no_bundle)
+                     a.pack_version, a.report_only, ap_workers, bundle=not a.no_bundle,
+                     learn_units=not a.no_learn, web_terms=not a.no_web)
     try:
         rows = run_batch(spec, show)
     except ValueError as e:

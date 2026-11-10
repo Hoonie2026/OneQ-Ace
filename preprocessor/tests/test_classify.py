@@ -54,7 +54,7 @@ def test_type_law_and_sequence():
 
 
 def test_unit_index_uses_standard_and_keywords():
-    idx = C.build_index(S.load("CIVIL"), "응용역학")
+    idx = C.build_index(S.load("CIVIL"), "응용역학", use_keywords=True)
     assert C.judge_unit("그림과 같은 부정정보에서 B점의 반력은?", idx).unit == "1-10"   # "정정보"보다 "부정정보"
     assert C.judge_unit("양단 힌지 기둥의 세장비는?", idx).unit == "1-7"                 # 보충 낱말
     assert C.judge_unit("단면 상승 모멘트의 값은?", idx).unit == "1-2"                    # 출제기준 세세항목
@@ -83,7 +83,7 @@ def _measure(gt_file: str, pdf_dir: str, pattern: str):
         for q in lay.questions:
             if prof.resolve(lay.subjects.get(q.subject_no, ""))[2] == gt["subject"]:
                 texts[(dt, q.no)] = q.text()
-    idx = C.build_index(prof, gt["subject"])
+    idx = C.build_index(prof, gt["subject"], use_keywords=True)   # 옛 C2 실측(보충 낱말) 기록 유지 — C4는 test_unitlearn
     n = len(gt["items"])
     t_ok = u_ok = sure = sure_ok = 0
     for g in gt["items"]:
@@ -111,7 +111,7 @@ def test_c2_survey_geodesy_blind():
 
 def test_unsure_unit_keeps_three_candidates():
     """확신 없는 단원은 정하지 않고 후보(최대 3)만 남긴다 — 학습 중 고르기(4.5, 사용자 결정 2026-10-24)."""
-    idx = C.build_index(S.load("CIVIL"), "응용역학")
+    idx = C.build_index(S.load("CIVIL"), "응용역학", use_keywords=True)
     c = C.classify("그림과 같은 캔틸레버 보에서 B점의 반력과 처짐은?\n① ②\n③ ④", idx)
     if c.unit_sure:
         assert c.candidates == []

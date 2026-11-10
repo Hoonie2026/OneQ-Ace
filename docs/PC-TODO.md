@@ -8,7 +8,10 @@
 ## 0. 늘 먼저
 - [ ] **P0 동기화**(작업 전마다): `cd C:\Users\dohwa\Downloads\OneQ-Ace` → `git fetch` → `git reset --hard origin/main`. 팩(`packs/`)·기출(`source_pdf/`)은 커밋 대상이 아니라 지워지지 않음
 
-- [ ] **P21 PC 연결(세션 #14 시작 때, C4 전제)**: P0 동기화 → Claude 데스크톱 앱에서 이 작업 열기 → "Link to this computer"(없으면 데스크톱 앱에서 PC 선택해 새 작업) → "PC 연결했어". Claude가 `source_pdf/`의 측량·토목·건설안전 기출을 읽음. 웹 용어 검색(C4 ②) 실측도 PC에서 사용자가 명령 실행
+- [x] **P21 PC 연결(세션 #14 시작 때, C4 전제)**: P0 동기화 → Claude 데스크톱 앱에서 이 작업 열기 → "Link to this computer"(없으면 데스크톱 앱에서 PC 선택해 새 작업) → "PC 연결했어". Claude가 `source_pdf/`의 측량·토목·건설안전 기출을 읽음. 웹 용어 검색(C4 ②) 실측도 PC에서 사용자가 명령 실행
+  - 2026-11-10 13:15 연결됨(폴더 접근 허용) → 측량 31·토목 32·건설안전 59회차 기출을 클라우드로 가져와 C4 구현·실측(ADR 021 4.8.1). PC 명령 실행은 여전히 안 됨
+
+- [ ] **P22 C4 ② 웹 용어 실측(사용자, 약 5분)**: ① P0 동기화 ② `cd C:\Users\dohwa\Downloads\OneQ-Ace\preprocessor` ③ `py -3 -m oneq_prep.unitlearn --measure --json C:\Temp\c4.json` → 기출을 읽고(2~3분) 위키백과를 검색한 뒤 표가 나옴. 표를 그대로 복사해 붙여 주거나 `C:\Temp\c4.json`을 알려 주면 됨. 볼 것: "①+② 웹 용어" 줄의 확정·확정 정답률, 비고의 "검색 n건(실패 m)". "위키백과 연결 실패"가 나오면 회사망에서 ko.wikipedia.org가 막힌 것 — 그대로 알려 주기
 
 ## 1. 큐넷 출제기준 (A1·A2의 전제)
 - [x] **P2 큐넷 출제기준 자료실 화면** — 2026-10-24 확인:

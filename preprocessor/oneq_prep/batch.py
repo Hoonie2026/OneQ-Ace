@@ -1,6 +1,7 @@
 """여러 기출 PDF를 한 번에 처리한다 — 명령줄과 창 프로그램이 함께 쓰는 핵심(ADR 018).
 
 - 회차마다 따로 처리한다. 한 회차가 실패해도 나머지는 계속한다.
+- 모든 회차를 준비한 뒤 과목별로 단원을 한꺼번에 다시 판정하고(기출 자기 학습 + 웹 용어, unitlearn — ADR 021 4.8) 팩을 쓴다.
 - 여러 회차를 CPU 코어에 나눠 동시에 처리한다(workers). 구기준 회차(재배정)는 현행 회차가 끝난 뒤.
 - 진행은 on_event로 알리고, should_stop()이 참이면 아직 시작하지 않은 회차는 건너뛴다.
 - 화면(Qt)에 의존하지 않는다.
@@ -35,6 +36,8 @@ class BatchSpec:
     bundle: bool = True              # 끝나면 종목 묶음 1개(이번에 새로 만들거나 바뀐 회차만, ADR 021 8절)
     file_dates: dict[Path, str] = field(default_factory=dict)   # 파일별 시행일 직접 지정(창 프로그램)
     context: list[Path] = field(default_factory=list)           # (v0.4 호환, 쓰지 않음 — 회차는 시행월로 정함)
+    learn_units: bool = True         # 여러 회차를 함께 놓고 단원 자기 학습(ADR 021 4.8 ①)
+    web_terms: bool = True           # 단원 학습 때 위키백과에서 단원 용어 검색(4.8 ②) — 안 되면 ①만
 
     def date_of(self, p: Path) -> str | None:
         return self.file_dates.get(p) or self.date
@@ -66,6 +69,7 @@ class Event:
     result: RoundResult | None = None
     report: Path | None = None
     bundle: Path | None = None
+    units: str = ""                   # 단원 확정 요약(finish) — unitlearn.ApplyStats.summary
 
 
 STATUS_TEXT = {"waiting": "대기", "running": "처리 중", "packed": "팩 생성", "review": "검수 필요",
@@ -140,14 +144,14 @@ def run_batch(spec: BatchSpec, on_event: Callable[[Event], None] | None = None,
             emit(Event("stage", i, total, rows[i]))
 
     def finish(i: int, prepared: Prepared | None, err: BaseException | None):
+        """준비가 끝난 회차는 단원 학습을 기다린다(팩은 모든 회차가 준비된 뒤에 씀)."""
         r = rows[i]
-        if err is None:
-            on_stage(str(r.pdf), "팩")
         if err is not None:
             r.status, r.message = "error", f"{type(err).__name__}: {err}"
-        else:
-            _finish_round(spec, r, prepared)
-        emit(Event("done", i, total, r))
+            emit(Event("done", i, total, r))
+            return
+        r.prepared = prepared
+        on_stage(str(r.pdf), "단원 대기")
 
     workers = max(1, spec.workers or default_workers())
     for group, ref in ((current, None), (legacy, "later")):
@@ -208,6 +212,22 @@ def run_batch(spec: BatchSpec, on_event: Callable[[Event], None] | None = None,
                     except Exception as e:  # noqa: BLE001
                         finish(i, None, e)
 
+    ready = [i for i, r in enumerate(rows) if r.status == "running" and r.prepared is not None]
+    unit_summary = ""
+    if ready and spec.learn_units:
+        for i in ready:
+            on_stage(str(rows[i].pdf), "단원 학습")
+        from . import unitlearn
+        st = unitlearn.apply([rows[i].prepared for i in ready], prof, web=spec.web_terms)
+        unit_summary = st.summary()
+    for i in ready:
+        on_stage(str(rows[i].pdf), "팩")
+        try:
+            _finish_round(spec, rows[i], rows[i].prepared)
+        except Exception as e:  # noqa: BLE001
+            rows[i].status, rows[i].message = "error", f"{type(e).__name__}: {e}"
+        emit(Event("done", i, total, rows[i]))
+
     from .report import write_report
     prepared = [r.prepared for r in rows if r.prepared is not None]
     report = write_report(prepared, spec.out / REVIEW_DIR / "report.html") if prepared else None
@@ -216,7 +236,7 @@ def run_batch(spec: BatchSpec, on_event: Callable[[Event], None] | None = None,
         from .bundle import write_bundle
         fresh = [r.zip_path for r in rows if r.status == "packed" and r.zip_path and not (r.prepared and r.prepared.unchanged)]
         bundle = write_bundle(fresh, spec.out, prof.code)
-    emit(Event("finish", total=total, report=report, bundle=bundle))
+    emit(Event("finish", total=total, report=report, bundle=bundle, units=unit_summary))
     return rows
 
 
