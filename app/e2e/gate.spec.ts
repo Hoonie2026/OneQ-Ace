@@ -12,6 +12,8 @@ import { tmpdir } from 'node:os';
 import { makePack } from '../src/test/makePack';
 
 const SAMPLE = resolve(import.meta.dirname, '../../packs/oneq-SURVEY-2022-1.zip');
+/** "다른 종목" 팩의 코드 — 표본(SURVEY)이 없으면 시험 팩이 TEST라, 다른 종목은 OTHER(같은 TEST-2022-1로 겹치던 클라우드 실패, 세션 #17) */
+const OTHER = existsSync(SAMPLE) ? 'TEST' : 'OTHER';
 
 async function packFile(): Promise<{ path: string; total: number }> {
   if (existsSync(SAMPLE)) return { path: SAMPLE, total: 100 };
@@ -213,13 +215,13 @@ test('3단계 게이트(5단계 개편 후): 오프라인 과목별 학습·이�
   await p2.getByTestId('pack-section').getByTestId('pack-input').setInputFiles(pack);
   await expect(p2.getByText(/같은 팩 1개는 건너뜀/)).toBeVisible();
   const dir = mkdtempSync(join(tmpdir(), 'oneq-cert-'));
-  const other = join(dir, 'oneq-TEST-2022-1.zip');
-  writeFileSync(other, await makePack({ questions: [{ hash: 'x' }, { hash: 'y' }] }));
+  const other = join(dir, `oneq-${OTHER}-2022-1.zip`);
+  writeFileSync(other, await makePack({ code: OTHER, questions: [{ hash: 'x' }, { hash: 'y' }] }));
   await p2.getByTestId('pack-section').getByTestId('pack-input').setInputFiles(other);
   await expect(p2.getByTestId('pack-section')).toContainText('문제팩 2회차');
   await p2.getByRole('button', { name: '뒤로' }).click();
   // 종목 선택은 드롭다운(v0.7)
-  await expect(p2.getByTestId('cert-select')).toHaveValue('TEST');
+  await expect(p2.getByTestId('cert-select')).toHaveValue(OTHER);
   await expect(p2.getByTestId('cert-select').locator('option')).toHaveCount(2);
 
   // 학습 기록만 지우기 → 백업 복원 → 문제팩을 다시 가져오지 않아도 바로 이어짐(실기기 2차 요청)
@@ -241,7 +243,7 @@ test('3단계 게이트(5단계 개편 후): 오프라인 과목별 학습·이�
   // 문제팩 지우기: 종목 하나의 문제팩 전체 = 종목 삭제(다른 종목은 그대로) → 모든 종목 지우기 → 빈 홈(가져오기 화면)
   await p2.getByRole('button', { name: '백업·설정' }).click();
   await p2.getByTestId('wipe').click();
-  await p2.getByTestId('wipe-cert').selectOption('TEST');
+  await p2.getByTestId('wipe-cert').selectOption(OTHER);
   await p2.getByTestId('wipe-pick-all').check();
   await p2.getByTestId('wipe-packs-go').click();
   await p2.getByTestId('dialog-ok').click();

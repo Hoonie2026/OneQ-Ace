@@ -88,7 +88,7 @@ test('v0.10.8: 선택기에서 돌아왔는데 파일이 아직 안 오면 "기�
   await page.goto('./');
   const files = await packFiles(2);
   const chooser = page.waitForEvent('filechooser');
-  await page.getByText('문제팩 가져오기').first().click();
+  await page.getByText('문제팩 가져오기', { exact: true }).first().click();
   const fc = await chooser;
   await page.evaluate(() => window.dispatchEvent(new Event('focus')));   // 앱 화면으로 돌아옴(기기는 아직 내려받는 중)
   await expect(page.getByTestId('pick-wait')).toContainText('고른 파일을 기기가 받는 중', { timeout: 5_000 });
