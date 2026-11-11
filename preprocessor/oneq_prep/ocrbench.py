@@ -122,6 +122,8 @@ def _paddle(img) -> str:
             kw["text_detection_model_name"] = os.environ["ONEQ_PADDLE_DET"]
         if os.environ.get("ONEQ_PADDLE_MKLDNN") != "1":
             kw["enable_mkldnn"] = False
+        if os.environ.get("ONEQ_PADDLE_THREADS"):        # 예: 1 — 계산 스레드 수(충돌 우회 시험)
+            kw["cpu_threads"] = int(os.environ["ONEQ_PADDLE_THREADS"])
         print("  paddle: 모델 불러오는 중", kw, flush=True)
         _PADDLE = PaddleOCR(lang="korean", use_doc_orientation_classify=False, use_doc_unwarping=False,
                             use_textline_orientation=False, **kw)
@@ -136,6 +138,24 @@ def _paddle(img) -> str:
             texts = (getattr(r, "json", {}) or {}).get("res", {}).get("rec_texts")
         out.extend(texts or [])
     return "\n".join(out)
+
+
+def _tesseract_mode(img, psm: str) -> str:
+    from .ocr import OcrUnavailable, tesseract_path
+    try:
+        exe = tesseract_path()
+    except OcrUnavailable as e:
+        raise Missing(str(e).splitlines()[0]) from e
+    with tempfile.TemporaryDirectory() as d:
+        p = Path(d) / "c.png"
+        img.save(p)
+        r = subprocess.run([exe, str(p), "stdout", "-l", "kor", "--psm", psm], capture_output=True)
+        return r.stdout.decode("utf-8", "replace")
+
+
+def _tesseract_line(img) -> str:
+    """한 줄(정답표 줄을 이어 붙인 그림) — psm 7. psm 3이면 덩어리로 나눠 글자를 놓침."""
+    return _tesseract_mode(img, "7")
 
 
 def _tesseract_char(img) -> str:
@@ -154,6 +174,7 @@ def _tesseract_char(img) -> str:
 
 RUN = {"tesseract": _tesseract, "winocr": _winocr, "paddle": _paddle}
 RUN_CHAR = {"tesseract": _tesseract_char, "winocr": _winocr, "paddle": _paddle}
+RUN_LINE = {"tesseract": _tesseract_line, "winocr": _winocr, "paddle": _paddle}
 
 # ── 정답표: 표를 칸으로 잘라 칸마다 읽기(2026-11-11 — 쪽 통째로는 세 엔진 모두 낱자를 거의 건너뜀, 9/100 이하) ──
 CONFUSE = {"마": "라", "타": "다", "카": "가", "따": "다", "까": "가", "랴": "라", "냐": "나", "댜": "다", "갸": "가"}
@@ -214,15 +235,22 @@ def table_rows(img) -> list[list]:
     return [ln for ln in out if ln]
 
 
-def _strip(cells: list):
-    """한 줄의 칸들을 띄어서 한 줄 그림으로 — Windows 내장 OCR은 낱자 하나짜리 그림을 읽지 않는다(2026-11-11 PC 5/100)."""
+def _strip(cells: list, k: float = 1.0):
+    """한 줄의 칸들을 띄어서 한 줄 그림으로 — Windows 내장 OCR은 낱자 하나짜리 그림을 읽지 않는다(2026-11-11 PC 5/100).
+    k: 크기 배율(글자가 너무 크면 Windows 내장이 못 읽을 수 있어 0.5·0.3도 시도)."""
     from PIL import Image
-    gap = 60
-    w = sum(c.width for c in cells) + gap * (len(cells) + 1)
-    h = max(c.height for c in cells)
+    from PIL import ImageOps
+    trimmed = []
+    for c in cells:                                   # 칸 여백을 걷어 글자만(+여유 10px) — 빈칸이 넓으면 줄이 끊김
+        bb = ImageOps.invert(c).getbbox()
+        trimmed.append(c.crop((max(0, bb[0] - 10), max(0, bb[1] - 10), min(c.width, bb[2] + 10), min(c.height, bb[3] + 10))) if bb else c)
+    cs = [c.resize((max(1, int(c.width * k)), max(1, int(c.height * k))), Image.LANCZOS) if k != 1 else c for c in trimmed]
+    gap = max(10, int(45 * k))
+    w = sum(c.width for c in cs) + gap * (len(cs) + 1)
+    h = max(c.height for c in cs)
     im = Image.new("L", (w, h), 255)
     x = gap
-    for c in cells:
+    for c in cs:
         im.paste(c, (x, (h - c.height) // 2))
         x += c.width + gap
     return im
@@ -239,20 +267,26 @@ def _letters(t: str) -> list[str]:
 
 
 def read_answer_cells(eng: str, img) -> str:
-    """정답표: 줄마다 칸들을 한 줄 그림으로 이어 붙여 읽고(줄당 엔진 1번), 글자 수가 칸 수와 다르면 그 줄만 칸마다 다시.
-    가·나·다·라만(비슷한 글자는 보정), 번호 줄(숫자)은 건너뜀. 칸을 못 찾으면 ''."""
+    """정답표: 줄마다 칸들을 한 줄 그림으로 이어 붙여 읽고(줄당 엔진 1~3번, 크기 1·0.5·0.3배 중 글자를 가장 많이 찾은 것),
+    가·나·다·라가 칸 수의 절반도 안 나오면 번호 줄로 보고 건너뜀, 절반 이상인데 모자라면 그 줄만 칸마다 다시.
+    비슷한 글자는 보정. 칸을 못 찾으면 ''."""
     got = []
     for row in table_rows(img):
-        t = re.sub(r"\s+", " ", RUN[eng](_strip(row)))
-        if re.fullmatch(r"[0-9 ]+", t.strip()):
-            continue
-        ls = _letters(t)
-        if len(ls) != len(row):
-            ls = []
+        best: list[str] = []
+        for k in (1.0, 0.5, 0.3):
+            ls = _letters(RUN_LINE[eng](_strip(row, k)))
+            if len(ls) > len(best):
+                best = ls
+            if len(best) >= len(row):
+                break
+        if len(best) * 2 < len(row):
+            continue                                   # 번호 줄(숫자)·빈 줄
+        if len(best) != len(row):
+            best = []
             for c in row:
                 one = _letters(RUN_CHAR[eng](c))
-                ls.append(one[0] if one else "?")
-        got += ls
+                best.append(one[0] if one else "?")
+        got += best
     return " ".join(got)
 
 
