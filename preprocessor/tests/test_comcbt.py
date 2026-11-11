@@ -47,6 +47,18 @@ def test_parse_board_and_files():
     assert comcbt.parse_menu(MENU) == {"토목기사": "n1", "철도토목산업기사": "cdf"}
 
 
+def test_parse_menu_2026_11_redesign():
+    """🖥P20③(2026-11-11): 첫 화면 개편 — 종목명이 span 안, 뒤에 › 표시. 게시판·글·첨부 모양은 그대로(Chrome으로 확인)."""
+    page = ('<a href="https://www.comcbt.com/xe/freeb">자유게시판</a>'
+            '<a class="cbt-download-item" href="//www.comcbt.com/xe/e1" target="_blank">\n'
+            '    <span class="cbt-download-item-title">콘크리트기사</span>\n'
+            '    <span class="cbt-download-arrow">›</span>\n</a>'
+            "<a class='cbt-download-item' href='//www.comcbt.com/xe/n1'><span class='cbt-download-item-title'>토목기사</span>"
+            "<span class='cbt-download-arrow'>›</span></a>")
+    m = comcbt.parse_menu(page)
+    assert m["콘크리트기사"] == "e1" and m["토목기사"] == "n1"
+
+
 def test_fetch_recent_first_page_only(tmp_path):
     c = Fake()
     res = comcbt.fetch_recent("토목기사", tmp_path, have_dates={"2022-03-05"}, client=c)

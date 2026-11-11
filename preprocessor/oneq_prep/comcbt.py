@@ -25,7 +25,10 @@ from pathlib import Path
 BASE = "https://www.comcbt.com"
 UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) OneQ-Prep"
 # 따옴표는 둘 다 받음 — 첫 화면 메뉴는 href='//www.comcbt.com/xe/n1'(작은따옴표), 게시판·글은 큰따옴표(2026-10-24 PC 실측)
-MENU_RE = re.compile(r"<a[^>]+href=[\"'](?:https?:)?//www\.comcbt\.com/xe/([A-Za-z0-9]+)[\"'][^>]*>\s*([^<]+?)\s*</a>")
+# 2026-11-11 첫 화면 개편: <a class="cbt-download-item" href="//…/xe/n1"><span class="…-title">토목기사</span><span>›</span></a>
+# → 링크 안쪽 HTML을 통째로 잡고, 제목 span이 있으면 그것, 없으면 태그를 걷어낸 글자(예전 모양도 그대로 읽음)
+MENU_RE = re.compile(r"<a[^>]+href=[\"'](?:https?:)?//www\.comcbt\.com/xe/([A-Za-z0-9]+)[\"'][^>]*>(.*?)</a>", re.S)
+MENU_TITLE_RE = re.compile(r"<span[^>]*class=[\"'][^\"']*title[^\"']*[\"'][^>]*>(.*?)</span>", re.S)
 POST_RE = re.compile(r"<a[^>]+href=[\"'](?:https?://www\.comcbt\.com)?/xe/([A-Za-z0-9]+)/(\d+)[\"'][^>]*>\s*([^<]*?필기\s*기출문제[^<]*?)\s*</a>")
 TITLE_RE = re.compile(r"(\d{4})년\s*(\d{1,2})월\s*(\d{1,2})일\s*\(([^)]*)\)")
 FILE_RE = re.compile(r"<a[^>]+href=[\"']([^\"']*procFileDownload[^\"']*)[\"'][^>]*>\s*([^<]+?\.pdf)\s*</a>", re.I)
@@ -85,8 +88,12 @@ def _norm(s: str) -> str:
 def parse_menu(page: str) -> dict[str, str]:
     """첫 화면 메뉴 → {종목명: 게시판 코드}."""
     out: dict[str, str] = {}
-    for slug, name in MENU_RE.findall(page):
-        out.setdefault(_norm(html.unescape(name)), slug)
+    for slug, inner in MENU_RE.findall(page):
+        t = MENU_TITLE_RE.search(inner)
+        name = re.sub(r"<[^>]+>", " ", t.group(1) if t else inner)
+        name = _norm(html.unescape(name).replace("›", "").replace("»", ""))
+        if name:
+            out.setdefault(name, slug)
     return out
 
 
@@ -118,9 +125,9 @@ def parse_files(page: str) -> list[tuple[str, str]]:
 
 def board_of(cert_name: str, client: Client) -> str:
     menu = parse_menu(client.get(BASE + "/").decode("utf-8", "replace"))
-    if not menu:
-        raise ComcbtError("comcbt.com 첫 화면 모양이 바뀌어 종목 게시판을 찾지 못했습니다.")
     slug = menu.get(_norm(cert_name))
+    if not slug and len(menu) < 20:   # 종목 게시판은 수백 개 — 몇 개뿐이면 메뉴를 못 읽은 것(2026-11-11 개편 때 1개)
+        raise ComcbtError("comcbt.com 첫 화면 모양이 바뀌어 종목 게시판을 찾지 못했습니다.")
     if not slug:
         raise ComcbtError(f"comcbt.com에서 '{cert_name}' 게시판을 찾지 못했습니다.")
     return slug

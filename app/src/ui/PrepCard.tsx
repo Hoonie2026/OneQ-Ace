@@ -29,6 +29,9 @@ export function PrepCard(props: { compact?: boolean; testId?: string; url?: stri
       <section className="card guide prep-card" data-testid={testId}>
         <h2>{offer === 'use-pc' ? '문제팩은 PC에서 만듭니다' : '문제팩 만들기 — Windows PC 필요'}</h2>
         <p className="hint">{PREP_WHAT}</p>
+        <p className="hint">
+          메신저·메일·소셜미디어로 <b>받은 문제팩</b>이 있으면 전처리기 없이 [문제팩 가져오기]로 바로 넣으면 됩니다. 직접 만들려면:
+        </p>
         <ol className="install-steps">
           <li>
             PC에 전처리기를 아직 설치하지 않았다면, <b>Windows PC에서 이 앱 주소를 열어</b> 전처리기를 설치하세요
