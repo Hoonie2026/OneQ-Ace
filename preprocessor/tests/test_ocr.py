@@ -186,3 +186,48 @@ def test_ocr_subject_header_variants():
     assert OCR_SUBJ.match("제 3 과목 •. 으요 하").group(1) == "3"
     assert OCR_SUBJ.match("제 1 과목 : 철도공학").group(2) == "철도공학"
     assert OCR_SUBJ.match("가. 과목 : 이름") is None
+
+
+def _grid_shaded():
+    """번호 줄(바탕 칠) · 답 줄 · 번호 줄 · 답 줄."""
+    from PIL import Image, ImageDraw
+    w, h = 640, 260
+    im = Image.new("L", (w, h), 255)
+    d = ImageDraw.Draw(im)
+    for r in (0, 2):
+        d.rectangle((3, 10 + r * 60, w - 4, 70 + r * 60), fill=243)
+    for x in range(3, w, 63):
+        d.line((x, 10, x, h - 10), fill=200, width=2)
+    for r in range(5):
+        d.line((3, 10 + r * 60, w - 4, 10 + r * 60), fill=200, width=1)
+    for r in range(4):
+        for i in range(10):
+            d.rectangle((3 + i * 63 + 25, 25 + r * 60, 3 + i * 63 + 35, 45 + r * 60), fill=0)
+    return im
+
+
+def test_answer_rows_shaded_and_empty_reads(monkeypatch):
+    """2026-11-11 PC winocr 2차: 번호 줄·답 줄 몇 개를 빈 글로 돌려줌 → 번호 줄은 바탕 칠로 가르고(읽지 않음),
+    빈 답 줄은 잘 읽힌 앞 답 줄과 함께 붙여 다시 읽는다. 순서가 밀리지 않아야 함."""
+    rows = ocr.table_rows_info(_grid_shaded())
+    assert [r.shaded for r in rows] == [True, False, True, False]
+
+    def fake(img, eng):
+        if img.info.get("stacked"):                      # 앞 줄과 함께 쌓은 그림(두 줄)
+            return "가 나 다 라 가 나 다 라 가 나\n라 라 라 라 라 다 다 다 다 다"
+        if img.width / img.height > 10:                  # 줄 하나 통째
+            fake.n += 1
+            return "가 나 다 라 가 나 다 라 가 나" if fake.n <= 1 else ""
+        return ""
+    fake.n = 0
+    real_stack = ocr._stack
+
+    def stack(top, bottom, gap=60):
+        im = real_stack(top, bottom, gap)
+        im.info["stacked"] = True
+        return im
+    monkeypatch.setattr(ocr, "_stack", stack)
+    monkeypatch.setattr(ocr, "line_text", fake)
+    got = ocr.read_answer_rows(_grid_shaded(), "winocr")
+    assert "".join(got) == "가나다라가나다라가나" + "라라라라라다다다다다"
+    assert ocr.ANSWER_DEBUG[3]["how"].startswith("앞 줄과 함께")

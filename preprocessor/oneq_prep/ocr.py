@@ -284,15 +284,22 @@ def _runs(mask) -> list[tuple[int, int]]:
     return out
 
 
-def table_rows(img) -> list[list]:
-    """격자 표 → 줄마다 칸 그림 목록. 가로선·색칠한 줄(번호 줄)과 세로선으로 자른다. 칸이 아니면 []."""
+@dataclass
+class TableRow:
+    cells: list                 # 칸 그림(글자 칸만)
+    shaded: bool                # 바탕을 칠한 줄(정답표의 번호 줄 — 표본은 밝기 240, 답 줄은 254)
+    band: object                # 줄 전체 그림(칸으로 자르지 않은 것, 다시 읽기용)
+
+
+def table_rows_info(img) -> list[TableRow]:
+    """격자 표 → 줄마다 칸 그림·바탕 칠 여부. 가로선·짙게 칠한 줄과 세로선으로 자른다. 칸이 아니면 []."""
     import numpy as np
     from PIL import Image
     g = img.convert("L")
     a = np.asarray(g).astype(int)
     h, w = a.shape
     ink = a < 240
-    line_rows = ink.mean(1) > 0.6           # 가로선 또는 색칠한 줄(번호 줄)
+    line_rows = ink.mean(1) > 0.6           # 가로선 또는 짙게 칠한 줄
     rows = [(y0, y1) for y0, y1 in _runs(~line_rows) if y1 - y0 > h / 60]
     vl = np.where(ink.mean(0) > 0.6)[0]
     cuts, grp = [], []
@@ -309,7 +316,6 @@ def table_rows(img) -> list[list]:
     out = []
     for y0, y1 in rows:
         line = []
-        out.append(line)
         for x0, x1 in cols:
             c = g.crop((x0, y0 + 2, x1, y1 - 2)).point(lambda v: 0 if v < 200 else 255)
             if c.getbbox() is None or c.getextrema()[0] != 0:
@@ -319,7 +325,18 @@ def table_rows(img) -> list[list]:
             pad = Image.new("L", (c.width + 80, c.height + 80), 255)
             pad.paste(c, (40, 40))
             line.append(pad)
-    return [ln for ln in out if ln]
+        if not line:
+            continue
+        mid = a[y0 + 3:max(y0 + 4, y1 - 3), cols[0][0]:cols[-1][1]]
+        shaded = bool(mid.size) and float(np.median(mid)) < 248
+        band = g.crop((cols[0][0] - 3, y0, cols[-1][1] + 2, y1))
+        out.append(TableRow(line, shaded, band))
+    return out
+
+
+def table_rows(img) -> list[list]:
+    """격자 표 → 줄마다 칸 그림 목록(table_rows_info의 칸만)."""
+    return [r.cells for r in table_rows_info(img)]
 
 
 def table_cells(img) -> list:
@@ -377,50 +394,94 @@ def _read_strip(cells: list, engine: str) -> tuple[list[str], bool, str]:
     return best, False, seen
 
 
+def _band_image(band, height: int = 90):
+    """칸으로 자르지 않은 줄 그림을 키워 여백을 둠(다시 읽기용)."""
+    from PIL import Image
+    k = height / max(1, band.height)
+    b = band.resize((max(1, int(band.width * k)), height), Image.LANCZOS).point(lambda v: 0 if v < 200 else 255)
+    pad = Image.new("L", (b.width + 80, b.height + 80), 255)
+    pad.paste(b, (40, 40))
+    return pad
+
+
+def _stack(top, bottom, gap: int = 60):
+    from PIL import Image
+    w = max(top.width, bottom.width)
+    im = Image.new("L", (w, top.height + gap + bottom.height), 255)
+    im.paste(top, (0, 0))
+    im.paste(bottom, (0, top.height + gap))
+    return im
+
+
+def _reread(row: TableRow, engine: str, context) -> tuple[list[str], str]:
+    """덜 읽은 답 줄 다시 읽기 — 맞는 칸 수가 나오는 첫 방법. (글자, 방법) / 끝내 못 읽으면 칸마다 "?"."""
+    n = len(row.cells)
+    h = n // 2
+    a, _, _ = _read_strip(row.cells[:h], engine)
+    b, _, _ = _read_strip(row.cells[h:], engine)
+    if len(a) == h and len(b) == n - h:
+        return a + b, "반씩"
+    for ht in (90, 60):
+        ls = letters(line_text(_band_image(row.band, ht), engine))
+        if len(ls) == n:
+            return ls, f"줄 통째({ht})"
+    if context is not None and engine == "winocr":
+        # Windows 내장 OCR은 글자 몇 개짜리 그림을 통째로 못 읽기도 함(2026-11-11 PC: 빈 글) → 잘 읽힌 답 줄 아래에 붙여 함께
+        for k in (1.0, 0.5):
+            t = line_text(_stack(strip_image(context, k), strip_image(row.cells, k)), engine)
+            last = [ln for ln in t.splitlines() if ln.strip()]
+            ls = letters(last[-1]) if len(last) >= 2 else []
+            if len(ls) == n:
+                return ls, f"앞 줄과 함께({k:g})"
+    parts = [row.cells[i:i + 3] for i in range(0, n, 3)]
+    got = []
+    for part in parts:
+        ls, _, _ = _read_strip(part, engine)
+        if len(ls) != len(part):
+            got = []
+            break
+        got += ls
+    if len(got) == n:
+        return got, "세 칸씩"
+    out = []
+    for c in row.cells:
+        one = letters(char_text(c, engine))
+        out.append(one[0] if one else "?")
+    return out, "칸마다"
+
+
 def read_answer_rows(img, engine: str) -> list[str]:
     """정답표 그림 → 답 글자 목록(읽은 순서, 못 읽은 칸은 "?"). 표가 아니면 [].
-    표의 대표 칸 수(보통 10)와 다른 줄(제목 줄)은 빼고, 숫자가 많으면 번호 줄로 건너뜀. **나머지 줄은 모두 답 줄** —
-    글자를 덜 읽었다고 건너뛰면 뒤 정답이 통째로 밀린다(2026-11-11 PC winocr: 한 줄을 건너뛰어 62번부터 어긋남).
-    덜 읽은 줄은 반씩 나눠 다시, 그래도 모자라면 칸마다, 끝내 못 읽은 칸은 "?"(검수에서 입력)."""
+    - 표의 대표 칸 수(보통 10)와 다른 줄(제목 줄)은 뺌
+    - 번호 줄 = 바탕을 칠한 줄(읽지 않음) 또는 숫자가 많은 줄 — **나머지 줄은 모두 답 줄**: 답 줄을 건너뛰면 뒤 정답이
+      통째로 밀린다(2026-11-11 PC winocr 1차: 덜 읽은 줄을 건너뜀 / 2차: 번호 줄·답 줄을 빈 글로 돌려줘 구분 못 함)
+    - 덜 읽은 답 줄은 반씩 · 줄 통째 · (winocr) 잘 읽힌 앞 답 줄과 함께 · 세 칸씩 · 칸마다 순서로 다시, 끝내 못 읽은 칸은 "?"."""
     from collections import Counter
     ANSWER_DEBUG.clear()
-    rows = table_rows(img)
+    rows = table_rows_info(img)
     if not rows:
         return []
-    width = Counter(len(r) for r in rows).most_common(1)[0][0]
+    width = Counter(len(r.cells) for r in rows).most_common(1)[0][0]
     got: list[str] = []
+    context = None
     for ri, row in enumerate(rows):
-        rec = {"row": ri, "cells": len(row)}
+        rec = {"row": ri, "cells": len(row.cells), "shaded": row.shaded}
         ANSWER_DEBUG.append(rec)
-        if len(row) != width:
+        if len(row.cells) != width:
             rec["kind"] = "제목·기타(칸 수 다름)"
             continue
-        best, numbers, seen = _read_strip(row, engine)
+        if row.shaded:
+            rec["kind"] = "번호 줄(바탕 칠)"
+            continue
+        best, numbers, seen = _read_strip(row.cells, engine)
         rec["text"] = seen
         if numbers:
-            rec["kind"] = "번호 줄"
+            rec["kind"] = "번호 줄(숫자)"
             continue
-        if not best and not any(ch.strip() for ch in seen):
-            # 아무것도 못 읽음: 반으로 나눠 숫자인지 다시 본다(빈 줄을 답 줄로 세지 않게)
-            h = len(row) // 2
-            a, na, _ = _read_strip(row[:h], engine)
-            b, nb, _ = _read_strip(row[h:], engine)
-            if na or nb:
-                rec["kind"] = "번호 줄(반씩)"
-                continue
-        if len(best) != len(row):
-            h = len(row) // 2
-            a, _, _ = _read_strip(row[:h], engine)
-            b, _, _ = _read_strip(row[h:], engine)
-            if len(a) == h and len(b) == len(row) - h:
-                best = a + b
-                rec["how"] = "반씩"
-            else:
-                best = []
-                for c in row:
-                    one = letters(char_text(c, engine))
-                    best.append(one[0] if one else "?")
-                rec["how"] = "칸마다"
+        if len(best) != len(row.cells):
+            best, rec["how"] = _reread(row, engine, context)
+        else:
+            context = row.cells
         rec["kind"] = "답 줄"
         rec["letters"] = "".join(best)
         got += best
