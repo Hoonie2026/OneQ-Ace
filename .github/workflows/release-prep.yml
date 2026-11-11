@@ -73,5 +73,5 @@ jobs:
         run: |
           gh release upload $env:TAG $env:ASSET --clobber
           $body = gh release view $env:TAG --json body --jq .body
-          $note = "OneQ-Prep-win64.zip — 전처리기 v${{ steps.zip.outputs.version }} · 약 ${{ steps.zip.outputs.mb }}MB · SHA-256 ${{ steps.zip.outputs.sha }}`n받은 zip 압축 풀기 → OneQ-Prep.exe → 「Windows의 PC 보호」 창이면 추가 정보 → 실행"
+          $note = "OneQ-Prep-win64.zip — 전처리기 v${{ steps.zip.outputs.version }} · 약 ${{ steps.zip.outputs.mb }}MB · SHA-256 ${{ steps.zip.outputs.sha }}`n설치 없음: 받은 zip을 오른쪽 클릭 → 모두 압축 풀기 → 풀린 폴더의 OneQ-Prep.exe(처음 열 때 바로가기 만들지 물음) → 「Windows의 PC 보호」 창이면 추가 정보 → 실행"
           gh release edit $env:TAG --notes ("$body`n`n$note").Trim()

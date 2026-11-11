@@ -22,6 +22,7 @@ from PySide6.QtWidgets import (QAbstractItemView, QApplication, QFileDialog, QFr
 from .. import __version__
 from .. import standards as S
 from ..appinfo import APP_URL, qr_png
+from . import shortcut
 from ..batch import STATUS_TEXT, BatchSpec, RoundResult, plan_rounds
 from ..summary import law_summary, peek_subjects, subject_change
 from . import theme
@@ -187,6 +188,8 @@ class MainWindow(QMainWindow):
         speed = m.addMenu("처리 속도")
         for v, t in ((0, "자동(코어 수 − 1, 최대 4)"), (1, "천천히 — 1회차씩(오래된 PC)")):
             speed.addAction(t, lambda v=v: self.settings.setValue("workers", v))
+        m.addAction("바로가기 만들기(바탕화면·시작 메뉴)", lambda: self.offer_shortcuts(ask=False))
+        m.addAction("프로그램 폴더 열기", self.open_program_folder)
         m.addAction("휴대폰에 학습앱 설치(앱 주소 복사)", self.copy_app_url)
         m.addAction("라이선스·사용한 오픈소스", self.show_licenses)
         m.addAction(f"{APP_NAME} 정보", lambda: QMessageBox.about(
@@ -257,6 +260,50 @@ class MainWindow(QMainWindow):
         row.addLayout(v, 1)
         c.body.addLayout(row)
         return c
+
+    # ── 설치 없는 zip 배포: 바로가기·임시 폴더 경고(🖥P14, 2026-11-11) ──
+    def first_run_checks(self) -> None:
+        """실행파일로 처음 열 때: zip 안에서 바로 열었으면 경고, 아니면 바로가기 만들지 한 번 묻기."""
+        exe = shortcut.exe_path()
+        if exe is None or os.name != "nt":
+            return
+        if shortcut.inside_zip_temp(exe):
+            QMessageBox.warning(self, APP_NAME, (
+                "zip 파일을 풀지 않고 그 안에서 바로 실행했어요.\n"
+                "이대로면 창을 닫을 때 프로그램이 임시 폴더에서 지워지고 바로가기도 만들 수 없어요.\n\n"
+                "창을 닫고 → 받은 zip을 오른쪽 클릭 → [모두 압축 풀기] → 풀린 폴더의 OneQ-Prep.exe를 여세요."))
+            return
+        if self.settings.value("shortcut_asked", False, type=bool):
+            return
+        self.settings.setValue("shortcut_asked", True)
+        self.offer_shortcuts(ask=True)
+
+    def offer_shortcuts(self, ask: bool) -> None:
+        exe = shortcut.exe_path()
+        if exe is None:
+            QMessageBox.information(self, APP_NAME, "바로가기는 실행파일(OneQ-Prep.exe)로 열었을 때 만들 수 있어요.")
+            return
+        if shortcut.inside_zip_temp(exe):
+            self.first_run_checks()
+            return
+        if ask and QMessageBox.question(self, APP_NAME, (
+                "원큐합격 전처리기는 설치 없이 이 폴더에서 바로 실행됩니다:\n"
+                f"{exe.parent}\n\n이 폴더를 지우거나 옮기지 말고 두세요.\n"
+                "바탕화면과 시작 메뉴에 바로가기를 만들까요?")) != QMessageBox.Yes:
+            return
+        try:
+            made = shortcut.make_shortcuts(exe)
+        except Exception as e:  # noqa: BLE001
+            QMessageBox.warning(self, APP_NAME, f"바로가기를 만들지 못했어요 — {e}\n\n프로그램 위치: {exe}")
+            return
+        self.status.setText("바로가기를 만들었어요: 바탕화면·시작 메뉴의 '원큐합격 전처리기'")
+        if not ask:
+            QMessageBox.information(self, APP_NAME, "바로가기를 만들었어요.\n" + "\n".join(made))
+
+    def open_program_folder(self) -> None:
+        exe = shortcut.exe_path()
+        folder = exe.parent if exe else Path(__file__).resolve().parents[2]
+        QDesktopServices.openUrl(QUrl.fromLocalFile(str(folder)))
 
     def copy_app_url(self) -> None:
         QApplication.clipboard().setText(APP_URL)
@@ -411,6 +458,7 @@ class MainWindow(QMainWindow):
     def _qnet_finished(self) -> None:
         self.qnet_thread.deleteLater()
         self.qnet_thread = None
+        self.update_ready()      # 🖥P19(2026-11-11): 조회 성공 때 on_qnet은 스레드가 끝나기 전이라 ②가 잠긴 채 남았음
 
     def _use_profile(self, code: str) -> None:
         self.picker.reload()
@@ -886,4 +934,5 @@ def main() -> None:
         app.setWindowIcon(QIcon(str(icon)))
     w = MainWindow()
     w.show()
+    QTimer.singleShot(400, w.first_run_checks)
     sys.exit(app.exec())

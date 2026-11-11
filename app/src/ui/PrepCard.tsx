@@ -40,9 +40,11 @@ export function PrepCard(props: { compact?: boolean; testId?: string }) {
         전처리기 받기(zip)
       </a>
       <ol className="install-steps">
-        <li>받은 zip을 오른쪽 클릭 → 「압축 풀기」(문서 폴더 등 아무 곳)</li>
         <li>
-          풀린 폴더의 <b>OneQ-Prep.exe</b>를 엽니다
+          받은 zip을 오른쪽 클릭 → <b>모두 압축 풀기</b>(문서 폴더 등 아무 곳). zip을 더블클릭해 안에서 바로 열면 닫을 때 사라집니다
+        </li>
+        <li>
+          풀린 폴더의 <b>OneQ-Prep.exe</b>를 엽니다 — 설치 없이 그 폴더가 프로그램 자리이고, 처음 열 때 바탕화면·시작 메뉴 바로가기를 만들지 묻습니다
         </li>
         <li>
           「Windows의 PC 보호」 창이 뜨면 <b>추가 정보</b> → <b>실행</b>(처음 한 번)

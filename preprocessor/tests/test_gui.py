@@ -178,3 +178,31 @@ def test_phone_qr_card(win):
     assert win.qr.pixmap() is not None and not win.qr.pixmap().isNull()
     win.copy_app_url()
     assert QApplication.clipboard().text() == APP_URL
+
+
+def test_qnet_success_unlocks_pdf_area(win, qtbot, monkeypatch):
+    """🖥P19(2026-11-11): [조회] 성공 뒤 ② 기출 PDF 단추·끌어다 놓기가 열려야 한다(전에는 잠긴 채 남음)."""
+    from PySide6.QtCore import QObject, Signal, Slot
+
+    from oneq_prep.gui import app as gui_app
+
+    class Post:
+        title = "건설안전기사(2026.1.1~2030.12.31)"
+
+    class FakeWorker(QObject):
+        done = Signal(object)
+        failed = Signal(str)
+
+        def __init__(self, *a):
+            super().__init__()
+
+        @Slot()
+        def run(self):
+            self.done.emit({"kind": "fetched", "code": "SAFETY", "post": Post(), "upcoming": None, "warnings": [], "same": True})
+
+    monkeypatch.delenv("ONEQ_NO_NETWORK")
+    monkeypatch.setattr(gui_app, "QnetWorker", FakeWorker)
+    win.qnet_check(win.picker.current)
+    qtbot.waitUntil(lambda: win.qnet_thread is None, timeout=5000)
+    assert win.drop.isEnabled() and all(b.isEnabled() for b in win.pdf_buttons)
+    assert "끌어다 놓으세요" in win.drop_hint.text()
