@@ -59,10 +59,10 @@ Windows PowerShell은 `*.pdf`를 풀어 주지 않으므로 `(Get-ChildItem ..\s
 |---|---|---|---|
 | comcbt 교사용(채운 원문자 ❶~❹ + 문서 끝 정답표) | 보기 표시 ↔ 정답표 교차 검증 | 같은 페이지 일반 원문자 픽셀로 교체 | 측량 34회차 · 건설안전 59회차 검증 |
 | 형광펜 표시형(노란 사각형, 과목마다 번호 1부터) | 형광 표시 | PDF 객체 단계에서 노란 사각형 삭제 | 토목 2024-3 경향문제 검증 |
-| 스캔본(텍스트층 없음) | 진하게 칠한 보기 번호 또는 검수 파일 | 지우고 글꼴로 원문자 다시 그림 | **시험용 모의 스캔만** — 실제 스캔본으로 보정 필요 |
+| 스캔본(텍스트층 없음) | 끝 쪽 정답표(칸 나눠 읽기) · 진하게 칠한 원문자 번호 · 검수 파일 | 원문자 칠한 번호는 지우고 다시 그림, 가나다라 손글씨 표시는 그대로(ADR 022) | 철도보선기사 2010-2 실제 스캔본 검증(문항 100/100·정답 99/100) |
 
-스캔본은 Tesseract가 필요하다(선택 설치): <https://github.com/UB-Mannheim/tesseract/wiki> 설치 때 **Korean** 선택.
-PATH에 없으면 환경변수 `ONEQ_TESSERACT=C:\Program Files\Tesseract-OCR\tesseract.exe`.
+스캔본은 **Windows 내장 OCR**(한국어 OCR 기능 — 한국어 Windows는 보통 설치돼 있음, `winocr` 패키지)로 읽는다(ADR 022). 점검: `py -3 -m oneq_prep.ocr --check`.
+예비로 직접 설치한 Tesseract(kor)가 있으면 Windows 내장을 못 쓸 때만 쓴다(PATH 또는 `ONEQ_TESSERACT`). 강제: `ONEQ_OCR_ENGINE=winocr|tesseract`.
 
 ## 출제기준 프로필 `standards/<종목코드>.json`
 
@@ -90,7 +90,8 @@ PATH에 없으면 환경변수 `ONEQ_TESSERACT=C:\Program Files\Tesseract-OCR\te
 | 모듈 | 하는 일 |
 |---|---|
 | `extract.py` | 단 구분·페이지별 본문 영역, 문항 경계(연속 번호 / 과목마다 1부터, 마지막 문항 뒤 안내문 끊기), 과목 머리말·제목줄, 보기 번호(어긋나면 배치 모양으로 다시 고름), 정답 표시(채운 원문자·형광), 정답표, 되풀이 안내문 제거 |
-| `ocr.py` | 스캔본 판정, Tesseract로 글자 좌표 생성(보기 번호 자리표) |
+| `ocr.py` | 스캔본 판정·엔진 고르기(Windows 내장 → Tesseract 예비), 글자 좌표 생성(보기 번호 자리표·가나다라), 끝 쪽 정답표 칸 나눠 읽기·글자 모양 맞춤, `--check` |
+| `ocrbench.py` | OCR 엔진 비교(🖥P5)·본 경로 실측 `--pack`(🖥P25) |
 | `render.py` | 288dpi 렌더링, 정답 표시 제거(원문자 교체·형광 삭제·스캔 칠한 번호)·잔존 검사, 문항 크롭, 1080px WebP |
 | `standards.py` | 출제기준 프로필 읽기, 과목명 정규화·별칭·제외 판정 |
 | `reassign.py` | 구기준 회차 과목 재배정 제안(글자 2-gram 유사도 투표) |
@@ -109,6 +110,6 @@ PATH에 없으면 환경변수 `ONEQ_TESSERACT=C:\Program Files\Tesseract-OCR\te
 - Python 3.11, PDF: pypdfium2(렌더링·형광 객체 삭제) + pdfplumber(문자 좌표)
 - PySide6(Essentials) 창 프로그램 + PyInstaller **폴더형** 실행파일(ADR 018 — 단일 파일 대신: 기동 속도·백신 오탐·Qt LGPL)
 - 텍스트 분석: kiwipiepy + scikit-learn TF-IDF — 6단계
-- OCR(스캔본만): Tesseract(kor) 선택 설치
+- OCR(스캔본만): Windows 내장 OCR(winocr, ADR 022) — Tesseract(kor)는 직접 설치된 PC에서만 예비
 
 실제 기출 PDF·팩(zip)·검수 보고서는 저장소에 커밋하지 않는다(`.gitignore`).
