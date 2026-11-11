@@ -42,8 +42,10 @@ def summary(p) -> dict:
 class ResultDialog(QDialog):
     want_review = Signal()
 
-    def __init__(self, row, parent=None):
+    def __init__(self, row, parent=None, pending: bool = False):
+        """pending=True: 처리 중에 먼저 끝난 파일(B3 ②) — 단원 확정과 팩 쓰기는 모든 회차가 끝난 뒤."""
         super().__init__(parent)
+        self.pending = pending
         p = row.prepared
         self.p = p
         s = summary(p)
@@ -75,8 +77,15 @@ class ResultDialog(QDialog):
             lay.addWidget(note)
         else:
             ok = Note("ok")
-            ok.set("ok", "확인할 문항 없음 — 그대로 팩이 만들어졌어요", [])
+            ok.set("ok", "확인할 문항 없음 — " + ("다른 회차가 끝나면 그대로 팩이 만들어져요" if pending
+                                              else "그대로 팩이 만들어졌어요"), [])
             lay.addWidget(ok)
+        if pending:
+            wait = Note("info")
+            wait.set("info", "다른 회차를 처리하는 중이에요",
+                     ["단원은 모든 회차를 함께 보고 정하므로 처리가 끝난 뒤 확정됩니다.",
+                      "지금 고친 내용은 처리가 끝나면 이 회차를 다시 만들 때 반영됩니다."])
+            lay.addWidget(wait)
 
         grid = QGridLayout()
         grid.setHorizontalSpacing(24)
@@ -106,7 +115,9 @@ class ResultDialog(QDialog):
         row_("정답", f"{got}/{tot}문항 확인" + (f" ({srcs})" if srcs else ""))
         t = s["types"]
         row_("유형", " · ".join(f"{QTYPE[k]} {t.get(k, 0)}" for k in QTYPE) + (f" · 순서·절차 {s['sequence']}" if s["sequence"] else ""))
-        if s["units"]:
+        if s["units"] and pending:
+            row_("단원", "모든 회차 처리가 끝난 뒤 확정")
+        elif s["units"]:
             sure, cand, none = s["units"]
             row_("단원", f"확정 {sure} · 미정 {cand + none}"
                  + (f" <span style='color:{theme.MUTED}'>(미정 문항은 앱에서 답한 뒤 후보 3개 중 고름)</span>" if cand else ""))

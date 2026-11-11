@@ -29,8 +29,9 @@ from ..summary import law_summary, peek_subjects, subject_change
 from . import theme
 from .cert_picker import CertPicker
 from .profile_dialog import ProfileDialog
-from .result_dialog import ResultDialog
+from .result_dialog import ResultDialog, suspects
 from .review_dialog import ReviewDialog
+from .samples import ConditionDialog, ConditionPicture
 from .widgets import BadgeDelegate, Card, DropZone, Note, ProgressDelegate
 from .worker import BatchWorker, ComcbtWorker, QnetWorker
 
@@ -55,6 +56,17 @@ def round_text(r: RoundResult) -> str:
         return f"0000년 {n}회 · 날짜 모름"
     tail = "날짜 모름" if r.date.endswith("-00") else r.date[5:]
     return f"{y}년 {n}회 · {tail}"
+
+
+def stage_progress(r: RoundResult) -> float:
+    """처리 중 진행 막대: 단계 다섯(STAGES) 중 어디인지. 준비가 끝나 단원 대기·단원 학습 중이면 '분류'와 '팩' 사이."""
+    if r.status != "running":
+        return 0.0
+    if r.stage in STAGES:
+        return (STAGES.index(r.stage) + 0.5) / len(STAGES)
+    if r.prepared is not None or r.stage in ("단원 대기", "단원 학습"):
+        return (STAGES.index("팩") + (0.25 if r.stage == "단원 학습" else 0.0)) / len(STAGES)
+    return 0.0
 
 
 def resource_path(rel: str) -> Path:
@@ -96,6 +108,7 @@ class MainWindow(QMainWindow):
         self.done = 0
         self.report: Path | None = None
         self.bundle: Path | None = None
+        self.pending_rerun: list[Path] = []      # 처리 중에 검수하고 [다시 만들기]를 누른 회차 — 처리가 끝나면 이어서
         self.out_dir = Path(".")
         self._building = False
 
@@ -213,6 +226,7 @@ class MainWindow(QMainWindow):
     def _card_conditions(self) -> Card:
         """올리는 기출 PDF 조건 셋(ADR 021 3절) — 넣으면 바로 [글자]/[스캔]과 회차를 보여 줌."""
         c = Card("올리는 기출 PDF", "", "어디서 구했든 괜찮아요. 아래 셋만 맞으면 됩니다.")
+        self.condition_pictures: list[ConditionPicture] = []
         for i, (t, h) in enumerate(CONDITIONS, 1):
             row = QHBoxLayout()
             row.setSpacing(10)
@@ -230,11 +244,18 @@ class MainWindow(QMainWindow):
             v.addWidget(hl)
             row.addLayout(v, 1)
             c.body.addLayout(row)
+            pic = ConditionPicture(i - 1)            # 예시 그림(B3 ①) — 누르면 크게
+            pic.clicked.connect(self.show_condition)
+            c.body.addWidget(pic)
+            self.condition_pictures.append(pic)
         tip = QLabel("한글(HWP)·워드 파일은 그 프로그램에서 PDF로 저장해 넣으세요.")
         tip.setObjectName("hint")
         tip.setWordWrap(True)
         c.body.addWidget(tip)
         return c
+
+    def show_condition(self, index: int) -> None:
+        ConditionDialog(index, CONDITIONS[index][1], self).exec()
 
     def show_app_install(self, tab: str = "pc") -> None:
         """[학습앱 설치] 창(설치 경로 일원화, 사용자 2026-11-11) — PC·Android·iPhone 중 골라 직접 설치."""
@@ -664,12 +685,15 @@ class MainWindow(QMainWindow):
             if r.pack_id in dup and r.status == "waiting":
                 msg = "같은 회차 PDF가 두 번 들어갔는지 확인하세요"
             done = r.status in ("packed", "review")
-            if r.status == "packed":
+            early = r.status == "running" and r.prepared is not None     # 처리 중에 끝난 파일(B3 ②) — 단원·팩만 남음
+            if early:
+                n_sus = len(suspects(r.prepared))
+                msg = (f"확인할 문항 {n_sus}건" if n_sus else f"{len(r.prepared.items)}문항") + " · 결과 보기 ›"
+            elif r.status == "packed":
                 msg = f"{r.questions}문항 · 결과 보기 ›"
             elif r.status == "review":
                 msg = f"확인할 문항 {len(r.issues)}건 · 결과 보기 ›"
-            prog = 1.0 if done else 0.0 if r.status in ("error", "skipped") else \
-                ((STAGES.index(r.stage) + 0.5) / len(STAGES) if r.status == "running" and r.stage in STAGES else 0.0)
+            prog = 1.0 if done else 0.0 if r.status in ("error", "skipped") else stage_progress(r)
             stage = {"waiting": "대기", "running": r.stage or "시작", "error": "처리 안 함", "skipped": "건너뜀"}.get(r.status, "끝")
             cells = [r.pdf.name, r.kind, round_text(r) or ("" if r.status == "error" else "…"), stage, st_text, msg]
             for c, text in enumerate(cells):
@@ -689,7 +713,7 @@ class MainWindow(QMainWindow):
             if needs_date:
                 self.table.item(i, C_ROUND).setForeground(QColor(theme.WARN))
                 self.table.item(i, C_ROUND).setToolTip("시행일을 문서에서 못 찾았어요. 알면 두 번 눌러 YYYY-MM-DD로 적으세요(안 적어도 됩니다)")
-            if done:
+            if done or early:
                 self.table.item(i, C_MSG).setForeground(QColor(theme.PRIMARY))
         self._building = False
         n = len(self.rows)
@@ -878,23 +902,34 @@ class MainWindow(QMainWindow):
             self.law_note.set("warn", "법령·기준 개정 주의", lines)
         else:
             self.law_note.setVisible(False)
+        if self.pending_rerun:                         # 처리 중에 검수한 회차 다시 만들기(B3 ②)
+            again = [p for p in self.pending_rerun if p in self.pdfs]
+            self.pending_rerun = []
+            if again:
+                QTimer.singleShot(0, lambda: self.start(again))
 
     def open_result(self, row: int, col: int) -> None:
-        if col == C_ROUND or self.worker is not None or row >= len(self.rows):
+        """끝난 파일을 누르면 결과 화면 — 처리 중에도 먼저 끝난 파일은 바로 열림(B3 ②)."""
+        if row >= len(self.rows) or (col == C_ROUND and self.worker is None):
             return
         r = self.rows[row]
         if r.prepared is None:
             if r.status == "error" and r.message:
                 QMessageBox.information(self, APP_NAME, r.message)
             return
-        dlg = ResultDialog(r, self)
+        dlg = ResultDialog(r, self, pending=self.worker is not None and r.status == "running")
         dlg.want_review.connect(lambda: self.open_review(r))
         dlg.exec()
 
     def open_review(self, r: RoundResult) -> None:
         dlg = ReviewDialog(r.prepared, self.out_dir, self, only_suspect=True)
         if dlg.exec() and dlg.rerun:
-            self.start([r.pdf])
+            if self.worker is not None:                # 처리 중이면 끝난 뒤 이어서 다시 만듦
+                if r.pdf not in self.pending_rerun:
+                    self.pending_rerun.append(r.pdf)
+                self.status.setText(f"고친 내용을 저장했어요 — 지금 처리가 끝나면 {r.pdf.name}을(를) 다시 만듭니다")
+            else:
+                self.start([r.pdf])
 
     def show_licenses(self) -> None:
         p = resource_path("THIRD-PARTY-NOTICES.txt")

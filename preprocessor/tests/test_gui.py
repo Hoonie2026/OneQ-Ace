@@ -221,3 +221,91 @@ def test_qnet_success_unlocks_pdf_area(win, qtbot, monkeypatch):
     qtbot.waitUntil(lambda: win.qnet_thread is None, timeout=5000)
     assert win.drop.isEnabled() and all(b.isEnabled() for b in win.pdf_buttons)
     assert "끌어다 놓으세요" in win.drop_hint.text()
+
+
+# ── B3 마무리(세션 #17): ① 조건 예시 그림 ② 처리 중에 끝난 파일 결과 보기 ──
+def test_condition_pictures(win, qtbot, monkeypatch):
+    """조건 셋마다 예시 그림 — 그려지고(빈 그림 아님), 누르면 크게 보는 창."""
+    from PySide6.QtCore import Qt
+    from PySide6.QtGui import QColor, QImage, QPainter
+    from oneq_prep.gui import app as appmod
+    from oneq_prep.gui.samples import ConditionDialog
+    pics = win.condition_pictures
+    assert len(pics) == 3
+    for pic in pics:
+        img = QImage(320, 120, QImage.Format_ARGB32)
+        img.fill(QColor("white"))
+        p = QPainter(img)
+        from PySide6.QtCore import QRectF
+        from oneq_prep.gui.samples import paint
+        paint(p, QRectF(0, 0, 320, 120), pic.index)
+        p.end()
+        dark = sum(1 for x in range(0, 320, 4) for y in range(0, 120, 4) if QColor(img.pixel(x, y)).lightness() < 200)
+        assert dark > 30, pic.index
+    opened = []
+    monkeypatch.setattr(ConditionDialog, "exec", lambda self: opened.append((self.windowTitle(), self.big.index)) or 0)
+    qtbot.mouseClick(pics[1], Qt.LeftButton)
+    assert opened == [("예시 — 정답이 파일 안에", 1)]
+    assert appmod.CONDITIONS[1][0] == "정답이 파일 안에"
+
+
+def _fake_prepared(tmp_path, n_warn=0):
+    import io
+    from types import SimpleNamespace as NS
+    from PIL import Image
+    from oneq_prep import standards as S
+    buf = io.BytesIO()
+    Image.new("RGB", (200, 60), "white").save(buf, "PNG")
+    prof = S.load("SAFETY")
+    subj = prof.subjects[0]["name"]
+    items = [NS(no=k + 1, subject=subj, answer=1, answer_source="inline-mark", qtype="concept", unit=None,
+                unit_candidates=[], sequence=False, excluded=False, suggestion=None, image=buf.getvalue(),
+                warnings=["정답 표시가 둘"] if k < n_warn else [])
+             for k in range(5)]
+    return NS(items=items, profile=prof, exam={"year": 2022, "round": 1, "date": "2022-03-05"}, info=None,
+              pdf=tmp_path / "a.pdf", issues=[])
+
+
+def test_result_while_running(win, qtbot, tmp_path, monkeypatch):
+    """처리 중에도 먼저 끝난 파일(준비 끝, 단원·팩 대기)은 '결과 보기'로 열리고, 검수 뒤 다시 만들기는 처리가 끝나면 이어서."""
+    from oneq_prep.batch import RoundResult
+    from oneq_prep.gui import app as appmod
+    from oneq_prep.gui.result_dialog import ResultDialog
+    a, b = tmp_path / "a.pdf", tmp_path / "b.pdf"
+    win.pdfs = [a, b]
+    win.rows = [RoundResult(pdf=a, pack_id="SAFETY-2022-1", date="2022-03-05", status="running", stage="단원 대기"),
+                RoundResult(pdf=b, pack_id="SAFETY-2022-2", date="2022-04-24", status="running", stage="정답")]
+    win.rows[0].prepared = _fake_prepared(tmp_path, n_warn=2)
+    win.worker = object()                       # 처리 중
+    win.render_rows()
+    assert "확인할 문항 2건 · 결과 보기" in win.table.item(0, appmod.C_MSG).text()
+    assert "결과 보기" not in win.table.item(1, appmod.C_MSG).text()
+    assert 0.8 <= win.table.item(0, appmod.C_PROG).data(appmod.Qt.UserRole) < 1.0     # 단원 대기 = 분류와 팩 사이
+
+    seen = []
+    monkeypatch.setattr(ResultDialog, "exec", lambda self: seen.append(self.pending) or 0)
+    win.open_result(1, appmod.C_MSG)            # 아직 처리 중인 파일 → 안 열림
+    win.open_result(0, appmod.C_MSG)
+    assert seen == [True]
+
+    # 실제 결과 화면(처리 중 표시)
+    dlg = ResultDialog(win.rows[0], win, pending=True)
+    qtbot.addWidget(dlg)
+    texts = " ".join(lbl.text() for lbl in dlg.findChildren(appmod.QLabel))
+    assert "처리가 끝난 뒤 확정" in texts and "다른 회차를 처리하는 중" in texts
+
+    # 검수 → 다시 만들기: 처리 중이면 미뤘다가 끝나면 시작
+    class FakeReview:
+        def __init__(self, *a, **k):
+            self.rerun = True
+
+        def exec(self):
+            return 1
+    monkeypatch.setattr(appmod, "ReviewDialog", FakeReview)
+    started = []
+    monkeypatch.setattr(win, "start", lambda pdfs=None: started.append(pdfs))
+    win.open_review(win.rows[0])
+    assert win.pending_rerun == [a] and started == []
+    win.on_finished(win.rows)
+    qtbot.waitUntil(lambda: started == [[a]], timeout=2000)
+    assert win.pending_rerun == []
