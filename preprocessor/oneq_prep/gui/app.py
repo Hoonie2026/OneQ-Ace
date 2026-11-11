@@ -273,7 +273,7 @@ class MainWindow(QMainWindow):
                 "이대로면 창을 닫을 때 프로그램이 임시 폴더에서 지워지고 바로가기도 만들 수 없어요.\n\n"
                 "창을 닫고 → 받은 zip을 오른쪽 클릭 → [모두 압축 풀기] → 풀린 폴더의 OneQ-Prep.exe를 여세요."))
             return
-        if self.settings.value("shortcut_asked", False, type=bool):
+        if shortcut.installed(exe) or self.settings.value("shortcut_asked", False, type=bool):
             return
         self.settings.setValue("shortcut_asked", True)
         self.offer_shortcuts(ask=True)

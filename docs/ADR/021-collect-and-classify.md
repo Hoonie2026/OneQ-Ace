@@ -191,6 +191,7 @@
 - **통합 배포 = 주소 하나**: 앱 주소(GitHub Pages) 하나로 배포. PC로 열면 [전처리기 받기] + [이 PC에 학습앱 설치], 폰으로 열면 앱 설치. 전처리기 첫 화면에 "폰에 앱 설치" QR(앱 주소를 보여 줄 뿐, 팩 전송 아님)
 - 폐기: 전처리기 설치에 학습앱을 넣는 방안(B), 전처리기를 웹앱에 흡수(불가 — 큐넷 수집·OCR)
 - **구현(세션 #15, 2026-11-10, PREP-PLAN D1)**: ① 앱 v0.12.0 `src/prep.ts`·`ui/PrepCard.tsx` — Windows PC면 홈(팩 없을 때)·설정에 [전처리기 받기(zip)] + 압축 풀기·「Windows의 PC 보호」 넘기기 안내, 맥은 "Windows 전용", 폰·태블릿은 설정에 "PC에서 이 주소를 열면 받기" ② 받는 곳 = GitHub Releases `releases/latest/download/OneQ-Prep-win64.zip`(이름 고정 → 새 판을 올려도 앱 주소 그대로) ③ `.github/workflows/release-prep.yml` — GitHub 웹(폰도 됨)에서 릴리스(태그 `prep-v…`)를 Publish하면 GitHub의 Windows 기계가 시험 → PyInstaller → zip을 그 릴리스에 붙임(PC 없이 빌드). 기출 PDF 점검·Defender 검사는 PC(🖥P9·P14) ④ 전처리기 첫 화면 왼쪽 "휴대폰에 학습앱 설치" 카드(QR = 앱 주소, `oneq_prep/appinfo.py`, segno BSD-3) + [주소 복사]·도움말 메뉴. 앱 주소·받기 파일 이름·실행파일 버전 정보가 어긋나면 `tests/test_appinfo.py`가 실패
+- **설치 프로그램(2026-11-11, 사용자 B안)**: 🖥P14에서 "설치 없는 zip은 아이콘도 위치도 모름" → 선택지 A(zip+바로가기 질문) / B(설치 프로그램) / C(코드 서명·스토어·winget — 비용·회사 명의 절차) 중 **B**. Inno Setup 6 `preprocessor/packaging/oneq-prep.iss` — 관리자 권한 없이 `%LOCALAPPDATA%\Programs\OneQ-Prep`, 시작 메뉴·바탕화면 바로가기, Windows 설정에서 제거(문제팩·설정은 남음), 같은 AppId로 새 판 덮어 설치. GitHub 빌드가 Setup.exe를 만들고 조용히 설치→바로가기→제거까지 시험한 뒤 릴리스에 Setup.exe·zip 둘 다 붙임. 앱 v0.12.2 [전처리기 설치 파일 받기](Setup.exe), zip은 "설치가 막힌 PC" 보조. 경고는 그대로 남음: 브라우저 「흔히 다운로드되는 파일이 아님」 → 유지, SmartScreen → 추가 정보 → 실행(C를 하면 없어짐)
 - 남은 걸림: 서명 안 된 exe의 "Windows의 PC 보호" 경고 — 사내 IT 배포 시스템 / Microsoft Store(MSIX) / OV 인증서(연 수십만 원, 바로 해제 안 됨). 먼저 PC-TODO P14
 
 ## 8. 팩 단위 = 종목 묶음 (사용자 2026-10-24, 조건부)

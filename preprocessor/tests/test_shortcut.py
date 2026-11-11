@@ -28,5 +28,13 @@ def test_ps_script_quotes_and_targets():
     assert "GetFolderPath('Desktop')" not in shortcut.ps_script(exe, desktop=False)
 
 
+def test_installed(tmp_path):
+    exe = tmp_path / "OneQ-Prep.exe"
+    exe.touch()
+    assert not shortcut.installed(exe)
+    (tmp_path / "unins000.exe").touch()
+    assert shortcut.installed(exe)
+
+
 def test_exe_path_none_when_not_frozen():
     assert shortcut.exe_path() is None

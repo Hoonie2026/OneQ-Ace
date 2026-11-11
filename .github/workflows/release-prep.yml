@@ -1,5 +1,6 @@
 # 원큐합격 전처리기 Windows 실행파일을 GitHub에서 빌드해 릴리스로 올린다(PREP-PLAN-v0.5 D1, ADR 021 7절).
-# 학습앱의 [전처리기 받기]는 .../releases/latest/download/OneQ-Prep-win64.zip 을 가리킨다(이름 고정 — app/src/prep.ts).
+# 학습앱의 [전처리기 받기]는 .../releases/latest/download/OneQ-Prep-Setup.exe(설치 프로그램, 사용자 2026-11-11 B안)와
+# 보조로 OneQ-Prep-win64.zip(설치 없이)을 가리킨다(이름 고정 — app/src/prep.ts).
 # 올리는 법: GitHub 웹(폰도 됨) Releases → Draft a new release → 태그 prep-v<버전>(예: prep-v0.5.0-dev.1) 새로 만들기
 #   → 제목·설명 → Set as the latest release 켬 → Publish. 그러면 이 워크플로가 빌드해 그 릴리스에 zip을 붙인다(몇 분).
 #   붙기 전까지 [전처리기 받기]는 직전 릴리스 파일이 아니라 404 — 한가한 시간에 올릴 것.
@@ -29,6 +30,7 @@ jobs:
     env:
       PYTHONUTF8: '1'
       ASSET: OneQ-Prep-win64.zip
+      SETUP: OneQ-Prep-Setup.exe
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -47,23 +49,56 @@ jobs:
         run: python -m pytest -q tests
       - name: 실행파일 만들기(PyInstaller, 폴더형)
         run: python -m PyInstaller --noconfirm --clean --distpath dist --workpath build packaging\oneq-prep.spec
-      - name: zip 만들기
+      - name: zip·설치 프로그램 만들기
         id: zip
         run: |
           if (-not (Test-Path dist\OneQ-Prep\OneQ-Prep.exe)) { throw "OneQ-Prep.exe 없음" }
           Compress-Archive -Path dist\OneQ-Prep -DestinationPath $env:ASSET
           $ver = python -c "import oneq_prep; print(oneq_prep.__version__)"
+          $num = python -c "import re, oneq_prep; print('.'.join(re.match(r'(\d+)\.(\d+)\.(\d+)', oneq_prep.__version__).groups()))"
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) {
+            choco install innosetup -y --no-progress | Out-Null
+            if (-not (Test-Path $iscc)) { throw "Inno Setup(ISCC.exe)을 찾지 못함" }
+          }
+          $ko = Join-Path (Split-Path $iscc) "Languages\Korean.isl"
+          if (-not (Test-Path $ko)) {   # 한국어가 공식 번역에 없으면 Inno Setup 저장소의 비공식 번역을 받아 씀(실패하면 영어)
+            try { Invoke-WebRequest "https://raw.githubusercontent.com/jrsoftware/issrc/main/Files/Languages/Unofficial/Korean.isl" -OutFile packaging\Korean.isl -UseBasicParsing }
+            catch { Write-Host "한국어 번역 파일을 받지 못함 — 설치 화면은 영어" }
+          }
+          & $iscc "/DMyVersion=$ver" "/DMyNumVersion=$num" packaging\oneq-prep.iss | Select-String "설치 화면 언어|Successful|Error"
+          if ($LASTEXITCODE -ne 0) { throw "설치 프로그램 만들기 실패" }
+          Move-Item dist\$env:SETUP $env:SETUP -Force
           $sha = (Get-FileHash $env:ASSET -Algorithm SHA256).Hash.ToLower()
           $mb = "{0:N0}" -f ((Get-Item $env:ASSET).Length / 1MB)
+          $ssha = (Get-FileHash $env:SETUP -Algorithm SHA256).Hash.ToLower()
+          $smb = "{0:N0}" -f ((Get-Item $env:SETUP).Length / 1MB)
           "version=$ver" >> $env:GITHUB_OUTPUT
           "sha=$sha" >> $env:GITHUB_OUTPUT
           "mb=$mb" >> $env:GITHUB_OUTPUT
+          "ssha=$ssha" >> $env:GITHUB_OUTPUT
+          "smb=$smb" >> $env:GITHUB_OUTPUT
+      - name: 설치 프로그램 시험(조용히 설치 → 파일 확인 → 제거)
+        run: |
+          $dir = Join-Path $env:RUNNER_TEMP "oneq-setup-test"
+          $p = Start-Process -FilePath (Resolve-Path $env:SETUP) -ArgumentList "/VERYSILENT","/SUPPRESSMSGBOXES","/NORESTART","/CURRENTUSER","/DIR=`"$dir`"","/TASKS=desktopicon" -Wait -PassThru
+          if ($p.ExitCode -ne 0) { throw "설치 실패(종료 코드 $($p.ExitCode))" }
+          if (-not (Test-Path "$dir\OneQ-Prep.exe")) { throw "설치 폴더에 OneQ-Prep.exe 없음" }
+          $lnk = Join-Path ([Environment]::GetFolderPath('Programs')) "원큐합격 전처리기.lnk"
+          if (-not (Test-Path $lnk)) { throw "시작 메뉴 바로가기 없음: $lnk" }
+          $u = Start-Process -FilePath "$dir\unins000.exe" -ArgumentList "/VERYSILENT","/SUPPRESSMSGBOXES","/NORESTART" -Wait -PassThru
+          for ($i = 0; $i -lt 30 -and (Test-Path "$dir\OneQ-Prep.exe"); $i++) { Start-Sleep -Seconds 1 }   # 제거기는 임시 사본으로 다시 떠서 끝남
+          if (Test-Path "$dir\OneQ-Prep.exe") { throw "제거 뒤에도 파일이 남음" }
+          Write-Host "설치·바로가기·제거 확인"
+
       - name: 빌드 결과 보관(손으로 돌렸을 때)
         if: ${{ github.event_name != 'release' }}
         uses: actions/upload-artifact@v4
         with:
           name: OneQ-Prep-win64
-          path: preprocessor/${{ env.ASSET }}
+          path: |
+            preprocessor/${{ env.ASSET }}
+            preprocessor/${{ env.SETUP }}
           retention-days: 14
       - name: 릴리스에 zip 붙이기
         if: ${{ github.event_name == 'release' }}
@@ -71,7 +106,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ github.event.release.tag_name }}
         run: |
-          gh release upload $env:TAG $env:ASSET --clobber
+          gh release upload $env:TAG $env:SETUP $env:ASSET --clobber
           $body = gh release view $env:TAG --json body --jq .body
-          $note = "OneQ-Prep-win64.zip — 전처리기 v${{ steps.zip.outputs.version }} · 약 ${{ steps.zip.outputs.mb }}MB · SHA-256 ${{ steps.zip.outputs.sha }}`n설치 없음: 받은 zip을 오른쪽 클릭 → 모두 압축 풀기 → 풀린 폴더의 OneQ-Prep.exe(처음 열 때 바로가기 만들지 물음) → 「Windows의 PC 보호」 창이면 추가 정보 → 실행"
+          $note = "OneQ-Prep-Setup.exe — 전처리기 v${{ steps.zip.outputs.version }} 설치 프로그램 · 약 ${{ steps.zip.outputs.smb }}MB · SHA-256 ${{ steps.zip.outputs.ssha }}`n받아 실행 → 「Windows의 PC 보호」 창이면 추가 정보 → 실행 → 설치(관리자 권한 필요 없음) → 시작 메뉴·바탕화면의 '원큐합격 전처리기'`n`nOneQ-Prep-win64.zip — 설치 없이 쓰는 판 · 약 ${{ steps.zip.outputs.mb }}MB · SHA-256 ${{ steps.zip.outputs.sha }}`n받은 zip을 오른쪽 클릭 → 모두 압축 풀기 → 풀린 폴더의 OneQ-Prep.exe"
           gh release edit $env:TAG --notes ("$body`n`n$note").Trim()

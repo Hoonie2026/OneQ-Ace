@@ -20,9 +20,20 @@ def test_app_url_matches_app_build():
 
 def test_download_asset_name_matches_release_workflow():
     prep = (ROOT / "app" / "src" / "prep.ts").read_text(encoding="utf-8")
-    asset = re.search(r"PREP_ASSET = '([^']+)'", prep).group(1)
     wf = (ROOT / ".github" / "workflows" / "release-prep.yml").read_text(encoding="utf-8")
-    assert asset in wf
+    for const in ("PREP_ASSET", "PREP_SETUP_ASSET"):
+        asset = re.search(const + r" = '([^']+)'", prep).group(1)
+        assert asset in wf, const
+    setup = re.search(r"PREP_SETUP_ASSET = '([^']+)'", prep).group(1)
+    iss = (PRE / "packaging" / "oneq-prep.iss").read_text(encoding="utf-8-sig")
+    assert f"OutputBaseFilename={Path(setup).stem}" in iss
+
+
+def test_installer_shortcut_name_matches_gui():
+    """설치 프로그램 바로가기와 [바로가기 만들기]가 같은 이름 → 두 개가 생기지 않고 덮어씀."""
+    from oneq_prep.gui.shortcut import LINK_NAME
+    iss = (PRE / "packaging" / "oneq-prep.iss").read_text(encoding="utf-8-sig")
+    assert f'#define MyAppName "{Path(LINK_NAME).stem}"' in iss
 
 
 def test_version_info_matches_package():

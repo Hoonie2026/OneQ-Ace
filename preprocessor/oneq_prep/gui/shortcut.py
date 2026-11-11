@@ -20,6 +20,11 @@ def exe_path() -> Path | None:
     return Path(sys.executable).resolve() if getattr(sys, "frozen", False) else None
 
 
+def installed(exe: Path) -> bool:
+    """설치 프로그램(Inno Setup)으로 깔렸는지 — 제거기 unins000.exe가 옆에 있음. 바로가기는 설치 프로그램이 만든다."""
+    return (exe.parent / "unins000.exe").exists()
+
+
 def inside_zip_temp(exe: Path, temp_dir: str | None = None) -> bool:
     """zip을 풀지 않고 열어 임시 폴더에서 도는지 — 탐색기(%TEMP%\\Temp1_….zip), 7-Zip(7zO…), 반디집 등 모두 %TEMP% 아래."""
     tmp = Path(temp_dir or tempfile.gettempdir()).resolve()

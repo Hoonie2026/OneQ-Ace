@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { PREP_ASSET, PREP_DOWNLOAD_URL, prepOffer } from './prep';
+import { PREP_ASSET, PREP_DOWNLOAD_URL, PREP_SETUP_ASSET, PREP_SETUP_URL, prepOffer } from './prep';
 import { deviceEnv } from './util';
 
 const UA = {
@@ -23,5 +23,7 @@ describe('전처리기 받기(D1)', () => {
   it('받기 주소는 최신 릴리스의 고정 파일 이름(릴리스 워크플로와 같은 이름)', () => {
     expect(PREP_DOWNLOAD_URL).toBe('https://github.com/Hoonie2026/OneQ-Ace/releases/latest/download/OneQ-Prep-win64.zip');
     expect(PREP_ASSET).toBe('OneQ-Prep-win64.zip');
+    expect(PREP_SETUP_URL).toBe('https://github.com/Hoonie2026/OneQ-Ace/releases/latest/download/OneQ-Prep-Setup.exe');
+    expect(PREP_SETUP_ASSET).toBe('OneQ-Prep-Setup.exe');
   });
 });

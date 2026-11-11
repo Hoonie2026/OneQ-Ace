@@ -1,6 +1,7 @@
 ﻿# 원큐합격 전처리기 — Windows 실행파일(폴더형) 만들기 (ADR 018)
 # 사용(preprocessor 폴더에서):  powershell -ExecutionPolicy Bypass -File packaging\build_exe.ps1
-# 결과: dist\OneQ-Prep\OneQ-Prep.exe  +  dist\OneQ-Prep-<버전>-win64.zip (동료에게 나눠 줄 파일)
+# 결과: dist\OneQ-Prep\OneQ-Prep.exe  +  dist\OneQ-Prep-<버전>-win64.zip  +  dist\OneQ-Prep-Setup.exe(Inno Setup 6이 깔려 있을 때)
+# 보통은 GitHub 빌드(.github/workflows/release-prep.yml)를 쓰고, 이 스크립트는 기출 PDF 점검·Defender 검사용
 $ErrorActionPreference = "Stop"
 $pre = Split-Path $PSScriptRoot -Parent
 Set-Location $pre
@@ -50,6 +51,16 @@ if (Test-Path $mp) {
     & $mp -Scan -ScanType 3 -File (Join-Path $pre "dist\OneQ-Prep") -DisableRemediation | Select-Object -Last 3
 } else {
     Write-Host "  Defender 명령줄을 찾지 못함 — 회사 백신으로 dist\OneQ-Prep 폴더를 직접 검사해 보세요" -ForegroundColor Yellow
+}
+$iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+if (Test-Path $iscc) {
+    Write-Host "+ 설치 프로그램 만들기(Inno Setup)" -ForegroundColor Cyan
+    $num = & $py -c "import re, oneq_prep; print('.'.join(re.match(r'(\d+)\.(\d+)\.(\d+)', oneq_prep.__version__).groups()))"
+    & $iscc /Qp "/DMyVersion=$ver" "/DMyNumVersion=$num" packaging\oneq-prep.iss
+    if ($LASTEXITCODE -ne 0) { throw "설치 프로그램 만들기 실패" }
+    Write-Host "  설치 프로그램: dist\OneQ-Prep-Setup.exe" -ForegroundColor Green
+} else {
+    Write-Host "  설치 프로그램 건너뜀: Inno Setup 6 없음(winget install JRSoftware.InnoSetup)" -ForegroundColor Yellow
 }
 $size = "{0:N0}MB" -f ((Get-Item $zip).Length / 1MB)
 Write-Host "`n완료: $exe`n나눠 줄 파일: $zip ($size)" -ForegroundColor Green
