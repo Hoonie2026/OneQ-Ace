@@ -2,7 +2,8 @@
 
 설치 프로그램은 전처리기만 깐다. 학습앱은 사용자가 이 창에서 기기를 골라 **직접** 설치한다
 (자동으로 둘 다 깔면 무엇이 설치됐는지 몰라 혼란 — 사용자). 순서: 전처리기 설치 → 문제팩 만들기 → 여기서 학습앱 설치 → 팩 넣기.
-- PC: [이 PC에 학습앱 설치] → 바탕화면·시작 메뉴 '원큐합격 학습앱'(Edge 앱 창, shortcut.py)
+- PC: [이 PC에 학습앱 설치] → 바탕화면·시작 메뉴 '원큐합격 학습앱'(기본 브라우저 Chrome/Edge의 앱 창, shortcut.py).
+  PC 접근은 이 아이콘 하나(앱 설정의 PC 브라우저 설치 안내도 없앰) — 기록이 브라우저마다 따로라는 혼란을 없앰
 - Android·iPhone: QR(앱 주소) + 기기별 순서 + 문제팩 옮기는 법
 """
 from __future__ import annotations
@@ -82,9 +83,11 @@ class AppInstallDialog(QDialog):
         v = QVBoxLayout(w)
         v.setContentsMargins(16, 16, 16, 16)
         v.setSpacing(10)
-        self.edge = shortcut.edge_path()
+        found = shortcut.app_browser()
+        self.edge, self.browser_name = found if found else (None, "")
         v.addWidget(_hint("바탕화면과 시작 메뉴에 <b>원큐합격 학습앱</b>(남색 아이콘)을 만듭니다. "
-                          "누르면 Microsoft Edge가 주소창 없는 앱 창으로 엽니다. 인터넷이 없어도 열리고, 기록은 이 PC에 저장됩니다."))
+                          "<b>PC에서는 언제나 이 아이콘으로 여세요</b> — 인터넷이 없어도 열리고 기록은 이 PC에 저장됩니다."
+                          + (f"<br>(이 PC의 기본 브라우저 {self.browser_name}로 주소창 없는 창이 열립니다)" if self.browser_name else "")))
         self.pc_btn = QPushButton("이 PC에 학습앱 설치")
         self.pc_btn.setObjectName("primarySmall")
         self.pc_btn.clicked.connect(self.install_pc)
@@ -104,8 +107,7 @@ class AppInstallDialog(QDialog):
         ]))
         if self.edge is None:
             self.pc_btn.setEnabled(False)
-            self.pc_note.setText("Microsoft Edge를 찾지 못했어요. [학습앱 열기]로 브라우저에서 연 뒤, "
-                                 "주소창 오른쪽의 설치 아이콘으로 설치하세요.")
+            self.pc_note.setText("Chrome·Edge를 찾지 못했어요. [학습앱 열기]로 브라우저에서 쓰세요.")
             self.pc_note.setVisible(True)
         v.addStretch(1)
         return w

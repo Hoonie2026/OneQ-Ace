@@ -80,14 +80,46 @@ def make_shortcuts(exe: Path, desktop: bool = True, start_menu: bool = True) -> 
 APP_LINK_NAME = "원큐합격 학습앱.lnk"
 
 
-def edge_path(env: dict | None = None) -> Path | None:
-    """Microsoft Edge(Windows 10·11 기본) — 학습앱을 주소창 없는 앱 창(--app)으로 연다."""
-    env = env if env is not None else os.environ
-    for base in (env.get("ProgramFiles(x86)"), env.get("ProgramFiles"), env.get("LOCALAPPDATA")):
+def _find(rel: tuple[str, ...], env: dict) -> Path | None:
+    for base in (env.get("ProgramFiles"), env.get("ProgramFiles(x86)"), env.get("LOCALAPPDATA")):
         if base:
-            p = Path(base) / "Microsoft" / "Edge" / "Application" / "msedge.exe"
+            p = Path(base).joinpath(*rel)
             if p.exists():
                 return p
+    return None
+
+
+def edge_path(env: dict | None = None) -> Path | None:
+    """Microsoft Edge(Windows 10·11 기본)."""
+    return _find(("Microsoft", "Edge", "Application", "msedge.exe"), env if env is not None else os.environ)
+
+
+def chrome_path(env: dict | None = None) -> Path | None:
+    return _find(("Google", "Chrome", "Application", "chrome.exe"), env if env is not None else os.environ)
+
+
+def default_browser_progid() -> str:
+    """이 PC의 기본 브라우저(https 연결) — ChromeHTML·MSEdgeHTM 등. 못 읽으면 ''."""
+    try:
+        import winreg
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER,
+                            r"Software\Microsoft\Windows\Shell\Associations\UrlAssociations\https\UserChoice") as k:
+            return str(winreg.QueryValueEx(k, "ProgId")[0])
+    except Exception:  # noqa: BLE001 — 윈도가 아니거나 값이 없음
+        return ""
+
+
+def app_browser(progid: str | None = None, env: dict | None = None) -> tuple[Path, str] | None:
+    """PC 학습앱을 열 브라우저(PC 접근 일원화, 2026-11-11): 기본 브라우저가 Chrome이면 Chrome, 아니면 Edge.
+    링크·메일을 여는 브라우저와 같아야 기록이 한곳에 모인다. 둘 다 없으면 None."""
+    progid = default_browser_progid() if progid is None else progid
+    chrome, edge = chrome_path(env), edge_path(env)
+    if progid.lower().startswith("chrome") and chrome:
+        return chrome, "Chrome"
+    if edge:
+        return edge, "Edge"
+    if chrome:
+        return chrome, "Chrome"
     return None
 
 
@@ -95,16 +127,16 @@ def app_args(url: str) -> str:
     return f"--app={url}"
 
 
-def app_ps_script(edge: Path, url: str, icon: Path) -> str:
-    return ps_script(edge, name=APP_LINK_NAME, args=app_args(url), icon=f"{icon},0", workdir=str(edge.parent),
+def app_ps_script(browser: Path, url: str, icon: Path) -> str:
+    return ps_script(browser, name=APP_LINK_NAME, args=app_args(url), icon=f"{icon},0", workdir=str(browser.parent),
                      description="원큐합격 학습앱 — 기사·산업기사 필기 기출 학습")
 
 
-def make_app_shortcuts(edge: Path, url: str, icon: Path) -> list[str]:
-    """바탕화면·시작 메뉴에 '원큐합격 학습앱'(Edge 앱 창). 기록은 이 PC Edge의 기본 프로필에 저장."""
-    return _run_ps(app_ps_script(edge, url, icon))
+def make_app_shortcuts(browser: Path, url: str, icon: Path) -> list[str]:
+    """바탕화면·시작 메뉴에 '원큐합격 학습앱'(기본 브라우저의 앱 창). 기록은 그 브라우저에 저장."""
+    return _run_ps(app_ps_script(browser, url, icon))
 
 
-def open_app_window(edge: Path, url: str) -> None:
+def open_app_window(browser: Path, url: str) -> None:
     flags = getattr(subprocess, "DETACHED_PROCESS", 0)
-    subprocess.Popen([str(edge), app_args(url)], creationflags=flags, close_fds=True)
+    subprocess.Popen([str(browser), app_args(url)], creationflags=flags, close_fds=True)

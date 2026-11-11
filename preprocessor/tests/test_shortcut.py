@@ -50,3 +50,20 @@ def test_app_shortcut_script_and_edge(tmp_path):
     s = shortcut.app_ps_script(e, "https://hoonie2026.github.io/OneQ-Ace/", Path("C:/p/app-icon.ico"))
     assert "원큐합격 학습앱.lnk" in s and "--app=https://hoonie2026.github.io/OneQ-Ace/" in s
     assert "app-icon.ico,0" in s and s.count("$l.Save()") == 2
+
+
+def test_app_browser_follows_default(tmp_path):
+    """PC 접근 일원화: 기본 브라우저가 Chrome이면 Chrome 앱 창, 아니면 Edge."""
+    env = {"ProgramFiles": str(tmp_path / "pf"), "LOCALAPPDATA": str(tmp_path / "la")}
+    edge = tmp_path / "pf" / "Microsoft" / "Edge" / "Application" / "msedge.exe"
+    chrome = tmp_path / "la" / "Google" / "Chrome" / "Application" / "chrome.exe"
+    for f in (edge, chrome):
+        f.parent.mkdir(parents=True)
+        f.touch()
+    assert shortcut.app_browser("ChromeHTML", env) == (chrome, "Chrome")
+    assert shortcut.app_browser("MSEdgeHTM", env) == (edge, "Edge")
+    assert shortcut.app_browser("FirefoxURL-308046B0AF4A39CB", env) == (edge, "Edge")
+    edge.unlink()
+    assert shortcut.app_browser("MSEdgeHTM", env) == (chrome, "Chrome")
+    chrome.unlink()
+    assert shortcut.app_browser("ChromeHTML", env) is None

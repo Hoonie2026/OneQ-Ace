@@ -180,7 +180,7 @@ def test_app_install_dialog(win, monkeypatch, tmp_path):
     edge = tmp_path / "msedge.exe"
     edge.touch()
     made = []
-    monkeypatch.setattr(aid.shortcut, "edge_path", lambda: edge)
+    monkeypatch.setattr(aid.shortcut, "app_browser", lambda: (edge, "Edge"))
     monkeypatch.setattr(aid.shortcut, "make_app_shortcuts", lambda e, url, icon: made.append((e, url, icon)) or ["C:/Desktop/원큐합격 학습앱.lnk"])
     d = aid.AppInstallDialog(win, "android", win.status)
     assert [d.tabs.tabText(i) for i in range(3)] == ["PC(이 컴퓨터)", "Android 휴대폰·태블릿", "iPhone·iPad"]

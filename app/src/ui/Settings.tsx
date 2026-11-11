@@ -565,7 +565,14 @@ export function Settings(props: {
         </div>
         <details className="why" data-testid="install-how">
           <summary>이 기기에 설치하는 방법</summary>
-          <InstallGuide url={appUrl} onCopy={() => copy(appUrl, '주소를 복사했습니다')} testId="install-guide-settings" />
+          {/* v0.13.1(PC 접근 일원화): PC 학습앱은 전처리기 [학습앱 설치]로 만든 바탕화면 아이콘 하나 — 브라우저 설치 안내는 휴대폰·태블릿만 */}
+          {deviceEnv().kind === 'pc' ? (
+            <p className="hint" data-testid="install-guide-settings">
+              PC에서는 <b>원큐합격 전처리기</b>를 설치한 뒤 전처리기의 <b>[학습앱 설치] → PC</b>로 만든 바탕화면의 <b>원큐합격 학습앱</b>으로 엽니다.
+            </p>
+          ) : (
+            <InstallGuide url={appUrl} onCopy={() => copy(appUrl, '주소를 복사했습니다')} testId="install-guide-settings" />
+          )}
           {isStandalone() && <p className="hint">이 기기에는 이미 설치되어 있습니다(설치한 앱으로 열림).</p>}
         </details>
       </section>
