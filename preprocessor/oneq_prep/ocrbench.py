@@ -117,8 +117,15 @@ def _paddle(img) -> str:
     if _PADDLE is None:
         # enable_mkldnn=False: PaddlePaddle 3.3 + CPU 가속(oneDNN)이 "ConvertPirAttribute2RuntimeAttribute not support"로
         # 멈추는 알려진 문제 우회(2026-11-11 사용자 PC). 그래도 안 되면 pip install paddlepaddle==3.2.2
+        kw = {}
+        if os.environ.get("ONEQ_PADDLE_DET"):          # 예: PP-OCRv5_mobile_det(가벼운 글자 찾기 모델)
+            kw["text_detection_model_name"] = os.environ["ONEQ_PADDLE_DET"]
+        if os.environ.get("ONEQ_PADDLE_MKLDNN") != "1":
+            kw["enable_mkldnn"] = False
+        print("  paddle: 모델 불러오는 중", kw, flush=True)
         _PADDLE = PaddleOCR(lang="korean", use_doc_orientation_classify=False, use_doc_unwarping=False,
-                            use_textline_orientation=False, enable_mkldnn=False)
+                            use_textline_orientation=False, **kw)
+        print("  paddle: 모델 준비됨 — 글자 읽기 시작", flush=True)
     res = _PADDLE.predict(np.array(img.convert("RGB")))
     out = []
     for r in res:
@@ -166,7 +173,12 @@ def _runs(mask) -> list[tuple[int, int]]:
 
 
 def table_cells(img) -> list:
-    """격자 표 → 칸 그림(왼→오, 위→아래). 가로선·색칠한 줄과 세로선으로 자른다. 칸이 아니면 []."""
+    """격자 표 → 칸 그림(왼→오, 위→아래, 한 줄로 펼침). 칸이 아니면 []."""
+    return [c for row in table_rows(img) for c in row]
+
+
+def table_rows(img) -> list[list]:
+    """격자 표 → 줄마다 칸 그림 목록. 가로선·색칠한 줄(번호 줄)과 세로선으로 자른다. 칸이 아니면 []."""
     import numpy as np
     from PIL import Image
     a = np.asarray(img.convert("L")).astype(int)
@@ -188,6 +200,8 @@ def table_cells(img) -> list:
         return []
     out = []
     for y0, y1 in rows:
+        line = []
+        out.append(line)
         for x0, x1 in cols:
             c = img.convert("L").crop((x0, y0 + 2, x1, y1 - 2)).point(lambda v: 0 if v < 200 else 255)
             if c.getbbox() is None or not any(px == 0 for px in c.getdata()):
@@ -196,19 +210,49 @@ def table_cells(img) -> list:
             c = c.resize((max(1, int(c.width * k)), 120), Image.LANCZOS)
             pad = Image.new("L", (c.width + 80, c.height + 80), 255)
             pad.paste(c, (40, 40))
-            out.append(pad)
+            line.append(pad)
+    return [ln for ln in out if ln]
+
+
+def _strip(cells: list):
+    """한 줄의 칸들을 띄어서 한 줄 그림으로 — Windows 내장 OCR은 낱자 하나짜리 그림을 읽지 않는다(2026-11-11 PC 5/100)."""
+    from PIL import Image
+    gap = 60
+    w = sum(c.width for c in cells) + gap * (len(cells) + 1)
+    h = max(c.height for c in cells)
+    im = Image.new("L", (w, h), 255)
+    x = gap
+    for c in cells:
+        im.paste(c, (x, (h - c.height) // 2))
+        x += c.width + gap
+    return im
+
+
+def _letters(t: str) -> list[str]:
+    out = []
+    for x in re.sub(r"[\s.,·:;|]+", "", t):
+        if x in LABELS:
+            out.append(x)
+        elif x in CONFUSE:
+            out.append(CONFUSE[x])
     return out
 
 
 def read_answer_cells(eng: str, img) -> str:
-    """칸마다 읽어 가·나·다·라만(비슷한 글자는 보정) — 번호 칸(숫자)은 건너뜀. 칸을 못 찾으면 ''."""
+    """정답표: 줄마다 칸들을 한 줄 그림으로 이어 붙여 읽고(줄당 엔진 1번), 글자 수가 칸 수와 다르면 그 줄만 칸마다 다시.
+    가·나·다·라만(비슷한 글자는 보정), 번호 줄(숫자)은 건너뜀. 칸을 못 찾으면 ''."""
     got = []
-    for c in table_cells(img):
-        t = re.sub(r"\s+", "", RUN_CHAR[eng](c))
-        if not t or re.fullmatch(r"[0-9]+", t):
+    for row in table_rows(img):
+        t = re.sub(r"\s+", " ", RUN[eng](_strip(row)))
+        if re.fullmatch(r"[0-9 ]+", t.strip()):
             continue
-        ch = next((x for x in t if x in LABELS), None) or next((CONFUSE[x] for x in t if x in CONFUSE), None)
-        got.append(ch or "?")
+        ls = _letters(t)
+        if len(ls) != len(row):
+            ls = []
+            for c in row:
+                one = _letters(RUN_CHAR[eng](c))
+                ls.append(one[0] if one else "?")
+        got += ls
     return " ".join(got)
 
 
@@ -320,15 +364,17 @@ def main(argv=None) -> int:
     for eng in engines:
         part = out / f"_{eng}.json"
         part.unlink(missing_ok=True)
-        cmd = [sys.executable, "-m", "oneq_prep.ocrbench", str(a.pdf), "--engines", eng, "--scales", a.scales,
+        cmd = [sys.executable, "-X", "faulthandler", "-m", "oneq_prep.ocrbench", str(a.pdf), "--engines", eng, "--scales", a.scales,
                "--out", str(out), "--one", str(part)] + (["--gt", str(gt_path)] if a.gt else [])
-        r = subprocess.run(cmd, cwd=str(Path(__file__).resolve().parents[1]))
+        r = subprocess.run(cmd, cwd=str(Path(__file__).resolve().parents[1]), stderr=subprocess.PIPE)
+        err = r.stderr.decode("utf-8", "replace")
+        if r.returncode != 0 and err:
+            (out / f"_{eng}_오류기록.txt").write_text(err, encoding="utf-8")   # 프로세스째 죽은 위치(faulthandler)
         if part.exists():
             rows += json.loads(part.read_text(encoding="utf-8"))
             part.unlink()
         else:
-            hint = (" — PaddlePaddle 3.3 문제일 수 있음: py -3 -m pip install paddlepaddle==3.2.2 뒤 다시"
-                    if eng == "paddle" else "")
+            hint = f" — 기록: _{eng}_오류기록.txt" if err else ""
             rows.append({"engine": eng, "scale": scales[0], "error": f"프로그램이 비정상 종료(코드 {r.returncode}){hint}"})
         (out / "결과.json").write_text(json.dumps({"pdf": a.pdf.name, "rows": rows}, ensure_ascii=False, indent=1),
                                      encoding="utf-8")
