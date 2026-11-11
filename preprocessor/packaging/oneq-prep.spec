@@ -20,6 +20,7 @@ if list((PRE / "standards").glob("*.csv")):
 icon_png = PRE / "oneq_prep" / "gui" / "icon.png"
 if icon_png.exists():
     datas.append((str(icon_png), "oneq_prep/gui"))
+datas.append((str(PRE / "oneq_prep" / "gui" / "app-icon.ico"), "oneq_prep/gui"))   # [학습앱 설치] PC 바로가기 아이콘(학습앱 남색)
 datas += collect_data_files("pdfminer")                    # 글꼴 cmap
 datas += collect_data_files("jsonschema_specifications")   # 스키마 메타
 datas += collect_data_files("pypdfium2_raw") + collect_data_files("pypdfium2")

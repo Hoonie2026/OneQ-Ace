@@ -38,3 +38,15 @@ def test_installed(tmp_path):
 
 def test_exe_path_none_when_not_frozen():
     assert shortcut.exe_path() is None
+
+
+def test_app_shortcut_script_and_edge(tmp_path):
+    env = {"ProgramFiles(x86)": str(tmp_path / "x86"), "ProgramFiles": str(tmp_path / "pf")}
+    assert shortcut.edge_path(env) is None
+    e = tmp_path / "pf" / "Microsoft" / "Edge" / "Application" / "msedge.exe"
+    e.parent.mkdir(parents=True)
+    e.touch()
+    assert shortcut.edge_path(env) == e
+    s = shortcut.app_ps_script(e, "https://hoonie2026.github.io/OneQ-Ace/", Path("C:/p/app-icon.ico"))
+    assert "원큐합격 학습앱.lnk" in s and "--app=https://hoonie2026.github.io/OneQ-Ace/" in s
+    assert "app-icon.ico,0" in s and s.count("$l.Save()") == 2

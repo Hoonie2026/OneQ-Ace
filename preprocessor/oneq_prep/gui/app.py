@@ -21,8 +21,9 @@ from PySide6.QtWidgets import (QAbstractItemView, QApplication, QFileDialog, QFr
 
 from .. import __version__
 from .. import standards as S
-from ..appinfo import APP_URL, qr_png
+from ..appinfo import APP_URL
 from . import shortcut
+from .app_install_dialog import AppInstallDialog
 from ..batch import STATUS_TEXT, BatchSpec, RoundResult, plan_rounds
 from ..summary import law_summary, peek_subjects, subject_change
 from . import theme
@@ -112,7 +113,6 @@ class MainWindow(QMainWindow):
         left.setSpacing(16)
         left.addWidget(self._card_cert())
         left.addWidget(self._card_conditions())
-        left.addWidget(self._card_phone())
         left.addStretch(1)
         lw = QWidget()
         lw.setLayout(left)
@@ -172,6 +172,11 @@ class MainWindow(QMainWindow):
         v = QLabel(f"v{__version__}")
         v.setObjectName("versionChip")
         lay.addWidget(v)
+        app_btn = QPushButton("학습앱 설치")
+        app_btn.setObjectName("appInstall")
+        app_btn.setToolTip("문제를 푸는 원큐합격 학습앱을 PC·휴대폰에 설치합니다")
+        app_btn.clicked.connect(lambda: self.show_app_install())
+        lay.addWidget(app_btn)
         help_btn = QToolButton()
         help_btn.setText("도움말 ▾")
         help_btn.setPopupMode(QToolButton.InstantPopup)
@@ -182,7 +187,8 @@ class MainWindow(QMainWindow):
             "① 종목을 찾아 고릅니다(예: 측량, 건안기).\n② 기출 PDF를 끌어다 놓고 [팩 만들기].\n"
             "③ 끝난 파일을 누르면 결과 화면 — 의심 문항이 있으면 [확인하기].\n\n"
             "끝나면 종목 묶음(oneq-종목-bundle-….zip) 하나가 저장 폴더에 생깁니다.\n"
-            "그 파일을 휴대폰·PC의 원큐합격 앱에서 [문제팩 가져오기]로 넣으세요(기기마다 따로).")))
+            "그 파일을 휴대폰·PC의 원큐합격 학습앱에서 [문제팩 가져오기]로 넣으세요(기기마다 따로).\n"
+            "학습앱은 위쪽 [학습앱 설치]에서 PC·Android·iPhone을 골라 설치합니다.")))
         m.addSeparator()
         m.addAction("저장 폴더 바꾸기…", self.pick_out)
         speed = m.addMenu("처리 속도")
@@ -190,7 +196,7 @@ class MainWindow(QMainWindow):
             speed.addAction(t, lambda v=v: self.settings.setValue("workers", v))
         m.addAction("바로가기 만들기(바탕화면·시작 메뉴)", lambda: self.offer_shortcuts(ask=False))
         m.addAction("프로그램 폴더 열기", self.open_program_folder)
-        m.addAction("휴대폰에 학습앱 설치(앱 주소 복사)", self.copy_app_url)
+        m.addAction("학습앱 설치(PC·휴대폰)…", lambda: self.show_app_install())
         m.addAction("라이선스·사용한 오픈소스", self.show_licenses)
         m.addAction(f"{APP_NAME} 정보", lambda: QMessageBox.about(
             self, APP_NAME, f"{APP_NAME} v{__version__}\n기출 PDF → 원큐합격 문제팩(.zip)"))
@@ -230,36 +236,9 @@ class MainWindow(QMainWindow):
         c.body.addWidget(tip)
         return c
 
-    def _card_phone(self) -> Card:
-        """휴대폰에 학습앱 설치 QR(PREP-PLAN-v0.5 D1, ADR 021 7절) — 앱 주소만 보여 줌, 팩은 보내지 않음."""
-        c = Card("휴대폰에 학습앱 설치", "", "휴대폰 카메라로 찍으면 원큐합격 앱 주소가 열립니다.")
-        row = QHBoxLayout()
-        row.setSpacing(12)
-        self.qr = QLabel()
-        self.qr.setObjectName("appQr")
-        png = qr_png()
-        pm = QPixmap()
-        if png and pm.loadFromData(png, "PNG"):
-            self.qr.setPixmap(pm.scaled(132, 132, Qt.KeepAspectRatio, Qt.FastTransformation))
-            row.addWidget(self.qr, 0, Qt.AlignTop)
-        v = QVBoxLayout()
-        v.setSpacing(6)
-        url = QLabel(APP_URL)
-        url.setObjectName("muted")
-        url.setWordWrap(True)
-        url.setTextInteractionFlags(Qt.TextSelectableByMouse)
-        v.addWidget(url)
-        copy = QPushButton("주소 복사")
-        copy.clicked.connect(self.copy_app_url)
-        v.addWidget(copy, 0, Qt.AlignLeft)
-        how = QLabel("만든 문제팩은 휴대폰으로 옮겨(카카오톡 나에게 보내기·드라이브 등) 앱의 [문제팩 가져오기]로 넣으세요.")
-        how.setObjectName("hint")
-        how.setWordWrap(True)
-        v.addWidget(how)
-        v.addStretch(1)
-        row.addLayout(v, 1)
-        c.body.addLayout(row)
-        return c
+    def show_app_install(self, tab: str = "pc") -> None:
+        """[학습앱 설치] 창(설치 경로 일원화, 사용자 2026-11-11) — PC·Android·iPhone 중 골라 직접 설치."""
+        AppInstallDialog(self, tab, self.status).exec()
 
     # ── 설치 없는 zip 배포: 바로가기·임시 폴더 경고(🖥P14, 2026-11-11) ──
     def first_run_checks(self) -> None:
@@ -868,7 +847,8 @@ class MainWindow(QMainWindow):
         if self.bundle:
             self.bundle_note.set("ok", f"종목 묶음 저장: {self.bundle.name}",
                                  [f"이번에 새로 만든 회차 {ok - sum(1 for r in rows if r.prepared and r.prepared.unchanged)}개를 파일 하나에 담았어요.",
-                                  "원큐합격 앱(폰·PC 각각)에서 [문제팩 가져오기]로 이 파일을 넣으세요. [팩 폴더 열기]로 위치를 볼 수 있어요."])
+                                  "원큐합격 학습앱(폰·PC 각각)에서 [문제팩 가져오기]로 이 파일을 넣으세요. [팩 폴더 열기]로 위치를 볼 수 있어요.",
+                                  "학습앱이 아직 없으면 위쪽 [학습앱 설치]에서 PC·휴대폰을 골라 설치하세요."])
         else:
             self.bundle_note.setVisible(False)
         lines = law_summary(self.rows)

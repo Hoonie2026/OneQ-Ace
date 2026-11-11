@@ -81,6 +81,14 @@ QLabel#cardStep {{ color: white; background: {PRIMARY}; border-radius: 11px; fon
 QLabel#cardHint, QLabel#muted, QLabel#hint {{ color: {MUTED}; font-size: 13px; }}
 QLabel#fieldLabel {{ color: {MUTED}; font-size: 13px; font-weight: 600; }}
 
+/* 탭([학습앱 설치] 창) */
+QTabWidget::pane {{ background: {SURFACE}; border: 1px solid {LINE}; border-radius: 10px; top: -1px; }}
+QTabBar::tab {{ background: {GRAY_SOFT}; color: {MUTED}; border: 1px solid {LINE}; border-bottom: 0;
+                border-top-left-radius: 8px; border-top-right-radius: 8px; padding: 8px 16px; margin-right: 4px; font-weight: 600; }}
+QTabBar::tab:selected {{ background: {SURFACE}; color: {INK}; }}
+QPushButton#appInstall {{ background: {PRIMARY}; color: white; border: 0; padding: 9px 16px; border-radius: 8px; font-weight: 700; }}
+QPushButton#appInstall:hover {{ background: {PRIMARY_DARK}; }}
+
 /* 입력 */
 QLineEdit, QComboBox, QSpinBox {{ background: {SURFACE}; border: 1px solid #cfd8e3; border-radius: 8px;
                                   padding: 7px 12px; min-height: 22px; selection-background-color: {PRIMARY}; }}

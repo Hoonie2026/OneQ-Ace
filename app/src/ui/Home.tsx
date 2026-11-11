@@ -11,7 +11,7 @@ import { SubjectDetail } from './SubjectDetail';
 import { ForecastView } from './ForecastView';
 import { Principles } from './Principles';
 import { computeInsight, type Insight } from '../insight';
-import { resetPageZoom } from '../util';
+import { deviceEnv, resetPageZoom } from '../util';
 import { PrepCard } from './PrepCard';
 import { InstallGuide } from './InstallGuide';
 import { BackButton, BrandLogo, Icon } from './Icon';
@@ -135,6 +135,7 @@ export function Home(props: {
 
   const inSub = view !== 'home' && !!coach && !!cert && !!packs && packs.length > 0;
   const appUrl = new URL(import.meta.env.BASE_URL, window.location.origin).href;
+  const isPc = deviceEnv().kind === 'pc';
   const copyUrl = () =>
     navigator.clipboard
       .writeText(appUrl)
@@ -173,10 +174,13 @@ export function Home(props: {
           )}
 
           {/* v0.10.1: 기기별 설치 안내(앱 안 브라우저 → 바깥 브라우저, 안드로이드·PC [앱 설치] 단추, 아이폰 홈 화면에 추가) */}
-          <InstallGuide compact url={appUrl} onCopy={copyUrl} />
+          {/* v0.13.0(설치 경로 일원화): PC의 학습앱 설치는 전처리기 [학습앱 설치]에서 — 홈에는 휴대폰·태블릿 안내만 */}
+          {!isPc && <InstallGuide compact url={appUrl} onCopy={copyUrl} />}
         </>
       )}
 
+      {/* v0.13.0: PC는 1단계 전처리기 설치가 먼저(문제팩은 전처리기로만 만듦) */}
+      {packs && packs.length === 0 && isPc && <PrepCard compact url={appUrl} />}
       {packs && packs.length === 0 && (
         <section className="card empty">
           <h2>문제팩을 가져오세요</h2>
@@ -186,8 +190,8 @@ export function Home(props: {
           <PackPicker busy={props.busy} onFiles={props.onImport} onPickFailed={props.onPickFailed} primary />
         </section>
       )}
-      {/* v0.12.0(D1): Windows PC에서 팩이 없으면 전처리기 받기 */}
-      {packs && packs.length === 0 && <PrepCard compact />}
+      {/* 휴대폰·태블릿: 문제팩은 PC에서 만든다는 설명 + 주소 복사 */}
+      {packs && packs.length === 0 && !isPc && <PrepCard compact url={appUrl} />}
 
       {coach && cert && packs && packs.length > 0 && (
         <>

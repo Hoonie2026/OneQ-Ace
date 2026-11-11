@@ -170,13 +170,28 @@ def test_comcbt_button_adds_files_and_guides(win, qtbot, tmp_path, monkeypatch):
     assert (tmp_path / "packs" / "기출 PDF" / "건설안전기사" / src.name).exists()
 
 
-def test_phone_qr_card(win):
-    """D1(ADR 021 7절): 첫 화면에 휴대폰 앱 설치 QR — 앱 주소만 보여 주고 [주소 복사]."""
-    from PySide6.QtWidgets import QApplication
+def test_app_install_dialog(win, monkeypatch, tmp_path):
+    """설치 경로 일원화(2026-11-11): [학습앱 설치] 창 — PC·Android·iPhone 탭, 휴대폰 탭엔 QR, PC는 누를 때만 바로가기."""
+    from PySide6.QtWidgets import QApplication, QLabel
 
     from oneq_prep.appinfo import APP_URL
-    assert win.qr.pixmap() is not None and not win.qr.pixmap().isNull()
-    win.copy_app_url()
+    from oneq_prep.gui import app_install_dialog as aid
+
+    edge = tmp_path / "msedge.exe"
+    edge.touch()
+    made = []
+    monkeypatch.setattr(aid.shortcut, "edge_path", lambda: edge)
+    monkeypatch.setattr(aid.shortcut, "make_app_shortcuts", lambda e, url, icon: made.append((e, url, icon)) or ["C:/Desktop/원큐합격 학습앱.lnk"])
+    d = aid.AppInstallDialog(win, "android", win.status)
+    assert [d.tabs.tabText(i) for i in range(3)] == ["PC(이 컴퓨터)", "Android 휴대폰·태블릿", "iPhone·iPad"]
+    assert d.tabs.currentIndex() == 1
+    qrs = [q for q in d.findChildren(QLabel) if q.objectName() == "appQr"]
+    assert len(qrs) == 2 and all(q.pixmap() is not None and not q.pixmap().isNull() for q in qrs)
+    assert made == []                         # 창을 열기만 해서는 아무것도 설치하지 않음
+    d.install_pc()
+    assert made and made[0][1] == APP_URL and made[0][2].name == "app-icon.ico" and made[0][2].exists()
+    assert "설치했어요" in d.pc_note.text()
+    d.copy_url()
     assert QApplication.clipboard().text() == APP_URL
 
 

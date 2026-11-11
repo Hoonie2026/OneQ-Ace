@@ -544,7 +544,7 @@ export function Settings(props: {
         </div>
       </section>
 
-      <PrepCard testId="prep-card-settings" />
+      <PrepCard testId="prep-card-settings" url={appUrl} />
 
       <section className="card address">
         <h2>앱 주소 · 설치 안내</h2>
