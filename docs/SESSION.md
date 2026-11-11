@@ -47,7 +47,7 @@ v0.9.1 마무리 때 지난 세션 요약을 줄였다 — 자세한 기록은 g
 - 실측(클라우드 Tesseract 5.3): 문항 95/100 · 찾은 문항 정답 95/95 · 보기 4개 82/95 · 10쪽 37초 · 검수 마침 뒤 팩 검증 통과. winocr 실측은 🖥P25
 - `ocrbench --pack`(본 경로 실측, 문항 그림·결과 JSON) · 정답표 함수는 ocr.py로 옮기고 ocrbench는 가져다 씀
 - 시험: pytest **128 통과·22 건너뜀**(`test_ocr.py` 10건 — 표본 실측 1건은 PDF 있을 때, winocr 2건은 Windows에서만)
-- 알게 된 것: requirements에 rapidfuzz가 없으면 `test_ocrbench`의 difflib 대체 경로가 실패(전부터 — 클라우드에 rapidfuzz 설치해 통과). 손댈지 BACKLOG 판단 전
+- GitHub Windows 빌드(손으로 실행, 릴리스 아님): 처음엔 `test_ocrbench`의 rapidfuzz 없는 대체 점수가 실패(세션 #15부터 있던 것) → 고침 → 시험 128 통과·**실행파일 안 Windows 내장 OCR 읽힘**('OneQ Ace 2010' → 그대로, winrt 묶기 확인)·설치·제거 시험 통과(run 42988290767)
 
 ## 세션 #15 이어서 (2026-11-11, PC) — 첫 릴리스 실측
 
