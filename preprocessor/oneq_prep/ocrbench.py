@@ -297,6 +297,7 @@ def main(argv=None) -> int:
     ap.add_argument("--engines", default=",".join(ENGINES))
     ap.add_argument("--scales", default="1,2", help="렌더 배율(이 표본은 1배 ≈ 120dpi, 2.5배 ≈ 300dpi)")
     ap.add_argument("--out", type=Path, help="결과 폴더(기본: PDF 폴더\\_ocrbench)")
+    ap.add_argument("--one", help=argparse.SUPPRESS)
     a = ap.parse_args(argv)
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")
@@ -307,11 +308,32 @@ def main(argv=None) -> int:
         return 2
     gt = json.loads(gt_path.read_text(encoding="utf-8"))
     out = a.out or a.pdf.parent / "_ocrbench"
-    rows = bench(a.pdf, gt, [e.strip() for e in a.engines.split(",") if e.strip()],
-                 [float(x) for x in a.scales.split(",")], out)
+    out.mkdir(parents=True, exist_ok=True)
+    engines = [e.strip() for e in a.engines.split(",") if e.strip()]
+    scales = [float(x) for x in a.scales.split(",")]
+    if a.one:
+        # 자식 프로세스: 엔진 하나만 재고 결과를 파일로(엔진이 프로세스째 죽어도 부모는 다른 엔진 결과를 지킴)
+        rows = bench(a.pdf, gt, engines, scales, out)
+        Path(a.one).write_text(json.dumps(rows, ensure_ascii=False), encoding="utf-8")
+        return 0
+    rows = []
+    for eng in engines:
+        part = out / f"_{eng}.json"
+        part.unlink(missing_ok=True)
+        cmd = [sys.executable, "-m", "oneq_prep.ocrbench", str(a.pdf), "--engines", eng, "--scales", a.scales,
+               "--out", str(out), "--one", str(part)] + (["--gt", str(gt_path)] if a.gt else [])
+        r = subprocess.run(cmd, cwd=str(Path(__file__).resolve().parents[1]))
+        if part.exists():
+            rows += json.loads(part.read_text(encoding="utf-8"))
+            part.unlink()
+        else:
+            hint = (" — PaddlePaddle 3.3 문제일 수 있음: py -3 -m pip install paddlepaddle==3.2.2 뒤 다시"
+                    if eng == "paddle" else "")
+            rows.append({"engine": eng, "scale": scales[0], "error": f"프로그램이 비정상 종료(코드 {r.returncode}){hint}"})
+        (out / "결과.json").write_text(json.dumps({"pdf": a.pdf.name, "rows": rows}, ensure_ascii=False, indent=1),
+                                     encoding="utf-8")
     print()
     print(table(rows))
-    (out / "결과.json").write_text(json.dumps({"pdf": a.pdf.name, "rows": rows}, ensure_ascii=False, indent=1), encoding="utf-8")
     print(f"\n자세한 결과: {out / '결과.json'}")
     return 0
 
