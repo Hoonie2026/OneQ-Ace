@@ -115,8 +115,10 @@ def _paddle(img) -> str:
     except ImportError as e:
         raise Missing("py -3 -m pip install paddlepaddle paddleocr") from e
     if _PADDLE is None:
+        # enable_mkldnn=False: PaddlePaddle 3.3 + CPU 가속(oneDNN)이 "ConvertPirAttribute2RuntimeAttribute not support"로
+        # 멈추는 알려진 문제 우회(2026-11-11 사용자 PC). 그래도 안 되면 pip install paddlepaddle==3.2.2
         _PADDLE = PaddleOCR(lang="korean", use_doc_orientation_classify=False, use_doc_unwarping=False,
-                            use_textline_orientation=False)
+                            use_textline_orientation=False, enable_mkldnn=False)
     res = _PADDLE.predict(np.array(img.convert("RGB")))
     out = []
     for r in res:
@@ -129,7 +131,85 @@ def _paddle(img) -> str:
     return "\n".join(out)
 
 
+def _tesseract_char(img) -> str:
+    """칸 하나(글자 하나) — psm 10."""
+    from .ocr import OcrUnavailable, tesseract_path
+    try:
+        exe = tesseract_path()
+    except OcrUnavailable as e:
+        raise Missing(str(e).splitlines()[0]) from e
+    with tempfile.TemporaryDirectory() as d:
+        p = Path(d) / "c.png"
+        img.save(p)
+        r = subprocess.run([exe, str(p), "stdout", "-l", "kor", "--psm", "10"], capture_output=True)
+        return r.stdout.decode("utf-8", "replace")
+
+
 RUN = {"tesseract": _tesseract, "winocr": _winocr, "paddle": _paddle}
+RUN_CHAR = {"tesseract": _tesseract_char, "winocr": _winocr, "paddle": _paddle}
+
+# ── 정답표: 표를 칸으로 잘라 칸마다 읽기(2026-11-11 — 쪽 통째로는 세 엔진 모두 낱자를 거의 건너뜀, 9/100 이하) ──
+CONFUSE = {"마": "라", "타": "다", "카": "가", "따": "다", "까": "가", "랴": "라", "냐": "나", "댜": "다", "갸": "가"}
+
+
+def _runs(mask) -> list[tuple[int, int]]:
+    out, s = [], None
+    for i, m in enumerate(mask):
+        if m and s is None:
+            s = i
+        elif not m and s is not None:
+            out.append((s, i))
+            s = None
+    if s is not None:
+        out.append((s, len(mask)))
+    return out
+
+
+def table_cells(img) -> list:
+    """격자 표 → 칸 그림(왼→오, 위→아래). 가로선·색칠한 줄과 세로선으로 자른다. 칸이 아니면 []."""
+    import numpy as np
+    from PIL import Image
+    a = np.asarray(img.convert("L")).astype(int)
+    h, w = a.shape
+    ink = a < 240
+    line_rows = ink.mean(1) > 0.6           # 가로선 또는 색칠한 줄(번호 줄)
+    rows = [(y0, y1) for y0, y1 in _runs(~line_rows) if y1 - y0 > h / 60]
+    vl = np.where(ink.mean(0) > 0.6)[0]
+    cuts, grp = [], []
+    for x in vl:
+        if grp and x > grp[-1] + 2:
+            cuts.append(int(sum(grp) / len(grp)))
+            grp = []
+        grp.append(x)
+    if grp:
+        cuts.append(int(sum(grp) / len(grp)))
+    cols = [(cuts[i] + 3, cuts[i + 1] - 2) for i in range(len(cuts) - 1) if cuts[i + 1] - cuts[i] > w / 40]
+    if len(cols) < 3 or not rows:
+        return []
+    out = []
+    for y0, y1 in rows:
+        for x0, x1 in cols:
+            c = img.convert("L").crop((x0, y0 + 2, x1, y1 - 2)).point(lambda v: 0 if v < 200 else 255)
+            if c.getbbox() is None or not any(px == 0 for px in c.getdata()):
+                continue                      # 빈 칸
+            k = 120 / max(1, c.height)
+            c = c.resize((max(1, int(c.width * k)), 120), Image.LANCZOS)
+            pad = Image.new("L", (c.width + 80, c.height + 80), 255)
+            pad.paste(c, (40, 40))
+            out.append(pad)
+    return out
+
+
+def read_answer_cells(eng: str, img) -> str:
+    """칸마다 읽어 가·나·다·라만(비슷한 글자는 보정) — 번호 칸(숫자)은 건너뜀. 칸을 못 찾으면 ''."""
+    got = []
+    for c in table_cells(img):
+        t = re.sub(r"\s+", "", RUN_CHAR[eng](c))
+        if not t or re.fullmatch(r"[0-9]+", t):
+            continue
+        ch = next((x for x in t if x in LABELS), None) or next((CONFUSE[x] for x in t if x in CONFUSE), None)
+        got.append(ch or "?")
+    return " ".join(got)
 
 
 def render(pdf, page_no: int, scale: float):
@@ -167,6 +247,11 @@ def bench(pdf_path: Path, gt: dict, engines: list[str], scales: list[float], out
                     row["worst"] = [w for s in scores for w in s["worst"]][:6]
                     if ans_page:
                         row["answers"] = answer_score(gt["answers"], texts[ans_page])
+                        t0 = time.perf_counter()
+                        cells = read_answer_cells(eng, render(pdf, ans_page, max(sc, 2.0)))
+                        row["answers_cells"] = answer_score(gt["answers"], cells)
+                        row["answers_cells"]["sec"] = round(time.perf_counter() - t0, 1)
+                        (out_dir / f"{eng}_x{sc:g}_p{ans_page}_cells.txt").write_text(cells, encoding="utf-8")
                     row["sec_per_page"] = sum(times[:len(pages)]) / len(pages)
                     row["sec_total_incl_load"] = time.perf_counter() - t_first
                     for p, t in texts.items():
@@ -188,17 +273,20 @@ def bench(pdf_path: Path, gt: dict, engines: list[str], scales: list[float], out
 
 
 def table(rows: list[dict]) -> str:
-    head = f"{'엔진':<10}{'배율':>5}{'글자 맞춤':>10}{'95%↑ 단위':>11}{'정답표':>10}{'쪽당 초':>9}  비고"
+    head = f"{'엔진':<10}{'배율':>5}{'글자 맞춤':>10}{'95%↑ 단위':>11}{'정답표':>10}{'칸별 정답':>10}{'쪽당 초':>9}  비고"
     lines = [head, "-" * len(head)]
     for r in rows:
         if "missing" in r or "error" in r:
-            lines.append(f"{r['engine']:<10}{r['scale']:>5g}{'':>10}{'':>11}{'':>10}{'':>9}  "
+            lines.append(f"{r['engine']:<10}{r['scale']:>5g}{'':>10}{'':>11}{'':>10}{'':>10}{'':>9}  "
                          + ("설치 안 됨 — " + r["missing"] if "missing" in r else "오류 — " + r["error"][:120]))
             continue
         a = r.get("answers") or {}
         ans = f"{a.get('matched', 0)}/{a.get('total', 0)}" if a else "-"
+        c = r.get("answers_cells") or {}
+        cel = f"{c.get('exact_position') if c.get('exact_position') is not None else c.get('matched', 0)}/{c.get('total', 0)}" if c else "-"
         lines.append(f"{r['engine']:<10}{r['scale']:>5g}{r['text_mean']*100:>9.1f}%{r['text_exact95']*100:>10.1f}%"
-                     f"{ans:>10}{r['sec_per_page']:>9.1f}  처음 실행 포함 {r['sec_total_incl_load']:.0f}초")
+                     f"{ans:>10}{cel:>10}{r['sec_per_page']:>9.1f}  처음 실행 포함 {r['sec_total_incl_load']:.0f}초"
+                     + (f", 칸 읽기 {c.get('sec')}초" if c else ""))
     return "\n".join(lines)
 
 

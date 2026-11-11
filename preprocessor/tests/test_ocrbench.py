@@ -31,3 +31,22 @@ def test_answer_score():
     a = ocrbench.answer_score(key, text)
     assert a["found"] == 100 and a["matched"] == 100 and a["exact_position"] == 100
     assert ocrbench.answer_score(key, " ".join(key[:90]))["matched"] == 90
+
+
+def test_table_cells_grid():
+    """정답표 칸 자르기: 번호 줄(색칠)·답 줄이 번갈아 있는 10열 격자 → 답 줄 칸만 글자가 있으면 그 칸들."""
+    from PIL import Image, ImageDraw
+    w, h = 640, 200
+    im = Image.new("L", (w, h), 255)
+    d = ImageDraw.Draw(im)
+    for y0, y1 in ((10, 40), (100, 130)):
+        d.rectangle((3, y0, w - 4, y1), fill=225)          # 번호 줄(색칠)
+    for x in range(3, w, 63):
+        d.line((x, 10, x, 190), fill=200, width=2)        # 세로선
+    for y in (10, 70, 100, 160, 190):
+        d.line((3, y, w - 4, y), fill=200, width=1)
+    for i in range(10):
+        d.rectangle((3 + i * 63 + 25, 48, 3 + i * 63 + 35, 62), fill=0)    # 답 칸 글자 자리
+    cells = ocrbench.table_cells(im)
+    assert len(cells) == 10
+    assert ocrbench.table_cells(Image.new("L", (300, 300), 255)) == []
