@@ -78,6 +78,19 @@ QFrame#card {{ background: {SURFACE}; border: 1px solid {LINE}; border-radius: 1
 QLabel#cardTitle {{ font-size: 16px; font-weight: 600; }}
 QLabel#cardStep {{ color: white; background: {PRIMARY}; border-radius: 11px; font-size: 12px; font-weight: 700;
                    min-width: 22px; max-width: 22px; min-height: 22px; max-height: 22px; qproperty-alignment: AlignCenter; }}
+/* 작업 순서(① 종목 → ② 기출 PDF 업로드[2-1·2-2] → ③ 팩 만들기)와 조건 표시 — 순서 번호(동그라미)와 조건(네모 칩)을 구분 */
+QLabel#subStep {{ color: {PRIMARY}; background: {PRIMARY_SOFT}; border: 1px solid {PRIMARY}; border-radius: 6px;
+                  padding: 2px 8px; font-size: 12px; font-weight: 700; }}
+QLabel#condChip {{ color: {MUTED}; background: {GRAY_SOFT}; border: 1px solid #cfd8e3; border-radius: 6px;
+                   padding: 2px 8px; font-size: 12px; font-weight: 700; }}
+QFrame#condPanel {{ background: #f8fafc; border: 1px solid {LINE}; border-radius: 10px; }}
+QLabel#flowStep {{ color: white; background: #b6c2d2; border-radius: 11px; font-size: 12px; font-weight: 700;
+                   min-width: 22px; max-width: 22px; min-height: 22px; max-height: 22px; qproperty-alignment: AlignCenter; }}
+QLabel#flowStep[state="now"] {{ background: {PRIMARY}; }}
+QLabel#flowStep[state="done"] {{ background: {OK}; }}
+QLabel#flowText {{ color: {MUTED}; font-weight: 600; }}
+QLabel#flowText[state="now"] {{ color: {PRIMARY}; font-weight: 700; }}
+QLabel#flowText[state="done"] {{ color: {INK}; }}
 QLabel#cardHint, QLabel#muted, QLabel#hint {{ color: {MUTED}; font-size: 13px; }}
 QLabel#fieldLabel {{ color: {MUTED}; font-size: 13px; font-weight: 600; }}
 

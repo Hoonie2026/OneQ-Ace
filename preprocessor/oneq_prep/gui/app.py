@@ -1,7 +1,7 @@
 """원큐합격 전처리기 — 창 프로그램 본체(ADR 018·019, v0.5 처리 화면 ADR 021 6절).
 
-머리 띠 | 왼쪽: ① 종목(검색·출제기준) + 올리는 PDF 조건 셋 | 오른쪽: ② 기출 PDF(한 목록 · 글자/스캔 · 파일별 진행 막대)
-| 아래: 실행 띠. 입력 칸 없음(만든 사람·출처·문제 종류·처리 속도 자동, 저장 폴더는 기본 폴더 — 도움말 메뉴에서 바꿈).
+머리 띠 | 왼쪽: ① 종목 선택(출제기준 다운로드) + 작업 순서 | 오른쪽: ② 기출 PDF 업로드(2-1 comcbt 자동 받기 →
+2-2 직접 올리기 + 올리는 기출 PDF 조건 셋 → 한 목록 · 글자/스캔 · 파일별 진행 막대) | 아래: ③ 팩 만들기 실행 띠(사용자 2026-11-11). 입력 칸 없음(만든 사람·출처·문제 종류·처리 속도 자동, 저장 폴더는 기본 폴더 — 도움말 메뉴에서 바꿈).
 끝난 파일을 누르면 결과 화면(과목별 문항·정답·유형·단원·미리 보기, 의심 문항 [확인하기]).
 """
 from __future__ import annotations
@@ -125,7 +125,7 @@ class MainWindow(QMainWindow):
         left = QVBoxLayout()
         left.setSpacing(16)
         left.addWidget(self._card_cert())
-        left.addWidget(self._card_conditions())
+        left.addWidget(self._card_flow())
         left.addStretch(1)
         lw = QWidget()
         lw.setLayout(left)
@@ -218,25 +218,28 @@ class MainWindow(QMainWindow):
         return h
 
     def _card_cert(self) -> Card:
-        c = Card("종목", "1")
+        c = Card("종목 선택(출제기준 다운로드)", "1")
         self.picker = CertPicker()
         c.body.addWidget(self.picker)
         return c
 
-    def _card_conditions(self) -> Card:
-        """올리는 기출 PDF 조건 셋(ADR 021 3절) — 넣으면 바로 [글자]/[스캔]과 회차를 보여 줌."""
-        c = Card("올리는 기출 PDF", "", "어디서 구했든 괜찮아요. 아래 셋만 맞으면 됩니다.")
-        self.condition_pictures: list[ConditionPicture] = []
-        for i, (t, h) in enumerate(CONDITIONS, 1):
+    def _card_flow(self) -> Card:
+        """작업 순서 한눈에(사용자 2026-11-11) — 끝난 단계 ✓(초록), 지금 할 단계(파랑), 남은 단계(회색)."""
+        c = Card("작업 순서", "", "")
+        self.flow: list[tuple[QLabel, QLabel]] = []
+        steps = [("종목 선택(출제기준 다운로드)", "종목 이름 입력 → [조회]"),
+                 ("기출 PDF 업로드", "2-1 comcbt 자동 받기 → 2-2 직접 올리기(조건 셋 확인)"),
+                 ("팩 만들기", "아래 [팩 만들기] → 생긴 묶음 파일을 학습앱 [문제팩 가져오기]로")]
+        for i, (t, h) in enumerate(steps, 1):
             row = QHBoxLayout()
             row.setSpacing(10)
             n = QLabel(str(i))
-            n.setObjectName("cardStep")
+            n.setObjectName("flowStep")
             row.addWidget(n, 0, Qt.AlignTop)
             v = QVBoxLayout()
             v.setSpacing(0)
             tl = QLabel(t)
-            tl.setStyleSheet("font-weight:600")
+            tl.setObjectName("flowText")
             hl = QLabel(h)
             hl.setObjectName("muted")
             hl.setWordWrap(True)
@@ -244,15 +247,86 @@ class MainWindow(QMainWindow):
             v.addWidget(hl)
             row.addLayout(v, 1)
             c.body.addLayout(row)
+            self.flow.append((n, tl))
+        return c
+
+    def flow_state(self) -> list[str]:
+        """작업 순서 세 단계의 상태 — done / now / todo."""
+        s1 = bool(self.picker.code)
+        s2 = any(r.pack_id and r.status != "error" for r in self.rows)
+        s3 = self.bundle is not None and self.worker is None and any(r.status in ("packed", "review") for r in self.rows)
+        out, now = [], False
+        for d in (s1, s2, s3):
+            if d and not now:
+                out.append("done")
+            elif not now:
+                out.append("now")
+                now = True
+            else:
+                out.append("todo")
+        return out
+
+    def update_flow(self) -> None:
+        if not hasattr(self, "flow"):
+            return
+        for i, ((n, t), st) in enumerate(zip(self.flow, self.flow_state()), 1):
+            n.setText("✓" if st == "done" else str(i))
+            for w in (n, t):
+                if w.property("state") != st:
+                    w.setProperty("state", st)
+                    w.style().unpolish(w)
+                    w.style().polish(w)
+
+    def _conditions_panel(self) -> QFrame:
+        """2-2 직접 올리기 아래의 '올리는 기출 PDF 조건' 셋(ADR 021 3절) — 조건 1·2·3(작업 순서 번호와 다른 모양) + 예시 그림."""
+        f = QFrame()
+        f.setObjectName("condPanel")
+        v = QVBoxLayout(f)
+        v.setContentsMargins(14, 10, 14, 10)
+        v.setSpacing(8)
+        head = QLabel("올리는 기출 PDF 조건 — 어디서 구했든 괜찮아요. 아래 셋만 맞으면 됩니다(그림을 누르면 크게)")
+        head.setObjectName("muted")
+        head.setWordWrap(True)
+        v.addWidget(head)
+        cols = QHBoxLayout()
+        cols.setSpacing(12)
+        self.condition_pictures: list[ConditionPicture] = []
+        for i, (t, h) in enumerate(CONDITIONS, 1):
+            col = QVBoxLayout()
+            col.setSpacing(4)
+            top = QHBoxLayout()
+            top.setSpacing(8)
+            chip = QLabel(f"조건 {i}")
+            chip.setObjectName("condChip")
+            top.addWidget(chip, 0, Qt.AlignVCenter)
+            tl = QLabel(t)
+            tl.setStyleSheet("font-weight:600")
+            top.addWidget(tl, 1)
+            col.addLayout(top)
+            hl = QLabel(h)
+            hl.setObjectName("muted")
+            hl.setWordWrap(True)
+            col.addWidget(hl)
+            col.addStretch(1)
             pic = ConditionPicture(i - 1)            # 예시 그림(B3 ①) — 누르면 크게
             pic.clicked.connect(self.show_condition)
-            c.body.addWidget(pic)
+            col.addWidget(pic)
             self.condition_pictures.append(pic)
+            cols.addLayout(col, 1)
+        v.addLayout(cols)
         tip = QLabel("한글(HWP)·워드 파일은 그 프로그램에서 PDF로 저장해 넣으세요.")
         tip.setObjectName("hint")
         tip.setWordWrap(True)
-        c.body.addWidget(tip)
-        return c
+        v.addWidget(tip)
+        return f
+
+    def toggle_conditions(self, show: bool | None = None) -> None:
+        """조건 셋 펼치기·접기. 목록이 비었으면 펼쳐 두고, 파일이 들어오면 표 자리를 위해 접음(직접 누르면 그대로 따름)."""
+        if show is None:
+            show = not self.cond_panel.isVisible()
+            self._cond_user = show
+        self.cond_panel.setVisible(show)
+        self.cond_btn.setText("조건 접기 ▴" if show else "조건 보기 ▾")
 
     def show_condition(self, index: int) -> None:
         ConditionDialog(index, CONDITIONS[index][1], self).exec()
@@ -309,28 +383,70 @@ class MainWindow(QMainWindow):
         QApplication.clipboard().setText(APP_URL)
         self.status.setText(f"앱 주소를 복사했습니다: {APP_URL}")
 
+    def _sub_row(self, tag: str, title: str, hint: str) -> QHBoxLayout:
+        row = QHBoxLayout()
+        row.setSpacing(10)
+        t = QLabel(tag)
+        t.setObjectName("subStep")
+        row.addWidget(t, 0, Qt.AlignVCenter)
+        v = QVBoxLayout()
+        v.setSpacing(0)
+        tl = QLabel(title)
+        tl.setStyleSheet("font-weight:600")
+        hl = QLabel(hint)
+        hl.setObjectName("muted")
+        hl.setWordWrap(True)
+        v.addWidget(tl)
+        v.addWidget(hl)
+        row.addLayout(v, 1)
+        return row
+
     def _card_pdfs(self) -> Card:
-        c = Card("기출 PDF", "2")
+        """② 기출 PDF 업로드 = 2-1 comcbt 자동 받기(먼저) → 2-2 직접 올리기(+ 조건 셋) → 목록(사용자 2026-11-11)."""
+        c = Card("기출 PDF 업로드", "2")
         self.summary = QLabel()
         self.summary.setObjectName("muted")
         c.head.addWidget(self.summary)
-        bar = QHBoxLayout()
-        bar.setSpacing(8)
         self.pdf_buttons = []
-        for text, fn in (("PDF 추가", self.add_files), ("폴더 추가", self.add_folder), ("선택 빼기", self.remove_selected),
-                         ("모두 비우기", self.clear_files)):
-            b = QPushButton(text)
-            b.clicked.connect(fn)
-            bar.addWidget(b)
-            self.pdf_buttons.append(b)
-        bar.addStretch(1)
-        # comcbt 게시판 첫 쪽의 최근 기출 받기(사용자 결정 2026-10-24 — 이전·최신 회차는 직접 올림)
+        # 2-1 comcbt 게시판 첫 쪽의 최근 기출 받기(사용자 결정 2026-10-24 — 이전·최신 회차는 직접 올림)
+        r1 = self._sub_row("2-1", "comcbt 최근 기출 자동 받기", "comcbt.com 종목 게시판 첫 쪽에 올라온 회차만 받아 목록에 넣어요")
         self.comcbt_btn = QPushButton("comcbt 최근 기출 받기")
         self.comcbt_btn.setObjectName("primarySmall")
         self.comcbt_btn.setToolTip("comcbt.com 종목 게시판 첫 쪽의 최근 기출(정답 표시된 교사용 PDF)을 받아 목록에 넣습니다")
         self.comcbt_btn.clicked.connect(self.comcbt_fetch)
-        bar.addWidget(self.comcbt_btn)
+        r1.addWidget(self.comcbt_btn)
         self.pdf_buttons.append(self.comcbt_btn)
+        c.body.addLayout(r1)
+        self.comcbt_note = Note("info")
+        self.comcbt_note.setVisible(False)
+        c.body.addWidget(self.comcbt_note)
+        # 2-2 직접 올리기 — 바로 아래에 조건 셋을 미리 보여 줌
+        r2 = self._sub_row("2-2", "직접 올리기", "자동으로 못 받은 이전·최신 회차 — 아래 조건 셋에 맞는 PDF")
+        for text, fn in (("PDF 추가", self.add_files), ("폴더 추가", self.add_folder)):
+            b = QPushButton(text)
+            b.clicked.connect(fn)
+            r2.addWidget(b)
+            self.pdf_buttons.append(b)
+        self.cond_btn = QPushButton("조건 접기 ▴")
+        self.cond_btn.setObjectName("link")
+        self.cond_btn.clicked.connect(lambda: self.toggle_conditions())
+        r2.addWidget(self.cond_btn)
+        c.body.addLayout(r2)
+        self._cond_user: bool | None = None
+        self.cond_panel = self._conditions_panel()
+        c.body.addWidget(self.cond_panel)
+        # 목록(자동 받은 것·직접 올린 것 한 목록)
+        bar = QHBoxLayout()
+        bar.setSpacing(8)
+        lt = QLabel("올린 기출 PDF 목록")
+        lt.setObjectName("fieldLabel")
+        bar.addWidget(lt)
+        bar.addStretch(1)
+        for text, fn in (("선택 빼기", self.remove_selected), ("모두 비우기", self.clear_files)):
+            b = QPushButton(text)
+            b.clicked.connect(fn)
+            bar.addWidget(b)
+            self.pdf_buttons.append(b)
         c.body.addLayout(bar)
 
         self.stack = QStackedWidget()
@@ -368,12 +484,9 @@ class MainWindow(QMainWindow):
         self.law_note.setVisible(False)
         self.bundle_note = Note("ok")
         self.bundle_note.setVisible(False)
-        self.comcbt_note = Note("info")
-        self.comcbt_note.setVisible(False)
         self.ocr_note = Note("warn")             # 스캔본인데 OCR 기능이 없을 때(ADR 022 1절)
         self.ocr_note.setVisible(False)
         c.body.addWidget(self.ocr_note)
-        c.body.addWidget(self.comcbt_note)
         c.body.addWidget(self.bundle_note)
         c.body.addWidget(self.change_note)
         c.body.addWidget(self.law_note)
@@ -389,6 +502,9 @@ class MainWindow(QMainWindow):
         lay = QHBoxLayout(f)
         lay.setContentsMargins(24, 14, 24, 14)
         lay.setSpacing(14)
+        step3 = QLabel("3")                      # ③ 작업 순서의 마지막 단계(사용자 2026-11-11)
+        step3.setObjectName("cardStep")
+        lay.addWidget(step3, 0, Qt.AlignVCenter)
         self.run_btn = QPushButton("팩 만들기")
         self.run_btn.setObjectName("primary")
         self.run_btn.setMinimumWidth(160)
@@ -568,6 +684,7 @@ class MainWindow(QMainWindow):
             b.setEnabled(ready)
         self.drop.setEnabled(ready)
         self.drop_hint.setText("기출 PDF를 여기로 끌어다 놓으세요" if ready else "먼저 ①에서 자격종목을 조회하세요")
+        self.update_flow()
 
     def make_profile(self, cert) -> None:
         dlg = ProfileDialog(cert, self)
@@ -618,6 +735,7 @@ class MainWindow(QMainWindow):
         self.refresh_plan()
 
     def clear_files(self) -> None:
+        self.bundle = None
         self.pdfs.clear()
         self.file_dates.clear()
         self.refresh_plan()
@@ -721,6 +839,9 @@ class MainWindow(QMainWindow):
         kinds = {k: sum(r.kind == k for r in self.rows) for k in ("글자", "스캔", "섞임")}
         ktxt = " · ".join(f"{k} {v}" for k, v in kinds.items() if v)
         self.summary.setText((f"PDF {n}개" + (f" ({ktxt})" if ktxt else "") + (f" · 팩 {packed}개" if packed else "")) if n else "")
+        if self._cond_user is None:
+            self.toggle_conditions(not self.rows)
+        self.update_flow()
 
     def on_item_changed(self, item: QTableWidgetItem) -> None:
         if self._building or item.column() != C_ROUND:
@@ -805,6 +926,7 @@ class MainWindow(QMainWindow):
         skip = {r.pdf for r in self.rows if r.status == "error" and not r.pack_id}
         pdfs = [p for p in pdfs if p not in skip]
         self.save_settings()
+        self.bundle = None
         spec = self.spec(pdfs)
         for r in self.rows:
             if r.pdf in pdfs:

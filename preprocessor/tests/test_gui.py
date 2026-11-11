@@ -309,3 +309,28 @@ def test_result_while_running(win, qtbot, tmp_path, monkeypatch):
     win.on_finished(win.rows)
     qtbot.waitUntil(lambda: started == [[a]], timeout=2000)
     assert win.pending_rerun == []
+
+
+def test_main_screen_work_order(win):
+    """메인 화면 작업 순서(사용자 2026-11-11): ① 종목 선택(출제기준 다운로드) → ② 기출 PDF 업로드(2-1 자동 → 2-2 직접 + 조건 1·2·3)
+    → ③ 팩 만들기. 조건은 순서 번호와 다른 모양(조건 칩), 작업 순서 카드는 끝난 단계 ✓."""
+    from oneq_prep.batch import RoundResult
+    from oneq_prep.gui.app import QLabel
+    texts = [lbl.text() for lbl in win.findChildren(QLabel)]
+    assert "종목 선택(출제기준 다운로드)" in texts and "기출 PDF 업로드" in texts
+    chips = [lbl.text() for lbl in win.findChildren(QLabel) if lbl.objectName() == "condChip"]
+    assert chips == ["조건 1", "조건 2", "조건 3"]
+    assert [lbl.text() for lbl in win.findChildren(QLabel) if lbl.objectName() == "subStep"] == ["2-1", "2-2"]
+    steps = [lbl.text() for lbl in win.findChildren(QLabel) if lbl.objectName() == "cardStep"]
+    assert sorted(steps) == ["1", "2", "3"]                     # 순서 번호는 셋뿐(조건에는 안 씀)
+    assert win.flow_state() == ["done", "now", "todo"]          # 종목은 골라져 있음 → 지금은 ② 업로드
+    assert not win.cond_panel.isHidden()                         # 목록이 비었으면 조건을 펼쳐 둠
+    p = win.out_dir / "a.pdf"
+    win.pdfs = [p]
+    win.rows = [RoundResult(pdf=p, pack_id="SAFETY-2022-1", date="2022-03-05", status="waiting")]
+    win.render_rows()
+    assert win.cond_panel.isHidden() and "보기" in win.cond_btn.text()     # 파일이 들어오면 접음
+    assert win.flow_state() == ["done", "done", "now"]
+    win.toggle_conditions()                                       # 직접 펼치면 그대로
+    win.render_rows()
+    assert not win.cond_panel.isHidden()
