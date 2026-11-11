@@ -165,3 +165,24 @@ def test_scan_sample_pack(tmp_path, monkeypatch):
     assert len(pr.items) + len(pr.missing) == 100
     assert len(pr.items) >= (98 if eng == "winocr" else 95)
     assert all("ocr" in it.flags and "needs-review" in it.flags for it in pr.items)
+
+
+def test_answer_row_partly_read_is_not_skipped(monkeypatch):
+    """덜 읽은 답 줄(10칸 중 6글자)을 건너뛰면 뒤 정답이 통째로 밀림(2026-11-11 PC winocr, 62번부터) → 반씩 다시 읽음."""
+    calls = {"full": 0}
+
+    def fake(img, eng):
+        if img.width / img.height < 10:
+            return "가 나 다 라 가"                     # 반쪽(5칸)
+        calls["full"] += 1
+        return "가 나 다 라 가 나" if calls["full"] <= 3 else "라 라 라 라 라 라 라 라 라 라"   # 1줄은 1·0.5·0.3배 모두 6글자
+    monkeypatch.setattr(ocr, "line_text", fake)
+    got = ocr.read_answer_rows(_grid(2), "winocr")
+    assert len(got) == 20 and "".join(got[10:]) == "라" * 10
+
+
+def test_ocr_subject_header_variants():
+    from oneq_prep.extract import OCR_SUBJ
+    assert OCR_SUBJ.match("제 3 과목 •. 으요 하").group(1) == "3"
+    assert OCR_SUBJ.match("제 1 과목 : 철도공학").group(2) == "철도공학"
+    assert OCR_SUBJ.match("가. 과목 : 이름") is None

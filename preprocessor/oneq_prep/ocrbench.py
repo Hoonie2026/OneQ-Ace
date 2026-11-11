@@ -308,6 +308,8 @@ def pack_measure(pdf_path: Path, gt: dict, out_dir: Path, log=print) -> dict:
     res = {"engine": engine, "sec": round(sec, 1), "packId": pr.pack_id, "exam": pr.exam,
            "found": len(pr.items), "missing": [n for n, _ in pr.missing], "answer_wrong": wrong,
            "choices_short": short, "issues": pr.issues, "notes": pr.notes,
+           "answer_rows": list(ocr.ANSWER_DEBUG), "subjects": sorted({it.subject or "" for it in pr.items}),
+           "per_subject": {n: sum(1 for it in pr.items if it.subject == n) for n in {it.subject for it in pr.items}},
            "texts": {it.no: it.text for it in pr.items}}
     (out_dir / "pack-결과.json").write_text(json.dumps(res, ensure_ascii=False, indent=1), encoding="utf-8")
     log(f"엔진 {ocr.ENGINE_NAMES.get(engine, engine)} · {sec:.0f}초 · 팩 이름 {pr.pack_id}")

@@ -220,9 +220,10 @@ def prepare(pdf_path: Path, profile: S.Profile, out_dir: Path,
     renamed: list[str] = []
     for sno, raw in sorted(layout.subjects.items()):
         override = review.get("subjectMap", {}).get(raw)
-        if not override and layout.ocr and re.fullmatch(r"\d과목", raw) and 1 <= sno <= len(profile.subjects):
+        if not override and layout.ocr and 1 <= sno <= len(profile.subjects) \
+                and (re.fullmatch(r"\d과목", raw) or profile.resolve(raw)[0] not in ("std", "excluded")):
             override = profile.subjects[sno - 1]["name"]          # 스캔본: 과목명을 못 읽음 → 출제기준 순서로
-            notes.append(f"{raw} 이름을 못 읽어 출제기준 {sno}번째 과목 '{override}'로 둠")
+            notes.append(f"{sno}과목 이름을 못 읽어('{raw}') 출제기준 {sno}번째 과목 '{override}'로 둠")
         if override == "제외":
             smap[sno] = (raw, None)
             continue

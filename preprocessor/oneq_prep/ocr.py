@@ -358,31 +358,71 @@ def letters(t: str) -> list[str]:
     return out
 
 
+ANSWER_DEBUG: list[dict] = []    # 마지막 정답표 읽기 기록(줄마다 칸 수·읽은 글·판정) — 실측 결과 파일용
+
+
+def _read_strip(cells: list, engine: str) -> tuple[list[str], bool, str]:
+    """칸 묶음을 한 줄 그림으로(크기 1·0.5·0.3배) 읽어 (가나다라 목록, 번호 줄인지, 읽은 글)."""
+    best: list[str] = []
+    seen = ""
+    for k in (1.0, 0.5, 0.3):
+        t = line_text(strip_image(cells, k), engine)
+        if sum(ch.isdigit() for ch in t) >= max(3, len(cells) // 3):
+            return [], True, t                     # 번호 줄("41 42 …"를 "다 라"로 일부 잘못 읽어도 숫자로 가름)
+        ls = letters(t)
+        if len(ls) > len(best):
+            best, seen = ls, t
+        if len(best) >= len(cells):
+            break
+    return best, False, seen
+
+
 def read_answer_rows(img, engine: str) -> list[str]:
     """정답표 그림 → 답 글자 목록(읽은 순서, 못 읽은 칸은 "?"). 표가 아니면 [].
-    줄마다 칸들을 한 줄 그림으로 이어 붙여 읽고(크기 1·0.5·0.3배 중 글자를 가장 많이 찾은 것),
-    가·나·다·라가 칸 수의 절반도 안 나오면 번호 줄로 보고 건너뜀, 절반 이상인데 모자라면 그 줄만 칸마다 다시."""
+    표의 대표 칸 수(보통 10)와 다른 줄(제목 줄)은 빼고, 숫자가 많으면 번호 줄로 건너뜀. **나머지 줄은 모두 답 줄** —
+    글자를 덜 읽었다고 건너뛰면 뒤 정답이 통째로 밀린다(2026-11-11 PC winocr: 한 줄을 건너뛰어 62번부터 어긋남).
+    덜 읽은 줄은 반씩 나눠 다시, 그래도 모자라면 칸마다, 끝내 못 읽은 칸은 "?"(검수에서 입력)."""
+    from collections import Counter
+    ANSWER_DEBUG.clear()
+    rows = table_rows(img)
+    if not rows:
+        return []
+    width = Counter(len(r) for r in rows).most_common(1)[0][0]
     got: list[str] = []
-    for row in table_rows(img):
-        best: list[str] = []
-        numbers = False
-        for k in (1.0, 0.5, 0.3):
-            t = line_text(strip_image(row, k), engine)
-            if sum(ch.isdigit() for ch in t) >= max(3, len(row) // 3):
-                numbers = True                         # 번호 줄("41 42 …"를 "다 라"로 잘못 읽는 일이 있어 숫자로 먼저 가름)
-                break
-            ls = letters(t)
-            if len(ls) > len(best):
-                best = ls
-            if len(best) >= len(row):
-                break
-        if numbers or len(best) * 10 < len(row) * 7:
-            continue                                   # 번호 줄(숫자 — 가끔 "다 라"로 잘못 읽힘)·빈 줄
+    for ri, row in enumerate(rows):
+        rec = {"row": ri, "cells": len(row)}
+        ANSWER_DEBUG.append(rec)
+        if len(row) != width:
+            rec["kind"] = "제목·기타(칸 수 다름)"
+            continue
+        best, numbers, seen = _read_strip(row, engine)
+        rec["text"] = seen
+        if numbers:
+            rec["kind"] = "번호 줄"
+            continue
+        if not best and not any(ch.strip() for ch in seen):
+            # 아무것도 못 읽음: 반으로 나눠 숫자인지 다시 본다(빈 줄을 답 줄로 세지 않게)
+            h = len(row) // 2
+            a, na, _ = _read_strip(row[:h], engine)
+            b, nb, _ = _read_strip(row[h:], engine)
+            if na or nb:
+                rec["kind"] = "번호 줄(반씩)"
+                continue
         if len(best) != len(row):
-            best = []
-            for c in row:
-                one = letters(char_text(c, engine))
-                best.append(one[0] if one else "?")
+            h = len(row) // 2
+            a, _, _ = _read_strip(row[:h], engine)
+            b, _, _ = _read_strip(row[h:], engine)
+            if len(a) == h and len(b) == len(row) - h:
+                best = a + b
+                rec["how"] = "반씩"
+            else:
+                best = []
+                for c in row:
+                    one = letters(char_text(c, engine))
+                    best.append(one[0] if one else "?")
+                rec["how"] = "칸마다"
+        rec["kind"] = "답 줄"
+        rec["letters"] = "".join(best)
         got += best
     return got
 

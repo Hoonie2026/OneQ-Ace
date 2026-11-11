@@ -322,15 +322,15 @@ def _qnum(ln: Line) -> int | None:
     k = 0
     while k < len(ink) and k < 3 and ink[k]["text"] in DIGITS:
         k += 1
-    if k == 0 or k >= len(ink) or ink[k]["text"] != ".":
-        return None
+    if k == 0 or k >= len(ink) or not (ink[k]["text"] == "." or (ink[k]["text"] == "," and ink[k].get("ocr"))):
+        return None                 # 스캔본은 "9,"도 문항번호(winocr가 마침표를 쉼표로 읽음)
     if k + 1 < len(ink) and ink[k + 1]["text"] in DIGITS and ink[k + 1]["x0"] - ink[k]["x1"] < 3:
         return None
     return int("".join(c["text"] for c in ink[:k]))
 
 
-OCR_QHEAD = re.compile(r"^[0-9OoIl|SB\-,·]{0,4}[.:]")   # "23.", ".", "-.", "2:" 그리고 글자가 붙은 "20.수준"
-OCR_SUBJ = re.compile(r"제?\s*(\d?)\s*과\s*목\s*[:：;]\s*(.*)$")   # 과목명을 못 읽으면 빈칸(→ "N과목", pack이 출제기준 순서로)
+OCR_QHEAD = re.compile(r"^[0-9OoIl|SB%\-,·]{0,4}[.:,]")   # "23.", ".", "-.", "2:", "9,"(winocr), "%."와 글자가 붙은 "20.수준"
+OCR_SUBJ = re.compile(r"^\s*제?\s*(\d?)\s*과\s*목\s*[:：;•·.,]+\s*(.*)$")   # 쌍점을 "•."로 읽기도(winocr). 이름을 못 읽으면 pack이 출제기준 순서로
 
 
 def _head_token(ln: Line) -> str:
@@ -360,7 +360,7 @@ def _scan(all_lines, col_left, titles, hl, expected: int | None, ocr: bool = Fal
     for ln in all_lines:
         text = ln.text.strip()
         m = SUBJ_RE.search(text.replace("\xa0", " "))
-        mo = OCR_SUBJ.search(text) if ocr and "과" in text[:8] else None
+        mo = OCR_SUBJ.match(text) if ocr and "과" in text[:8] else None
         if (m and "과목" in text[:6]) or mo:
             header_mode = True
             if m:
