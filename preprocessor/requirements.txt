@@ -1,7 +1,8 @@
-# oneq-prep 2단계 MVP 의존성(스캔본 OCR은 Tesseract 별도 선택 설치 — README) (모두 MIT/Apache/BSD)
+# oneq-prep 의존성(모두 MIT/Apache/BSD). 스캔본 OCR = Windows 내장(winocr, ADR 022) — Tesseract는 직접 설치한 PC에서만 예비
 pypdfium2>=4
 pdfplumber>=0.11
 pillow>=10
 numpy>=1.26
 jsonschema>=4.20
 pytest>=8
+winocr>=0.0.15; sys_platform == "win32"   # Windows 내장 OCR(Windows.Media.Ocr) 부르기 — winrt-* 패키지 함께 설치됨

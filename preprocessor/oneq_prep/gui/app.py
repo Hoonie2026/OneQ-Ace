@@ -349,6 +349,9 @@ class MainWindow(QMainWindow):
         self.bundle_note.setVisible(False)
         self.comcbt_note = Note("info")
         self.comcbt_note.setVisible(False)
+        self.ocr_note = Note("warn")             # 스캔본인데 OCR 기능이 없을 때(ADR 022 1절)
+        self.ocr_note.setVisible(False)
+        c.body.addWidget(self.ocr_note)
         c.body.addWidget(self.comcbt_note)
         c.body.addWidget(self.bundle_note)
         c.body.addWidget(self.change_note)
@@ -627,7 +630,26 @@ class MainWindow(QMainWindow):
         self.render_rows()
         self.law_note.setVisible(False)
         self.bundle_note.setVisible(False)
+        self.update_ocr_note()
         self.peek_timer.start()
+
+    def update_ocr_note(self) -> None:
+        """스캔본이 있는데 OCR 엔진(Windows 한국어 OCR 기능)이 없으면 처리 전에 미리 알린다(ADR 022 1절)."""
+        from ..ocr import OcrUnavailable, pick_engine
+        if not any(r.kind in ("스캔", "섞임") for r in self.rows):
+            self.ocr_note.setVisible(False)
+            return
+        if getattr(self, "_ocr_err", None) is None:
+            try:
+                pick_engine()
+                self._ocr_err = ""
+            except OcrUnavailable as e:
+                self._ocr_err = str(e)
+        if not self._ocr_err:
+            self.ocr_note.setVisible(False)
+            return
+        lines = [x.strip() for x in self._ocr_err.splitlines()[1:] if x.strip()]
+        self.ocr_note.set("warn", "스캔본을 읽으려면 Windows 한국어 OCR 기능이 필요해요", lines)
 
     def render_rows(self) -> None:
         self._building = True

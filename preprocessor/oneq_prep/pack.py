@@ -145,6 +145,7 @@ class Prepared:
     renamed: list[str] = field(default_factory=list)
     info: "examinfo.ExamInfo | None" = None   # 문서에서 읽은 종목·출처·근거(B2)
     unchanged: bool = False       # 출력 폴더에 내용이 같은 팩이 이미 있었음(묶음에서 뺌, ADR 021 8절)
+    missing: list = field(default_factory=list)   # 스캔본에서 찾지 못한 문항(번호, PDF 과목명) → manifest.excluded "unreadable"
     zip_path: Path | None = None
     review_file: Path | None = None
 
@@ -153,15 +154,22 @@ def prepare(pdf_path: Path, profile: S.Profile, out_dir: Path,
             date: str | None = None, round_no: int | None = None, image_quality: int = 80,
             reference: Reference | None = None, log=print, progress=None) -> Prepared:
     """progress(단계) — 처리 화면의 파일별 진행 막대용(ADR 021 6절): 읽기 → 문항 나누기 → 정답 → 분류(→ 팩은 쓰는 쪽)."""
-    from .ocr import needs_ocr, ocr_pdf
+    from .ocr import ENGINE_NAMES, needs_ocr, ocr_document
 
     step = progress or (lambda _s: None)
     step("읽기")
 
     issues: list[str] = []
     notes: list[str] = []
+    doc = None
+    if needs_ocr(pdf_path):
+        # 스캔본: 먼저 OCR(ADR 022) — 종목·시행일도 OCR 글에서 읽는다
+        log(f"  {pdf_path.name}: 텍스트층 없음 → OCR")
+        doc = ocr_document(pdf_path)
+        notes.append(f"스캔본: {ENGINE_NAMES.get(doc.engine, doc.engine)}로 글자를 읽음 — 문항 경계·보기를 검수")
     # 종목·시행일·회차·출처는 문서 내용에서(ADR 021 2절) — 파일 이름은 쓰지 않음
-    exam, info = examinfo.exam_of(pdf_path, profile, out_dir, date, round_no)
+    exam, info = examinfo.exam_of(pdf_path, profile, out_dir, date, round_no,
+                                  examinfo.read(pdf_path, ocr_text=doc.text) if doc else None)
     pack_id = examinfo.pack_id(profile.code, exam)
     if info.cert_name and S.norm(info.cert_name) != S.norm(profile.name):
         issues.append(f"이 파일은 '{info.cert_name}' 문서로 보입니다(고른 종목: {profile.name}) — 종목을 확인하세요")
@@ -170,14 +178,19 @@ def prepare(pdf_path: Path, profile: S.Profile, out_dir: Path,
                                                     else f"0000년 {exam['round']}회로 지정"))
     review = load_review(out_dir, pack_id)
 
-    ocr_pages = None
-    if needs_ocr(pdf_path):
-        log(f"  {pdf_path.name}: 텍스트층 없음 → OCR")
-        ocr_pages = ocr_pdf(pdf_path)
-        notes.append("스캔본: OCR로 문항 경계를 찾음 — 보기·정답을 반드시 검수")
     step("문항 나누기")
-    layout = analyze(pdf_path, ocr_pages=ocr_pages)
-    issues += layout.warnings
+    layout = analyze(pdf_path, ocr_pages=doc.pages if doc else None)
+    issues += [w for w in layout.warnings if not w.startswith("스캔본:")]
+    notes += [w for w in layout.warnings if w.startswith("스캔본:")]     # 빠진 번호는 아래에서 번호마다
+    if doc and doc.answer_pages:
+        layout.answer_table = doc.answers      # 끝 쪽 정답표(칸 나눠 읽기, ADR 022 4절)
+        msg = f"정답표({', '.join(str(p + 1) for p in doc.answer_pages)}쪽)에서 정답 {len(doc.answers)}개를 읽음"
+        if doc.unread_answers:
+            issues.append(msg + f" — {doc.unread_answers}칸은 못 읽음(검수에서 정답 입력)")
+        else:
+            notes.append(msg)
+        if len(doc.answers) + doc.unread_answers != len(layout.questions) + len(layout.missing):
+            issues.append(f"정답표 칸 {len(doc.answers) + doc.unread_answers}개 ≠ 문항 {len(layout.questions)}개 — 정답 순서 확인")
 
     step("정답")
     # 렌더링 + 정답 표시 제거
@@ -207,6 +220,9 @@ def prepare(pdf_path: Path, profile: S.Profile, out_dir: Path,
     renamed: list[str] = []
     for sno, raw in sorted(layout.subjects.items()):
         override = review.get("subjectMap", {}).get(raw)
+        if not override and layout.ocr and re.fullmatch(r"\d과목", raw) and 1 <= sno <= len(profile.subjects):
+            override = profile.subjects[sno - 1]["name"]          # 스캔본: 과목명을 못 읽음 → 출제기준 순서로
+            notes.append(f"{raw} 이름을 못 읽어 출제기준 {sno}번째 과목 '{override}'로 둠")
         if override == "제외":
             smap[sno] = (raw, None)
             continue
@@ -226,6 +242,8 @@ def prepare(pdf_path: Path, profile: S.Profile, out_dir: Path,
         per = {}
         for q in layout.questions:
             per[q.subject_no] = per.get(q.subject_no, 0) + 1
+        for _, sno in layout.missing:               # 찾지 못한 문항은 따로 알림(아래) — 경계 경고와 겹치지 않게
+            per[sno] = per.get(sno, 0) + 1
         want = {s["name"]: s["count"] for s in profile.subjects}
         for sno, (raw, std) in smap.items():
             if std in want and per.get(sno, 0) != want[std]:
@@ -313,17 +331,25 @@ def prepare(pdf_path: Path, profile: S.Profile, out_dir: Path,
             # OCR의 보기 번호 개수·순서 경고는 정답만 확보되면 막지 않는다(카드에는 표시)
             soft = layout.ocr and it.answer is not None
             issues += [f"{it.no}번: {w}" for w in it.warnings
-                       if not (soft and (w.startswith("OCR:") or w.startswith("보기 번호 순서")))]
+                       if not (soft and (w.startswith("OCR:") or w.startswith("보기 번호 순서")
+                                         or (w.startswith("스캔본:") and review.get("reviewed"))))]
     note = classify_note(items, profile)
     if note:
         notes.append(note)
     n_ex = sum(1 for it in items if it.excluded)
     if n_ex:
         notes.append(f"제외 {n_ex}문항")
+    for no, sno in layout.missing:
+        # 검수자가 확인(reviewed)하면 막지 않음 — 그 번호는 manifest.excluded "unreadable"로 빠진 채 팩을 만든다
+        (notes if review.get("reviewed") else issues).append(
+            f"{no}번: 스캔본에서 문항을 찾지 못함 — 팩에서 빠짐(판독 불가)"
+            + ("" if review.get("reviewed") else " · 확인했으면 검수를 마침으로"))
     if layout.numbering == "per-subject":
         notes.append("원본은 과목마다 번호가 1부터 다시 시작 — 팩 번호(no)는 시험지 전체 순번")
+    missing = [(no, (lambda r, st: st if st and re.fullmatch(r"\d과목", r) else r)(*smap.get(sno, (f"{sno}과목", None))))
+               for no, sno in layout.missing]                     # 과목명을 못 읽었으면 출제기준 이름으로
     return Prepared(pdf_path, pack_id, exam, profile, method, masked, items, issues, notes,
-                    layout.numbering, layout.ocr, legacy, review, renamed, info=info)
+                    layout.numbering, layout.ocr, legacy, review, renamed, info=info, missing=missing)
 
 
 def classify_note(items: list[Item], profile: S.Profile) -> str:
@@ -432,6 +458,10 @@ def write_pack(p: Prepared, out_dir: Path, prepared_by: str, source_type: str | 
         if it.excluded:
             reason = "abolished-subject" if it.subject is None else ("unreadable" if "판독" in it.excluded else "other")
             excluded.setdefault((it.pdf_subject, reason, it.excluded if reason == "other" else ""), []).append(it.no)
+    for no, raw in p.missing:
+        excluded.setdefault((raw, "unreadable", ""), []).append(no)
+    for v in excluded.values():
+        v.sort()
 
     qjson = json.dumps(questions, ensure_ascii=False, indent=1).encode("utf-8")
     files = {"questions.json": qjson, **files}

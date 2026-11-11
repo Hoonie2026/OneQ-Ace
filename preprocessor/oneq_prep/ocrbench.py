@@ -5,6 +5,7 @@
 
     py -3 -m oneq_prep.ocrbench "..\\source_pdf\\철도보선기사_스캔본.pdf"
     py -3 -m oneq_prep.ocrbench <pdf> --engines tesseract,winocr --scales 1,2
+    py -3 -m oneq_prep.ocrbench <pdf> --pack      (B1 실측 🖥P25: 본 경로로 문항·정답표·보기 번호)
 
 결과: 표(화면) + <PDF 폴더>\\_ocrbench\\결과.json, 엔진·배율별 읽은 글자(.txt) — Claude가 PC 연결로 읽는다.
 글자 맞춤 점수는 순서·띄어쓰기를 무시한 부분 정렬(두 단 배치를 엔진마다 다른 순서로 읽어도 공정하게).
@@ -176,94 +177,8 @@ RUN = {"tesseract": _tesseract, "winocr": _winocr, "paddle": _paddle}
 RUN_CHAR = {"tesseract": _tesseract_char, "winocr": _winocr, "paddle": _paddle}
 RUN_LINE = {"tesseract": _tesseract_line, "winocr": _winocr, "paddle": _paddle}
 
-# ── 정답표: 표를 칸으로 잘라 칸마다 읽기(2026-11-11 — 쪽 통째로는 세 엔진 모두 낱자를 거의 건너뜀, 9/100 이하) ──
-CONFUSE = {"마": "라", "타": "다", "카": "가", "따": "다", "까": "가", "랴": "라", "냐": "나", "댜": "다", "갸": "가"}
-
-
-def _runs(mask) -> list[tuple[int, int]]:
-    out, s = [], None
-    for i, m in enumerate(mask):
-        if m and s is None:
-            s = i
-        elif not m and s is not None:
-            out.append((s, i))
-            s = None
-    if s is not None:
-        out.append((s, len(mask)))
-    return out
-
-
-def table_cells(img) -> list:
-    """격자 표 → 칸 그림(왼→오, 위→아래, 한 줄로 펼침). 칸이 아니면 []."""
-    return [c for row in table_rows(img) for c in row]
-
-
-def table_rows(img) -> list[list]:
-    """격자 표 → 줄마다 칸 그림 목록. 가로선·색칠한 줄(번호 줄)과 세로선으로 자른다. 칸이 아니면 []."""
-    import numpy as np
-    from PIL import Image
-    a = np.asarray(img.convert("L")).astype(int)
-    h, w = a.shape
-    ink = a < 240
-    line_rows = ink.mean(1) > 0.6           # 가로선 또는 색칠한 줄(번호 줄)
-    rows = [(y0, y1) for y0, y1 in _runs(~line_rows) if y1 - y0 > h / 60]
-    vl = np.where(ink.mean(0) > 0.6)[0]
-    cuts, grp = [], []
-    for x in vl:
-        if grp and x > grp[-1] + 2:
-            cuts.append(int(sum(grp) / len(grp)))
-            grp = []
-        grp.append(x)
-    if grp:
-        cuts.append(int(sum(grp) / len(grp)))
-    cols = [(cuts[i] + 3, cuts[i + 1] - 2) for i in range(len(cuts) - 1) if cuts[i + 1] - cuts[i] > w / 40]
-    if len(cols) < 3 or not rows:
-        return []
-    out = []
-    for y0, y1 in rows:
-        line = []
-        out.append(line)
-        for x0, x1 in cols:
-            c = img.convert("L").crop((x0, y0 + 2, x1, y1 - 2)).point(lambda v: 0 if v < 200 else 255)
-            if c.getbbox() is None or not any(px == 0 for px in c.getdata()):
-                continue                      # 빈 칸
-            k = 120 / max(1, c.height)
-            c = c.resize((max(1, int(c.width * k)), 120), Image.LANCZOS)
-            pad = Image.new("L", (c.width + 80, c.height + 80), 255)
-            pad.paste(c, (40, 40))
-            line.append(pad)
-    return [ln for ln in out if ln]
-
-
-def _strip(cells: list, k: float = 1.0):
-    """한 줄의 칸들을 띄어서 한 줄 그림으로 — Windows 내장 OCR은 낱자 하나짜리 그림을 읽지 않는다(2026-11-11 PC 5/100).
-    k: 크기 배율(글자가 너무 크면 Windows 내장이 못 읽을 수 있어 0.5·0.3도 시도)."""
-    from PIL import Image
-    from PIL import ImageOps
-    trimmed = []
-    for c in cells:                                   # 칸 여백을 걷어 글자만(+여유 10px) — 빈칸이 넓으면 줄이 끊김
-        bb = ImageOps.invert(c).getbbox()
-        trimmed.append(c.crop((max(0, bb[0] - 10), max(0, bb[1] - 10), min(c.width, bb[2] + 10), min(c.height, bb[3] + 10))) if bb else c)
-    cs = [c.resize((max(1, int(c.width * k)), max(1, int(c.height * k))), Image.LANCZOS) if k != 1 else c for c in trimmed]
-    gap = max(10, int(45 * k))
-    w = sum(c.width for c in cs) + gap * (len(cs) + 1)
-    h = max(c.height for c in cs)
-    im = Image.new("L", (w, h), 255)
-    x = gap
-    for c in cs:
-        im.paste(c, (x, (h - c.height) // 2))
-        x += c.width + gap
-    return im
-
-
-def _letters(t: str) -> list[str]:
-    out = []
-    for x in re.sub(r"[\s.,·:;|]+", "", t):
-        if x in LABELS:
-            out.append(x)
-        elif x in CONFUSE:
-            out.append(CONFUSE[x])
-    return out
+# ── 정답표: 칸 나눠 읽기 — 본 경로(ocr.py)로 옮김(ADR 022 4절). 여기서는 같은 함수를 쓴다 ──
+from .ocr import CONFUSE, _runs, letters as _letters, strip_image as _strip, table_cells, table_rows  # noqa: E402,F401
 
 
 def read_answer_cells(eng: str, img) -> str:
@@ -350,6 +265,54 @@ def bench(pdf_path: Path, gt: dict, engines: list[str], scales: list[float], out
     return rows
 
 
+RAILTRACK_2010 = {   # B1 실측용 임시 프로필(표본 2010년 2회의 5과목 — 큐넷 현행 기준과 다를 수 있어 저장하지 않음)
+    "code": "RAILTRACK", "name": "철도보선기사", "grade": "기사", "version": "B1 실측용",
+    "passRule": {"subjectMin": 40, "avgMin": 60},
+    "subjects": [{"name": n, "count": 20} for n in ("철도공학", "측량학", "응용역학", "건설재료 및 시공", "철도보선관계법규")],
+    "aliases": {}, "excluded": []}
+
+
+def pack_measure(pdf_path: Path, gt: dict, out_dir: Path, log=print) -> dict:
+    """B1 실측(🖥P25): 본 경로(pack.prepare)로 스캔본을 처리해 문항 찾기·정답표·보기 번호를 정답과 맞춘다.
+    out_dir에 문항 그림(q###.webp)·막히는 문제 목록·요약 JSON — Claude가 PC 연결로 읽는다."""
+    import shutil
+    from . import ocr
+    from . import standards as S
+    from .pack import prepare
+    home = out_dir / "_home"
+    (home / "standards").mkdir(parents=True, exist_ok=True)
+    (home / "standards" / "RAILTRACK.json").write_text(json.dumps(RAILTRACK_2010, ensure_ascii=False), encoding="utf-8")
+    old = os.environ.get("ONEQ_PREP_HOME")
+    os.environ["ONEQ_PREP_HOME"] = str(home)
+    try:
+        engine = ocr.pick_engine()
+        t0 = time.perf_counter()
+        pr = prepare(pdf_path, S.load("RAILTRACK"), out_dir / "_work", log=lambda *a: None)
+        sec = time.perf_counter() - t0
+    finally:
+        if old is None:
+            os.environ.pop("ONEQ_PREP_HOME", None)
+        else:
+            os.environ["ONEQ_PREP_HOME"] = old
+        shutil.rmtree(home, ignore_errors=True)
+    key = gt["answers"]
+    wrong = [it.no for it in pr.items if it.answer != LABELS.index(key[it.no - 1]) + 1]
+    short = [it.no for it in pr.items if any(w.startswith("OCR: 보기") for w in it.warnings)]
+    for it in pr.items:
+        (out_dir / f"q{it.no:03d}.webp").write_bytes(it.image)
+    res = {"engine": engine, "sec": round(sec, 1), "packId": pr.pack_id, "exam": pr.exam,
+           "found": len(pr.items), "missing": [n for n, _ in pr.missing], "answer_wrong": wrong,
+           "choices_short": short, "issues": pr.issues, "notes": pr.notes,
+           "texts": {it.no: it.text for it in pr.items}}
+    (out_dir / "pack-결과.json").write_text(json.dumps(res, ensure_ascii=False, indent=1), encoding="utf-8")
+    log(f"엔진 {ocr.ENGINE_NAMES.get(engine, engine)} · {sec:.0f}초 · 팩 이름 {pr.pack_id}")
+    log(f"문항 {len(pr.items)}/100 찾음 · 못 찾음 {res['missing'] or '없음'}")
+    log(f"정답(정답표) 맞음 {len(pr.items) - len(wrong)}/{len(pr.items)}" + (f" · 틀림 {wrong}" if wrong else ""))
+    log(f"보기 가나다라 4개 다 찾음 {len(pr.items) - len(short)}/{len(pr.items)}")
+    log(f"막히는 문제 {len(pr.issues)}건 — 자세한 것: {out_dir / 'pack-결과.json'}")
+    return res
+
+
 def table(rows: list[dict]) -> str:
     head = f"{'엔진':<10}{'배율':>5}{'글자 맞춤':>10}{'95%↑ 단위':>11}{'정답표':>10}{'칸별 정답':>10}{'쪽당 초':>9}  비고"
     lines = [head, "-" * len(head)]
@@ -376,6 +339,7 @@ def main(argv=None) -> int:
     ap.add_argument("--scales", default="1,2", help="렌더 배율(이 표본은 1배 ≈ 120dpi, 2.5배 ≈ 300dpi)")
     ap.add_argument("--out", type=Path, help="결과 폴더(기본: PDF 폴더\\_ocrbench)")
     ap.add_argument("--one", help=argparse.SUPPRESS)
+    ap.add_argument("--pack", action="store_true", help="B1 실측: 본 경로로 팩 준비까지(🖥P25) — 엔진 비교 대신")
     a = ap.parse_args(argv)
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")
@@ -387,6 +351,9 @@ def main(argv=None) -> int:
     gt = json.loads(gt_path.read_text(encoding="utf-8"))
     out = a.out or a.pdf.parent / "_ocrbench"
     out.mkdir(parents=True, exist_ok=True)
+    if a.pack:
+        pack_measure(a.pdf, gt, out / "pack")
+        return 0
     engines = [e.strip() for e in a.engines.split(",") if e.strip()]
     scales = [float(x) for x in a.scales.split(",")]
     if a.one:

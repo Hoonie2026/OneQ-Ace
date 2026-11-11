@@ -145,7 +145,8 @@ def mask_ocr_filled(pages: list[Image.Image], layout: Layout, scale: float = SCA
     from PIL import ImageDraw
     n = 0
     for q in layout.questions:
-        filled = [lab for lab in q.labels if ink_ratio(pages[lab.page], lab.bbox, scale) > FILLED_RATIO]
+        # 가나다라 보기(hangul)는 칠해 표시하는 형식이 아님 — 손글씨 ✓가 번호에 겹쳐도 정답으로 쓰지 않는다(ADR 022 4절)
+        filled = [lab for lab in q.labels if not lab.hangul and ink_ratio(pages[lab.page], lab.bbox, scale) > FILLED_RATIO]
         for lab in filled:
             lab.filled = True
         if len(filled) == 1 and q.inline_answer is None:

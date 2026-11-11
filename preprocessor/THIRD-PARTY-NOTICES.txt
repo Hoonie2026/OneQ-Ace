@@ -17,8 +17,9 @@
 ■ pdfplumber (MIT), pdfminer.six (MIT)
 ■ Pillow (MIT-CMU / HPND)
 ■ segno (BSD-3-Clause) — 첫 화면 앱 주소 QR
+■ winocr (MIT), PyWinRT winrt-* (MIT) — 스캔본 글자 읽기에 Windows 내장 OCR(Windows.Media.Ocr)을 부름. OCR 엔진 자체는 Windows 기능
 ■ NumPy (BSD-3-Clause)
 ■ jsonschema (MIT), referencing·jsonschema-specifications·rpds-py (MIT)
 ■ Python (PSF License)
 
-■ (선택 설치, 함께 배포하지 않음) Tesseract OCR — Apache-2.0. 스캔본 PDF를 처리할 때만 따로 설치합니다.
+■ (선택 설치, 함께 배포하지 않음) Tesseract OCR — Apache-2.0. Windows 내장 OCR을 쓸 수 없는 PC에서 직접 설치한 경우에만 예비로 씁니다.

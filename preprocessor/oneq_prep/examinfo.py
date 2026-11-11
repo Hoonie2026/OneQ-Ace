@@ -21,7 +21,8 @@ from . import standards as S
 
 DATE_KO = re.compile(r"(19\d{2}|20\d{2})\s*년\s*(\d{1,2})\s*월\s*(\d{1,2})\s*일")
 DATE_DOT = re.compile(r"(?<!\d)(19\d{2}|20\d{2})\s*[.\-/]\s*(\d{1,2})\s*[.\-/]\s*(\d{1,2})(?!\d)")
-YEAR_ROUND = re.compile(r"(19\d{2}|20\d{2})\s*년\s*(?:도\s*)?(?:제\s*)?(\d)\s*회")
+YEAR_ROUND = re.compile(r"(19\d{2}|20\d{2})\s*년\s*(?:도\s*)?(?:(?:기사|산업기사|기능사|기능장|기술사)\s*)?(?:제\s*)?(\d)\s*회")
+# ↑ 옛 국가기술자격 시험지 머리 "2010년 기사 제2회 필기시험"(스캔본 표본)
 YY_CERT_ROUND = re.compile(r"(?<!\d)(\d{2})\s*([가-힣()·]+?(?:기사|산업기사|기능사|기술사|기능장))\D{0,40}?(\d)\s*회")
 ROUND_ONLY = re.compile(r"(?:제\s*)?(\d)\s*회\s*(?:필기|기출|시험|CBT)")
 
@@ -87,6 +88,9 @@ def round_from_date(date: str) -> tuple[int, str | None]:
 
 def read(pdf_path: Path, ocr_text: str | None = None, names: list[str] | None = None) -> ExamInfo:
     head, tail = _text(pdf_path)
+    if not head.strip() and ocr_text is None:
+        from .ocr import head_text          # 스캔본: 첫 쪽 위쪽만 OCR(엔진 없으면 "" → 0000년 nn회)
+        ocr_text = head_text(pdf_path) or None
     if not head.strip() and ocr_text:
         head, tail = ocr_text[:1500], ocr_text[-400:]
     info = ExamInfo()

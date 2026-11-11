@@ -25,6 +25,12 @@ datas += collect_data_files("pdfminer")                    # 글꼴 cmap
 datas += collect_data_files("jsonschema_specifications")   # 스키마 메타
 datas += collect_data_files("pypdfium2_raw") + collect_data_files("pypdfium2")
 binaries = collect_dynamic_libs("pypdfium2_raw")
+hidden_ocr = []
+try:                                                       # Windows 내장 OCR(ADR 022) — winrt는 이름공간 패키지라 모두 모음
+    from PyInstaller.utils.hooks import collect_submodules
+    hidden_ocr = ["winocr"] + collect_submodules("winrt")
+except Exception:  # noqa: BLE001 — winocr 없는 환경(Windows 아님)
+    pass
 
 icon_ico = HERE / "oneq-prep.ico"
 
@@ -33,7 +39,7 @@ a = Analysis(
     pathex=[str(PRE)],
     binaries=binaries,
     datas=datas,
-    hiddenimports=["oneq_prep.gui.app", "oneq_prep.pack", "oneq_prep.batch", "oneq_prep.lawtag", "oneq_prep.summary", "oneq_prep.certs", "oneq_prep.appinfo", "segno"],
+    hiddenimports=["oneq_prep.gui.app", "oneq_prep.pack", "oneq_prep.batch", "oneq_prep.lawtag", "oneq_prep.summary", "oneq_prep.certs", "oneq_prep.appinfo", "oneq_prep.ocr", "segno"] + hidden_ocr,
     excludes=["tkinter", "matplotlib", "PySide6.QtWebEngineCore", "PySide6.QtWebEngineWidgets", "PySide6.Qt3DCore",
               "PySide6.QtQuick", "PySide6.QtQml", "PySide6.QtMultimedia", "PySide6.QtCharts", "PySide6.QtDataVisualization",
               "pytest", "pytestqt", "scipy", "pandas", "lxml", "IPython", "sympy", "matplotlib"],

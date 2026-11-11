@@ -49,6 +49,12 @@ jobs:
         run: python -m pytest -q tests
       - name: 실행파일 만들기(PyInstaller, 폴더형)
         run: python -m PyInstaller --noconfirm --clean --distpath dist --workpath build packaging\oneq-prep.spec
+      - name: 실행파일 안 Windows 내장 OCR 점검(ADR 022 — winrt 모듈이 빠지지 않았는지, 빌드 기계엔 영어 OCR만 있을 수 있음)
+        run: |
+          $p = Start-Process -FilePath dist\OneQ-Prep\OneQ-Prep.exe -ArgumentList "--ocr-check","en" -WorkingDirectory dist -Wait -PassThru
+          if (Test-Path dist\oneq-prep-ocr-check.log) { Get-Content dist\oneq-prep-ocr-check.log -Encoding utf8; Remove-Item dist\oneq-prep-ocr-check.log }
+          if ($p.ExitCode -eq 2 -or $p.ExitCode -eq 4) { throw "실행파일에서 Windows 내장 OCR을 못 부름(종료 코드 $($p.ExitCode))" }
+          if ($p.ExitCode -ne 0) { Write-Host "::warning::빌드 기계에 영어 OCR 기능이 없어 실제 읽기는 건너뜀(종료 코드 $($p.ExitCode))" }
       - name: zip·설치 프로그램 만들기
         id: zip
         run: |
