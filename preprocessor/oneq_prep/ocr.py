@@ -463,6 +463,8 @@ def read_answer_rows(img, engine: str) -> list[str]:
         return []
     width = Counter(len(r.cells) for r in rows).most_common(1)[0][0]
     got: list[str] = []
+    cells_of: list = []                 # got과 같은 순서의 칸 그림(모양 맞춤용)
+    sure: list[tuple] = []              # 줄 통째로 다 읽힌 칸(그림, 글자) — 같은 표의 견본
     context = None
     for ri, row in enumerate(rows):
         rec = {"row": ri, "cells": len(row.cells), "shaded": row.shaded}
@@ -482,10 +484,52 @@ def read_answer_rows(img, engine: str) -> list[str]:
             best, rec["how"] = _reread(row, engine, context)
         else:
             context = row.cells
+            sure += list(zip(row.cells, best))
         rec["kind"] = "답 줄"
         rec["letters"] = "".join(best)
         got += best
+        cells_of += row.cells
+    if "?" in got and sure:
+        fixed = _match_shapes([c for c, x in zip(cells_of, got) if x == "?"], sure)
+        it = iter(fixed)
+        got = [next(it) if x == "?" else x for x in got]
+        ANSWER_DEBUG.append({"kind": "모양 맞춤", "filled": sum(x != "?" for x in fixed), "of": len(fixed)})
     return got
+
+
+def _shape(cell, n: int = 24):
+    """칸 그림 → 글자만 잘라 n×n 흑백 배열(0~1, 잉크=1)."""
+    import numpy as np
+    from PIL import Image, ImageOps
+    g = cell.convert("L")
+    bb = ImageOps.invert(g).getbbox()
+    if bb is None:
+        return None
+    g = g.crop(bb).resize((n, n), Image.LANCZOS)
+    return 1.0 - np.asarray(g, dtype=float) / 255.0
+
+
+def _match_shapes(unknown: list, sure: list[tuple], margin: float = 0.85) -> list[str]:
+    """못 읽은 칸을 같은 표에서 확실히 읽은 칸(견본)과 글자 모양으로 맞춘다 — 정답표 글자는 한 글꼴의 가·나·다·라 넷뿐.
+    가장 가까운 글자의 거리가 둘째 글자의 margin배 이하일 때만 정함(표본 줄 하나씩 빼고 맞춰 보기: 0.85에서 100/100·틀림 0, 0.6이면 69/100), 아니면 "?"(2026-11-11 PC winocr 3차:
+    61~70번 답 줄 하나를 다섯 방법 모두 빈 글로 돌려줌)."""
+    import numpy as np
+    proto: dict[str, list] = {}
+    for c, x in sure:
+        a = _shape(c)
+        if a is not None and x in HANGUL_LABELS:
+            proto.setdefault(x, []).append(a)
+    if len(proto) < 2:
+        return ["?"] * len(unknown)
+    out = []
+    for c in unknown:
+        a = _shape(c)
+        if a is None:
+            out.append("?")
+            continue
+        d = sorted((min(float(np.abs(a - p).mean()) for p in ps), x) for x, ps in proto.items())
+        out.append(d[0][1] if len(d) == 1 or d[0][0] <= d[1][0] * margin else "?")
+    return out
 
 
 def answers_from_letters(seq: list[str]) -> dict[int, int]:
@@ -501,6 +545,7 @@ class OcrDoc:
     answers: dict[int, int] = field(default_factory=dict)   # 정답표에서 읽은 번호 → 보기 번호
     answer_pages: list[int] = field(default_factory=list)  # 정답표 쪽(0부터)
     unread_answers: int = 0                     # 정답표에서 못 읽은 칸 수
+    shape_answers: int = 0                      # OCR로 못 읽어 글자 모양으로 맞춘 칸 수
     text: str = ""                              # 쪽 글(종목·시행일 읽기용, examinfo)
 
 
@@ -531,11 +576,13 @@ def ocr_document(path: str | Path, progress=None, engine: str | None = None) -> 
     try:
         n = len(pdf)
         ans_pages: list[int] = []
+        shape = 0
         seq: list[str] = []
         for i in range(n - 1, max(0, n - 3) - 1, -1):          # 끝 쪽부터 최대 3쪽(정답표가 둘 이상 쪽일 수 있음)
             got = _answer_table(pdf[i], engine) if i > 0 else None
             if got is None:
                 break
+            shape += sum(r.get("filled", 0) for r in ANSWER_DEBUG if r.get("kind") == "모양 맞춤")
             ans_pages.insert(0, i)
             seq = got + seq
         out: list[list[dict]] = []
@@ -551,8 +598,8 @@ def ocr_document(path: str | Path, progress=None, engine: str | None = None) -> 
                 texts.append(_words_text(words))
             if progress:
                 progress(i + 1, n)
-        return OcrDoc(out, engine, answers_from_letters(seq), ans_pages, sum(x == "?" for x in seq),
-                      "\n".join(texts))
+        return OcrDoc(out, engine, answers_from_letters(seq), ans_pages, unread_answers=sum(x == "?" for x in seq),
+                      shape_answers=shape, text="\n".join(texts))
     finally:
         pdf.close()
 

@@ -231,3 +231,25 @@ def test_answer_rows_shaded_and_empty_reads(monkeypatch):
     got = ocr.read_answer_rows(_grid_shaded(), "winocr")
     assert "".join(got) == "가나다라가나다라가나" + "라라라라라다다다다다"
     assert ocr.ANSWER_DEBUG[3]["how"].startswith("앞 줄과 함께")
+
+
+@pytest.mark.skipif(not SAMPLE.exists(), reason="스캔본 표본 PDF 없음(source_pdf/, 커밋 안 함)")
+def test_answer_shape_match_leave_one_row_out():
+    """정답표 답 줄 하나를 OCR이 통째로 못 읽어도(PC winocr 3차, 61~70번) 같은 표의 나머지 칸을 견본으로 모양 맞춤.
+    줄 하나씩 빼고 맞춰 보면 틀린 글자가 없어야 함."""
+    import pypdfium2 as pdfium
+    pdf = pdfium.PdfDocument(str(SAMPLE))
+    try:
+        img = ocr._render(pdf[9], 2.0833)
+    finally:
+        pdf.close()
+    key = json.loads(GT.read_text(encoding="utf-8"))["answers"]
+    cells = [c for r in ocr.table_rows_info(img) if not r.shaded and len(r.cells) == 10 for c in r.cells]
+    assert len(cells) == 100
+    ok = bad = 0
+    for hold in range(10):
+        got = ocr._match_shapes(cells[hold * 10:hold * 10 + 10],
+                                [(c, key[i]) for i, c in enumerate(cells) if i // 10 != hold])
+        ok += sum(a == b for a, b in zip(got, key[hold * 10:hold * 10 + 10]))
+        bad += sum(a not in (b, "?") for a, b in zip(got, key[hold * 10:hold * 10 + 10]))
+    assert bad == 0 and ok >= 95

@@ -185,6 +185,8 @@ def prepare(pdf_path: Path, profile: S.Profile, out_dir: Path,
     if doc and doc.answer_pages:
         layout.answer_table = doc.answers      # 끝 쪽 정답표(칸 나눠 읽기, ADR 022 4절)
         msg = f"정답표({', '.join(str(p + 1) for p in doc.answer_pages)}쪽)에서 정답 {len(doc.answers)}개를 읽음"
+        if doc.shape_answers:
+            msg += f"(그중 {doc.shape_answers}개는 OCR이 못 읽어 같은 표의 글자 모양으로 맞춤)"
         if doc.unread_answers:
             issues.append(msg + f" — {doc.unread_answers}칸은 못 읽음(검수에서 정답 입력)")
         else:
