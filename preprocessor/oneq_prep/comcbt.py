@@ -40,6 +40,20 @@ class ComcbtError(RuntimeError):
     """comcbt에서 받지 못함(사용자에게 그대로 보여 줄 문장)."""
 
 
+# 게시판 첫 쪽 = 글 20개(2026-10-24 PC 확인: 토목기사 첫 쪽 20글, 2016-05 ~ 2022-04). 기사 필기는 한 해 3~4회라 대략 5~6년치.
+# 받기 전 안내용 어림값 — 받은 뒤에는 실제 회차 수·기간을 보여 줌(first_page_text).
+FIRST_PAGE_POSTS = 20
+FIRST_PAGE_HINT = f"보통 약 {FIRST_PAGE_POSTS}회차 — 기사는 최근 5~6년치"
+
+
+def first_page_text(res: "Result") -> str:
+    """받은 뒤: 이 종목 첫 쪽의 실제 회차 수와 기간(예: '20회차 · 2016년 5월 ~ 2022년 4월')."""
+    if not res.posts:
+        return "첫 쪽에 필기 기출 글이 없어요"
+    a, b = min(p.date for p in res.posts), max(p.date for p in res.posts)
+    return f"{len(res.posts)}회차 · {int(a[:4])}년 {int(a[5:7])}월 ~ {int(b[:4])}년 {int(b[5:7])}월"
+
+
 @dataclass
 class Post:
     title: str

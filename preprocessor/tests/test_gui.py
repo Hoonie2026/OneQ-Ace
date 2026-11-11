@@ -334,3 +334,13 @@ def test_main_screen_work_order(win):
     win.toggle_conditions()                                       # 직접 펼치면 그대로
     win.render_rows()
     assert not win.cond_panel.isHidden()
+
+
+def test_comcbt_hint_round_count(win):
+    """2-1 안내에 첫 쪽이 대략 몇 회차인지(받기 전 어림), 받은 뒤엔 이 종목의 실제 회차 수·기간(사용자 2026-11-11)."""
+    from oneq_prep import comcbt
+    assert "약 20회차" in win.comcbt_hint.text() and "5~6년치" in win.comcbt_hint.text()
+    posts = [comcbt.Post("t", "u", "2016-05-08", "2회"), comcbt.Post("t", "u", "2022-04-24", "2회")]
+    win.on_comcbt_done(comcbt.Result("nj", posts, [], skipped=["a", "b"]))
+    assert "2회차 · 2016년 5월 ~ 2022년 4월" in win.comcbt_hint.text()
+    assert comcbt.first_page_text(comcbt.Result("nj", [])) == "첫 쪽에 필기 기출 글이 없어요"

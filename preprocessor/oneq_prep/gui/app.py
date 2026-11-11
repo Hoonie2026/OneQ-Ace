@@ -384,6 +384,7 @@ class MainWindow(QMainWindow):
         self.status.setText(f"앱 주소를 복사했습니다: {APP_URL}")
 
     def _sub_row(self, tag: str, title: str, hint: str) -> QHBoxLayout:
+        """하위 작업 줄(2-1·2-2). 설명 글은 row.hint로 바꿀 수 있음."""
         row = QHBoxLayout()
         row.setSpacing(10)
         t = QLabel(tag)
@@ -399,6 +400,7 @@ class MainWindow(QMainWindow):
         v.addWidget(tl)
         v.addWidget(hl)
         row.addLayout(v, 1)
+        row.hint = hl
         return row
 
     def _card_pdfs(self) -> Card:
@@ -409,7 +411,10 @@ class MainWindow(QMainWindow):
         c.head.addWidget(self.summary)
         self.pdf_buttons = []
         # 2-1 comcbt 게시판 첫 쪽의 최근 기출 받기(사용자 결정 2026-10-24 — 이전·최신 회차는 직접 올림)
-        r1 = self._sub_row("2-1", "comcbt 최근 기출 자동 받기", "comcbt.com 종목 게시판 첫 쪽에 올라온 회차만 받아 목록에 넣어요")
+        from ..comcbt import FIRST_PAGE_HINT
+        r1 = self._sub_row("2-1", "comcbt 최근 기출 자동 받기",
+                           f"comcbt.com 종목 게시판 첫 쪽에 올라온 회차({FIRST_PAGE_HINT})만 받아 목록에 넣어요")
+        self.comcbt_hint = r1.hint
         self.comcbt_btn = QPushButton("comcbt 최근 기출 받기")
         self.comcbt_btn.setObjectName("primarySmall")
         self.comcbt_btn.setToolTip("comcbt.com 종목 게시판 첫 쪽의 최근 기출(정답 표시된 교사용 PDF)을 받아 목록에 넣습니다")
@@ -638,6 +643,8 @@ class MainWindow(QMainWindow):
 
     def on_comcbt_done(self, res) -> None:
         from .. import comcbt
+        self.comcbt_hint.setText(f"comcbt.com '{self.picker.current.name if self.picker.current else ''}' 게시판 첫 쪽: "
+                                 f"{comcbt.first_page_text(res)} — 이전 회차는 2-2로 직접 올려 주세요")
         if res.saved:
             self.add_paths(res.saved)
         head = f"comcbt.com에서 {len(res.saved)}회차를 받아 목록에 넣었어요" if res.saved else "새로 받을 회차가 없어요"
