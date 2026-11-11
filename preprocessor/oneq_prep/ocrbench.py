@@ -46,6 +46,11 @@ def partial_score(unit: str, text: str) -> float:
         from rapidfuzz import fuzz
         return fuzz.partial_ratio(u, t) / 100
     except ImportError:
+        # rapidfuzz 없음(빌드 기계 등): ① 순서대로 맞는 글자 비율(정렬 블록) ② 같은 길이 창 비교 중 큰 값
+        sm = difflib.SequenceMatcher(None, u, t, autojunk=False)
+        aligned = sum(b.size for b in sm.get_matching_blocks()) / len(u)
+        if aligned >= 0.999:
+            return 1.0
         n, best = len(u), 0.0
         step = max(1, n // 4)
         for i in range(0, max(1, len(t) - n + 1), step):
