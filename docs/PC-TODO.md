@@ -33,7 +33,7 @@
 ## 2. OCR 엔진 고르기 (→ 문항 글자 확보 → 모든 분류의 전제)
 - [x] **P3 Windows 내장 OCR 한국어** — 2026-10-24: 사용자 PC `Language.OCR~~~ko-KR` Installed. 사내 기본 상태인지는 동료 PC 한 대에서 같은 명령(`Get-WindowsCapability -Online | ? Name -like 'Language.OCR*'`)으로 한 번 더(P14 때 함께)
 - [x] **P4 스캔본 표본 확보** — 2026-11-11 `source_pdf/철도보선기사_스캔본.pdf`(2010년 2회, 10쪽, 실제 종이 스캔 1000×1406px ≈ 120dpi, 보기 가나다라, 그림·수식·손글씨 ✓ 표시, 마지막 쪽 정답표). 원래: 실제 스캔본 기출 1~2회차(없으면 comcbt PDF를 인쇄해 스캔) → `source_pdf/`에 두고 알림
-- [ ] **P5 OCR 3종 비교**: Tesseract / Windows 내장(winocr — PC에서만 돎) / PaddleOCR PP-OCRv5 한국어 — 글자 정확도·정답 표시 인식·처리 시간·설치 부담. 명령은 Claude가 준비, 실행은 사용자
+- [ ] **P5 OCR 3종 비교** — 2026-11-11 사용자: 3종 모두 설치해 비교. 비교 도구 `oneq_prep/ocrbench.py` + 정답 `tests/fixtures/ocr/railway-2010-2-gt.json`(1·6쪽 문항 98단위, 10쪽 정답 100개 — Claude가 원본을 보고 만듦). 클라우드 기준선(Tesseract **4.1**): 글자 맞춤 ×1 87.4%·×2 90.4%·×2.5 80.0%, 정답표 9/100(옅은 회색 표 글자를 거의 못 읽음), 쪽당 약 2초. PaddleOCR은 클라우드에서 모델을 못 받아 PC에서만. **할 일(사용자, 약 30분)**: ① P0 동기화 ② Tesseract 설치 — https://github.com/UB-Mannheim/tesseract/wiki 의 w64 설치 파일, "Additional language data" → **Korean** 체크(관리자 권한 없으면 "Only for me") ③ `cd preprocessor` → `py -3 -m pip install -r requirements-ocrbench.txt`(수 분) ④ `py -3 -m oneq_prep.ocrbench "..\source_pdf\철도보선기사_스캔본.pdf"` — PaddleOCR이 모델을 못 받으면 `$env:PADDLE_PDX_MODEL_SOURCE="bos"` 넣고 다시 ⑤ "P5 끝"이라고 알려 주면 Claude가 `source_pdf\_ocrbench\`의 결과를 읽음. 원래 내용: Tesseract / Windows 내장(winocr — PC에서만 돎) / PaddleOCR PP-OCRv5 한국어 — 글자 정확도·정답 표시 인식·처리 시간·설치 부담. 명령은 Claude가 준비, 실행은 사용자
 - 의존: P3·P4 → P5 → 엔진 결정(ADR) → 스캔본 분류 실측
 
 ## 3. 분류 정확도 실측 (→ 단원별·유형별 화면을 내놓을지 결정)

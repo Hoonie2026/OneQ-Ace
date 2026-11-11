@@ -33,7 +33,8 @@ class OcrUnavailable(RuntimeError):
 def tesseract_path() -> str:
     p = os.environ.get("ONEQ_TESSERACT") or shutil.which("tesseract")
     if not p:
-        for cand in (r"C:\Program Files\Tesseract-OCR\tesseract.exe", r"C:\Program Files (x86)\Tesseract-OCR\tesseract.exe"):
+        local = os.path.join(os.environ.get("LOCALAPPDATA", ""), "Programs", "Tesseract-OCR", "tesseract.exe")   # "나만 설치"(관리자 권한 없음)
+        for cand in (r"C:\Program Files\Tesseract-OCR\tesseract.exe", r"C:\Program Files (x86)\Tesseract-OCR\tesseract.exe", local):
             if Path(cand).exists():
                 return cand
         raise OcrUnavailable(
