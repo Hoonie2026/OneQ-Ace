@@ -25,6 +25,7 @@ import type { PackRow } from '../db';
 import { BackButton, Icon } from './Icon';
 import { InstallGuide } from './InstallGuide';
 import { PrepCard } from './PrepCard';
+import { prepLink } from '../prep';
 
 /** 3분 전 · 2시간 전 · 5일 전 */
 function ago(ts: number): string {
@@ -544,36 +545,44 @@ export function Settings(props: {
         </div>
       </section>
 
-      <PrepCard testId="prep-card-settings" url={appUrl} />
-
+      {/* 보내기·설치 — 설치 경로 두 갈래(사용자 2026-11-12, ADR 021 7절): 학습앱 링크(공부할 사람) / 전처리기 링크(문제팩을 만들 사람) */}
       <section className="card address">
-        <h2>앱 주소 · 설치 안내</h2>
+        <h2>동료에게 보내기 · 설치 안내</h2>
+        <h3>학습앱 링크 — 공부할 사람에게</h3>
         <p className="url">{appUrl}</p>
         <p className="hint">
-          이 주소를 카카오톡·메일·게시판으로 보내면 받은 사람은 링크를 눌러 열고, 첫 화면 안내대로 설치합니다. 권장: 안드로이드는 <b>Chrome</b>, 아이폰·아이패드는 <b>Safari</b>, PC는{' '}
-          <b>Chrome·Edge</b>. 카카오톡·네이버 앱 안에서 열리면 첫 화면이 바깥 브라우저로 여는 단추를 보여 줍니다.
+          문제팩 파일(oneq-종목-bundle-….zip)과 함께 카카오톡·메일 등으로 보내면, 받은 사람은 링크를 열어 학습앱을 설치하고 설치한 앱에서 받은 문제팩을 가져옵니다.
         </p>
         <div className="test-actions">
-          <button className="btn btn-small" onClick={() => copy(appUrl, '주소를 복사했습니다')}>
-            주소 복사
+          <button className="btn btn-small" onClick={() => copy(appUrl, '학습앱 링크를 복사했습니다')} data-testid="copy-app-link">
+            학습앱 링크 복사
           </button>
           {'share' in navigator && (
-            <button className="btn btn-small" onClick={() => navigator.share({ title: '원큐합격', url: appUrl }).catch(() => undefined)}>
-              주소 보내기
+            <button className="btn btn-small" onClick={() => navigator.share({ title: '원큐합격 학습앱', url: appUrl }).catch(() => undefined)}>
+              보내기
+            </button>
+          )}
+        </div>
+        <h3>전처리기 링크 — 문제팩을 직접 만들 사람에게(Windows PC)</h3>
+        <p className="url">{prepLink(appUrl)}</p>
+        <div className="test-actions">
+          <button className="btn btn-small" onClick={() => copy(prepLink(appUrl), '전처리기 링크를 복사했습니다')} data-testid="copy-prep-link">
+            전처리기 링크 복사
+          </button>
+          {'share' in navigator && (
+            <button className="btn btn-small" onClick={() => navigator.share({ title: '원큐합격 전처리기', url: prepLink(appUrl) }).catch(() => undefined)}>
+              보내기
             </button>
           )}
         </div>
         <details className="why" data-testid="install-how">
-          <summary>이 기기에 설치하는 방법</summary>
-          {/* v0.13.1(PC 접근 일원화): PC 학습앱은 전처리기 [학습앱 설치]로 만든 바탕화면 아이콘 하나 — 브라우저 설치 안내는 휴대폰·태블릿만 */}
-          {deviceEnv().kind === 'pc' ? (
-            <p className="hint" data-testid="install-guide-settings">
-              PC에서는 <b>원큐합격 전처리기</b>를 설치한 뒤 전처리기의 <b>[학습앱 설치] → PC</b>로 만든 바탕화면의 <b>원큐합격 학습앱</b>으로 엽니다.
-            </p>
-          ) : (
-            <InstallGuide url={appUrl} onCopy={() => copy(appUrl, '주소를 복사했습니다')} testId="install-guide-settings" />
-          )}
+          <summary>이 기기에 학습앱 설치하는 방법</summary>
+          <InstallGuide url={appUrl} onCopy={() => copy(appUrl, '주소를 복사했습니다')} testId="install-guide-settings" />
           {isStandalone() && <p className="hint">이 기기에는 이미 설치되어 있습니다(설치한 앱으로 열림).</p>}
+        </details>
+        <details className="why" data-testid="prep-how">
+          <summary>문제팩을 직접 만들려면 — 원큐합격 전처리기</summary>
+          <PrepCard testId="prep-card-settings" url={appUrl} />
         </details>
       </section>
     </div>

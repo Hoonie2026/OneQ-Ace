@@ -193,7 +193,7 @@ test('3단계 게이트(5단계 개편 후): 오프라인 과목별 학습·이�
   await ctx2.addInitScript(newerChromeScroll);
   const p2 = await ctx2.newPage();
   await p2.goto('./');
-  await expect(p2.getByText('문제팩을 가져오세요')).toBeVisible();
+  await expect(p2.getByTestId('empty-home')).toBeVisible(); // 팩 없는 첫 화면(브라우저에서는 접힌 '설치하지 않고 쓰기')
   await p2.getByRole('button', { name: '백업·설정' }).click();
   p2.on('dialog', (d) => d.accept());
   await p2.getByTestId('restore-input').setInputFiles(backupPath);
@@ -252,6 +252,6 @@ test('3단계 게이트(5단계 개편 후): 오프라인 과목별 학습·이�
   await p2.getByTestId('wipe-all-go').click();
   await p2.getByTestId('dialog-ok').click();
   await p2.getByTestId('dialog-ok').click();
-  await expect(p2.getByText('문제팩을 가져오세요')).toBeVisible();
+  await expect(p2.getByTestId('empty-home')).toBeVisible(); // 팩 없는 첫 화면(브라우저에서는 접힌 '설치하지 않고 쓰기')
   await ctx2.close();
 });

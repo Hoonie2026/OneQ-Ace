@@ -13,6 +13,7 @@ import { Principles } from './Principles';
 import { computeInsight, type Insight } from '../insight';
 import { deviceEnv, resetPageZoom } from '../util';
 import { PrepCard } from './PrepCard';
+import { isPrepLink } from '../prep';
 import { InstallGuide } from './InstallGuide';
 import { BackButton, BrandLogo, Icon } from './Icon';
 
@@ -135,7 +136,10 @@ export function Home(props: {
 
   const inSub = view !== 'home' && !!coach && !!cert && !!packs && packs.length > 0;
   const appUrl = new URL(import.meta.env.BASE_URL, window.location.origin).href;
-  const isPc = deviceEnv().kind === 'pc';
+  const env = deviceEnv();
+  // 설치 경로 두 갈래(사용자 2026-11-12, ADR 021 7절): 학습앱 링크 = 설치 메인·전처리기 서브 / 전처리기 링크(?prep) = 전처리기 메인·학습앱 서브
+  const prepMode = isPrepLink();
+  const empty = !!packs && packs.length === 0;
   const copyUrl = () =>
     navigator.clipboard
       .writeText(appUrl)
@@ -173,25 +177,41 @@ export function Home(props: {
             </label>
           )}
 
-          {/* v0.10.1: 기기별 설치 안내(앱 안 브라우저 → 바깥 브라우저, 안드로이드·PC [앱 설치] 단추, 아이폰 홈 화면에 추가) */}
-          {/* v0.13.0(설치 경로 일원화): PC의 학습앱 설치는 전처리기 [학습앱 설치]에서 — 홈에는 휴대폰·태블릿 안내만 */}
-          {!isPc && <InstallGuide compact url={appUrl} onCopy={copyUrl} />}
+          {/* 전처리기 링크(?prep): 전처리기 설치가 메인, 학습앱은 카드 안 서브 링크 */}
+          {prepMode && <PrepCard main url={appUrl} />}
+          {/* 학습앱 링크: 이 기기에 학습앱 설치가 메인(모든 기기 — PC도 Chrome·Edge 정식 설치). 설치한 앱(standalone)에서는 안 보임 */}
+          {!prepMode && <InstallGuide compact main={empty} url={appUrl} onCopy={copyUrl} />}
         </>
       )}
 
-      {/* v0.13.0: PC는 1단계 전처리기 설치가 먼저(문제팩은 전처리기로만 만듦) */}
-      {packs && packs.length === 0 && isPc && <PrepCard compact url={appUrl} />}
-      {packs && packs.length === 0 && (
-        <section className="card empty">
+      {/* 문제팩 가져오기는 설치한 앱에서 메인. 브라우저 화면(설치 전)에서는 접어 둠 — 설치 안 하고 쓰는 사람만 펼침(사용자 2026-11-12) */}
+      {empty && !prepMode && (env.standalone ? (
+        <section className="card empty" data-testid="empty-home">
           <h2>문제팩을 가져오세요</h2>
           <p>
             받은 문제팩 파일(<b>oneq-종목-….zip</b>)을 고릅니다 — 카카오톡·메일로 받았거나 다운로드 폴더·구글 드라이브·PC에 보관한 곳에서. 여러 회차를 한 번에 골라도 됩니다(5~10년치를 권장).
           </p>
           <PackPicker busy={props.busy} onFiles={props.onImport} onPickFailed={props.onPickFailed} primary />
         </section>
+      ) : (
+        <details className="why sub-path" data-testid="empty-home">
+          <summary>설치하지 않고 이 브라우저에서 쓰기</summary>
+          <p className="hint">
+            받은 문제팩 파일(<b>oneq-종목-….zip</b>)을 고릅니다.{' '}
+            {env.os === 'ios'
+              ? '아이폰·아이패드는 이 브라우저 화면과 홈 화면 앱의 기록이 따로 저장되니, 되도록 설치한 앱에서 가져오세요.'
+              : '설치한 앱과 이 브라우저는 기록을 함께 씁니다.'}
+          </p>
+          <PackPicker busy={props.busy} onFiles={props.onImport} onPickFailed={props.onPickFailed} />
+        </details>
+      ))}
+      {/* 서브: 문제팩을 직접 만들려면 전처리기 */}
+      {empty && !prepMode && (
+        <details className="why sub-path" data-testid="prep-sub">
+          <summary>문제팩을 직접 만들려면 — 원큐합격 전처리기(Windows PC)</summary>
+          <PrepCard url={appUrl} />
+        </details>
       )}
-      {/* 휴대폰·태블릿: 문제팩은 PC에서 만든다는 설명 + 주소 복사 */}
-      {packs && packs.length === 0 && !isPc && <PrepCard compact url={appUrl} />}
 
       {coach && cert && packs && packs.length > 0 && (
         <>

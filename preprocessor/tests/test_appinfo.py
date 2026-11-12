@@ -48,3 +48,11 @@ def test_qr_png():
     if png is None:      # segno 없는 명령줄 환경
         return
     assert png[:8] == b"\x89PNG\r\n\x1a\n"
+
+
+def test_prep_link_matches_app():
+    """전처리기 링크(앱 주소?prep)가 앱 prep.ts의 PREP_PARAM과 같아야 함(설치 경로 두 갈래, 2026-11-12)."""
+    from oneq_prep.appinfo import PREP_URL
+    prep = (ROOT / "app" / "src" / "prep.ts").read_text(encoding="utf-8")
+    param = re.search(r"PREP_PARAM = '([^']+)'", prep).group(1)
+    assert PREP_URL == APP_URL + "?" + param

@@ -4,7 +4,7 @@ import { deviceEnv, deviceNoun, type DeviceEnv } from '../util';
 
 /**
  * 기기별 설치 안내(v0.10.1 — 실기기 Y6·추가 검토). 권장 경로를 기기마다 하나로:
- * 안드로이드 = Chrome에서 [앱 설치], 아이폰·아이패드 = Safari에서 공유 → 홈 화면에 추가, PC = Chrome·Edge에서 설치(선택).
+ * 안드로이드 = Chrome에서 [앱 설치], 아이폰·아이패드 = Safari에서 공유 → 홈 화면에 추가, PC = Chrome·Edge에서 설치(2026-11-12부터 PC도 이 길 하나).
  * 카카오톡·네이버 앱 안에서 열리면 설치가 안 되고 기록도 따로 저장되므로 먼저 바깥 브라우저로 보낸다.
  */
 interface Guide {
@@ -56,16 +56,17 @@ function guideFor(env: DeviceEnv, canPrompt: boolean, url: string, copy: () => v
     };
   }
   if (env.kind === 'pc')
+    // 사용자 2026-11-12: PC도 Chrome·Edge 정식 설치(PWA)로 통일 — 바탕화면·시작 메뉴 아이콘, Windows 설정 › 앱에 올라가 거기서 제거
     return {
-      title: 'PC에 설치하면 창으로 바로 열립니다(선택)',
-      lead: '설치하지 않고 이 브라우저에서 그대로 써도 됩니다. 같은 브라우저·같은 사용자 프로필로 열어야 기록이 이어집니다.',
+      title: 'PC에 원큐합격 학습앱 설치',
+      lead: '설치하면 바탕화면·시작 메뉴에서 창으로 열리고 Windows 설정 › 앱에서 지울 수 있습니다. 실행은 인터넷이 필요 없고 학습 기록은 이 PC(이 브라우저)에 저장됩니다.',
       action: canPrompt ? { label: 'PC에 설치', run: install, testId: 'install-app' } : undefined,
       steps:
         env.browser === 'Edge'
-          ? ['주소창 오른쪽의 「앱 사용 가능」 아이콘을 누르거나, ⋯ → 앱 → 「이 사이트를 앱으로 설치」', '「설치」를 누릅니다', '바탕 화면·시작 메뉴의 원큐합격 아이콘으로 엽니다']
+          ? [canPrompt ? '[PC에 설치]를 누르거나, 주소창 오른쪽의 「앱 사용 가능」 아이콘 · ⋯ → 앱 → 「이 사이트를 앱으로 설치」' : '주소창 오른쪽의 「앱 사용 가능」 아이콘을 누르거나, ⋯ → 앱 → 「이 사이트를 앱으로 설치」', '「설치」를 누릅니다', '바탕화면·시작 메뉴의 원큐합격 아이콘으로 엽니다']
           : env.browser === 'Chrome' || env.browser === '웨일'
-            ? ['주소창 오른쪽 끝의 설치 아이콘(모니터 모양)을 누릅니다', '「설치」를 누릅니다', '바탕 화면·시작 메뉴의 원큐합격 아이콘으로 엽니다']
-            : ['Chrome 또는 Edge로 이 주소를 엽니다', '주소창 오른쪽의 설치 아이콘을 누릅니다'],
+            ? [canPrompt ? '[PC에 설치]를 누르거나, 주소창 오른쪽 끝의 설치 아이콘(모니터 모양)' : '주소창 오른쪽 끝의 설치 아이콘(모니터 모양)을 누릅니다', '「설치」를 누릅니다', '바탕화면·시작 메뉴의 원큐합격 아이콘으로 엽니다']
+            : ['이 브라우저는 설치를 지원하지 않습니다 — Chrome 또는 Edge로 이 주소를 엽니다', '주소창 오른쪽의 설치 아이콘을 누릅니다'],
       dismissible: true,
     };
   // 안드로이드에서 Chrome이 아닌 브라우저(Firefox·Edge·웨일 등 — 기본 브라우저면 메일·메신저 링크가 여기로 열림, 실기기 Z4)
@@ -105,7 +106,7 @@ function guideFor(env: DeviceEnv, canPrompt: boolean, url: string, copy: () => v
 
 const HIDE_KEY = 'oneq-install-hide-until';
 
-export function InstallGuide(props: { url: string; onCopy: () => void; compact?: boolean; testId?: string }) {
+export function InstallGuide(props: { url: string; onCopy: () => void; compact?: boolean; testId?: string; /** 첫 화면(팩 없음)의 메인 — '나중에' 숨기기 없음 */ main?: boolean }) {
   const env = deviceEnv();
   const [canPrompt, setCanPrompt] = useState(canPromptInstall());
   const [hidden, setHidden] = useState(() => {
@@ -191,7 +192,7 @@ export function InstallGuide(props: { url: string; onCopy: () => void; compact?:
     );
   }
   const g = guideFor(env, canPrompt, props.url, props.onCopy, () => void promptInstall());
-  if (props.compact && hidden && g.dismissible) return null;
+  if (props.compact && hidden && g.dismissible && !props.main) return null;
 
   return (
     <section className={`card guide install-guide${props.compact ? '' : ' plain'}`} data-testid={props.testId ?? 'install-guide'}>
@@ -208,7 +209,7 @@ export function InstallGuide(props: { url: string; onCopy: () => void; compact?:
         ))}
       </ol>
       {g.note && <p className="hint">{g.note}</p>}
-      {props.compact && g.dismissible && (
+      {props.compact && g.dismissible && !props.main && (
         <button
           className="link-btn install-later"
           onClick={() => {

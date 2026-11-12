@@ -87,6 +87,7 @@ test('v0.10.8: 35개 결과 창은 요약되고 [확인]이 화면 안에 있어
 test('v0.10.8: 선택기에서 돌아왔는데 파일이 아직 안 오면 "기기가 받는 중" 안내 → 파일이 오면 사라지고 가져오기', async ({ page }) => {
   await page.goto('./');
   const files = await packFiles(2);
+  await page.getByTestId('empty-home').locator('summary').click(); // 브라우저 화면(설치 전)에서는 가져오기가 접혀 있음(2026-11-12)
   const chooser = page.waitForEvent('filechooser');
   await page.getByText('문제팩 가져오기', { exact: true }).first().click();
   const fc = await chooser;

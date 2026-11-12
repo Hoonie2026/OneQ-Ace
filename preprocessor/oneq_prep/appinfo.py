@@ -6,6 +6,8 @@ QR은 주소를 보여 줄 뿐, 팩을 보내지 않는다(전처리기 → 앱 
 from __future__ import annotations
 
 APP_URL = "https://hoonie2026.github.io/OneQ-Ace/"
+# 설치 경로 두 갈래(사용자 2026-11-12): 학습앱 링크(공부할 사람) / 전처리기 링크(문제팩을 만들 사람) — 앱 prep.ts prepLink와 같음
+PREP_URL = APP_URL + "?prep"
 
 
 def qr_png(data: str = APP_URL, scale: int = 5) -> bytes | None:

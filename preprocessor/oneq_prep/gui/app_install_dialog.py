@@ -1,31 +1,24 @@
-"""[학습앱 설치] 창 — 설치 경로 일원화(사용자 2026-11-11).
+"""[학습앱 설치] 창 — 전처리기 경로(B)의 서브(사용자 2026-11-12, ADR 021 7절).
 
-설치 프로그램은 전처리기만 깐다. 학습앱은 사용자가 이 창에서 기기를 골라 **직접** 설치한다
-(자동으로 둘 다 깔면 무엇이 설치됐는지 몰라 혼란 — 사용자). 순서: 전처리기 설치 → 문제팩 만들기 → 여기서 학습앱 설치 → 팩 넣기.
-- PC: [이 PC에 학습앱 설치] → 바탕화면·시작 메뉴 '원큐합격 학습앱'(기본 브라우저 Chrome/Edge의 앱 창, shortcut.py)
-  + Windows 프로그램 목록 등록(설정 › 앱·제어판 › 프로그램 제거에서 지움, 사용자 2026-11-12).
-  PC 접근은 이 아이콘 하나 — [학습앱 열기]·아래쪽 [주소 복사]는 없앰(사용자 2026-11-12)
+설치 경로는 두 갈래: A 학습앱 링크(+ 문제팩)를 받은 사람은 링크에서 바로 학습앱 설치, B 전처리기를 설치한 사람은
+팩을 만든 뒤 이 창에서 공부할 기기에 학습앱을 설치. 어느 쪽이든 학습앱 설치 방법은 같다(기기의 브라우저 정식 설치).
+- PC: 기본 브라우저로 학습앱을 열고 그 화면의 [PC에 설치](Chrome·Edge 정식 설치 — 바탕화면·시작 메뉴, Windows 설정 › 앱에서 제거).
+  전처리기가 바로가기를 만들던 방식(11-11~12 개발판)은 없앰 — 남아 있으면 정리 안내만
 - Android·iPhone: 주소를 휴대폰으로 여는 두 방법(QR / 주소 복사해 보내기). 어느 브라우저로 열릴지는 휴대폰 설정마다
-  달라서 여기서는 브라우저별 순서를 적지 않고, 열린 학습앱 첫 화면이 그 브라우저를 알아보고 설치 방법을 안내한다(InstallGuide)
+  달라서 브라우저별 순서는 적지 않고, 열린 학습앱 첫 화면이 그 브라우저를 알아보고 설치 방법을 안내한다(InstallGuide)
+- 문제팩 가져오기 안내는 두지 않는다 — 설치 전이라 앱이 없음. 학습앱을 처음 열면 안내(사용자 2026-11-12)
 """
 from __future__ import annotations
 
-import sys
-from pathlib import Path
-
-from PySide6.QtCore import Qt
-from PySide6.QtGui import QPixmap
-from PySide6.QtWidgets import (QApplication, QDialog, QHBoxLayout, QLabel, QMessageBox, QPushButton, QTabWidget,
-                               QVBoxLayout, QWidget)
+from PySide6.QtCore import Qt, QUrl
+from PySide6.QtGui import QDesktopServices, QPixmap
+from PySide6.QtWidgets import QApplication, QDialog, QHBoxLayout, QLabel, QPushButton, QTabWidget, QVBoxLayout, QWidget
 
 from ..appinfo import APP_URL, qr_png
 from . import shortcut
 
-INTRO = ("원큐합격 학습앱은 문제를 푸는 앱이고, 이 전처리기는 Q-Net 출제기준과 기출 PDF로 학습앱에 넣을 "
-         "문제팩을 만드는 프로그램입니다. 공부할 기기를 골라 학습앱을 직접 설치하세요(여러 기기에 설치해도 됩니다).")
-
-# 문제팩 가져오기 안내는 이 창에 두지 않는다 — 설치 단계에서는 아직 앱이 없음. 학습앱을 처음 열면 빈 화면(PrepCard)이
-# 팩 옮기기·[문제팩 가져오기]를 안내한다(사용자 2026-11-12)
+INTRO = ("원큐합격 학습앱은 문제를 푸는 앱입니다. 공부할 기기를 골라 설치하세요(여러 기기에 설치해도 됩니다). "
+         "학습 기록은 설치된 기기에 저장되고, 다른 기기와의 학습 기록 공유는 학습 기록 백업 파일로만 가능합니다.")
 
 
 def _steps(items: list[str]) -> QLabel:
@@ -43,8 +36,11 @@ def _hint(text: str) -> QLabel:
     return lab
 
 
-def _resource(rel: str) -> Path:
-    return Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parents[2])) / rel
+def _head(text: str) -> QLabel:
+    lab = QLabel(text)
+    lab.setStyleSheet("font-weight:600")
+    lab.setWordWrap(True)
+    return lab
 
 
 class AppInstallDialog(QDialog):
@@ -73,50 +69,42 @@ class AppInstallDialog(QDialog):
         foot.addWidget(close)
         lay.addLayout(foot)
 
-    # ── PC ──
+    # ── PC: 브라우저 정식 설치(사용자 2026-11-12) ──
     def _tab_pc(self) -> QWidget:
         w = QWidget()
         v = QVBoxLayout(w)
         v.setContentsMargins(16, 16, 16, 16)
         v.setSpacing(10)
-        found = shortcut.app_browser()
-        self.edge, self.browser_name = found if found else (None, "")
-        v.addWidget(_hint("바탕화면과 시작 메뉴에 <b>원큐합격 학습앱</b>을 설치합니다. 실행은 인터넷이 필요 없고 "
-                          "학습 기록은 설치된 기기에 저장됩니다(다른 기기와의 학습 기록 공유는 학습 기록 백업 파일로만 가능)."
-                          "<br>지울 때는 Windows 설정 › 앱(또는 제어판 › 프로그램 제거)의 <b>원큐합격 학습앱</b>."))
-        self.pc_btn = QPushButton("다시 설치(바로가기 새로 만들기)" if shortcut.app_installed() else "이 PC에 학습앱 설치")
+        v.addWidget(_hint("바탕화면과 시작 메뉴에 <b>원큐합격</b> 학습앱을 설치합니다. 실행은 인터넷이 필요 없고 학습 기록은 "
+                          "설치된 기기에 저장됩니다(다른 기기와의 학습 기록 공유는 학습 기록 백업 파일로만 가능). "
+                          "지울 때는 Windows 설정 › 앱의 <b>원큐합격</b>."))
+        self.pc_btn = QPushButton("학습앱 열어 설치하기")
         self.pc_btn.setObjectName("primarySmall")
         self.pc_btn.clicked.connect(self.install_pc)
         row = QHBoxLayout()
         row.addWidget(self.pc_btn)
         row.addStretch(1)
         v.addLayout(row)
+        v.addWidget(_steps([
+            "[학습앱 열어 설치하기]를 누르면 이 PC의 기본 브라우저에 학습앱이 열립니다",
+            "열린 화면 위쪽의 <b>[PC에 설치]</b>(또는 주소창 오른쪽의 설치 아이콘) → 「설치」 — "
+            "Chrome·Edge가 아닌 브라우저면 화면 안내대로 Chrome·Edge로 엽니다",
+            "바탕화면·시작 메뉴의 <b>원큐합격</b>으로 엽니다",
+        ]))
         self.pc_note = _hint("")
         self.pc_note.setVisible(False)
-        v.addWidget(self.pc_note)
-        if self.edge is None:
-            self.pc_btn.setEnabled(False)
-            self.pc_note.setText("Chrome·Edge를 찾지 못해 설치할 수 없어요 — 둘 중 하나를 설치한 뒤 다시 여세요.")
+        if shortcut.legacy_app_installed():
+            self.pc_note.setText("예전 방식으로 만든 <b>원큐합격 학습앱</b> 바로가기가 이 PC에 있어요. 기록은 같은 브라우저라 그대로 이어지니, "
+                                 "새로 설치한 뒤 Windows 설정 › 앱에서 <b>원큐합격 학습앱</b>을 제거해 아이콘을 하나로 정리하세요.")
             self.pc_note.setVisible(True)
+        v.addWidget(self.pc_note)
         v.addStretch(1)
         return w
 
     def install_pc(self) -> None:
-        if self.edge is None:
-            return
-        icon = _resource("oneq_prep/gui/app-icon.ico")
-        try:
-            made = shortcut.make_app_shortcuts(self.edge, APP_URL, icon)
-        except Exception as e:  # noqa: BLE001
-            QMessageBox.warning(self, "원큐합격 학습앱 설치", f"설치하지 못했어요 — {e}")
-            return
-        self.pc_note.setText("설치했어요 — 바탕화면·시작 메뉴의 <b>원큐합격 학습앱</b>으로 여세요"
-                             "(Windows 설정 › 앱 목록에도 올렸어요)." +
-                             ("<br>" + "<br>".join(made) if made else ""))
-        self.pc_note.setVisible(True)
-        self.pc_btn.setText("다시 설치(바로가기 새로 만들기)")
+        QDesktopServices.openUrl(QUrl(APP_URL))
         if self.status is not None:
-            self.status.setText("PC에 원큐합격 학습앱을 설치했어요(바탕화면·시작 메뉴)")
+            self.status.setText("브라우저에 학습앱을 열었어요 — 그 화면의 [PC에 설치]를 누르세요")
 
     # ── 휴대폰 ──
     def _tab_phone(self, os_: str) -> QWidget:
@@ -134,9 +122,7 @@ class AppInstallDialog(QDialog):
         v = QVBoxLayout()
         v.setSpacing(8)
         dev = "휴대폰·태블릿" if os_ == "android" else "아이폰·아이패드"
-        head = QLabel(f"1. {dev}에서 학습앱 주소 열기 — 편한 방법 하나")
-        head.setStyleSheet("font-weight:600")
-        v.addWidget(head)
+        v.addWidget(_head(f"1. {dev}에서 학습앱 주소 열기 — 편한 방법 하나"))
         v.addWidget(_steps([
             "<b>QR</b>: 카메라(또는 QR 스캔 앱)로 왼쪽 QR을 찍고, 뜨는 주소를 누릅니다",
             "<b>주소 보내기</b>: 아래 [주소 복사] → 카카오톡 ‘나와의 채팅’·메일 등으로 내 휴대폰에 보낸 뒤, 휴대폰에서 그 주소를 누릅니다",
@@ -151,9 +137,7 @@ class AppInstallDialog(QDialog):
         copy.clicked.connect(self.copy_url)
         row.addWidget(copy)
         v.addLayout(row)
-        head2 = QLabel("2. 열린 화면의 안내대로 설치")
-        head2.setStyleSheet("font-weight:600")
-        v.addWidget(head2)
+        v.addWidget(_head("2. 열린 화면의 안내대로 설치"))
         how = ("어느 브라우저로 열리든(휴대폰 설정마다 다름) 학습앱 첫 화면이 그 브라우저를 알아보고 설치 방법을 알려 줍니다"
                " — 안내대로 [원큐합격 앱 설치] 또는 「앱 설치」·「홈 화면에 추가」.")
         how += (" 카카오톡·네이버 앱 안에서 열리면 안내대로 바깥 브라우저로 다시 엽니다." if os_ == "android" else

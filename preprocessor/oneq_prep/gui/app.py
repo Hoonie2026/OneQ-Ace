@@ -32,6 +32,7 @@ from .profile_dialog import ProfileDialog
 from .result_dialog import ResultDialog, suspects
 from .review_dialog import ReviewDialog
 from .samples import ConditionDialog, ConditionPicture
+from .share_dialog import ShareDialog
 from .widgets import BadgeDelegate, Card, DropZone, Note, ProgressDelegate
 from .worker import BatchWorker, ComcbtWorker, QnetWorker
 
@@ -185,11 +186,13 @@ class MainWindow(QMainWindow):
         v = QLabel(f"v{__version__}")
         v.setObjectName("versionChip")
         lay.addWidget(v)
-        app_btn = QPushButton("학습앱 설치")
-        app_btn.setObjectName("appInstall")
-        app_btn.setToolTip("문제를 푸는 원큐합격 학습앱을 PC·휴대폰에 설치합니다")
-        app_btn.clicked.connect(lambda: self.show_app_install())
-        lay.addWidget(app_btn)
+        # 설치 경로 두 갈래(사용자 2026-11-12): 머리말에는 [동료에게 보내기](학습앱+팩 / 전처리기), [학습앱 설치]는 서브
+        # (작업 순서 3단계·팩 완료 안내·도움말 메뉴)
+        share_btn = QPushButton("동료에게 보내기")
+        share_btn.setObjectName("appInstall")
+        share_btn.setToolTip("공부할 동료에게 학습앱 링크+문제팩, 문제팩을 만들 동료에게 전처리기 링크를 보냅니다")
+        share_btn.clicked.connect(self.show_share)
+        lay.addWidget(share_btn)
         help_btn = QToolButton()
         help_btn.setText("도움말 ▾")
         help_btn.setPopupMode(QToolButton.InstantPopup)
@@ -201,7 +204,7 @@ class MainWindow(QMainWindow):
             "③ 끝난 파일을 누르면 결과 화면 — 의심 문항이 있으면 [확인하기].\n\n"
             "끝나면 종목 묶음(oneq-종목-bundle-….zip) 하나가 저장 폴더에 생깁니다.\n"
             "그 파일을 휴대폰·PC의 원큐합격 학습앱에서 [문제팩 가져오기]로 넣으세요(기기마다 따로).\n"
-            "학습앱은 위쪽 [학습앱 설치]에서 PC·Android·iPhone을 골라 설치합니다.")))
+            "학습앱이 아직 없으면 도움말 › 학습앱 설치, 동료에게는 위쪽 [동료에게 보내기].")))
         m.addSeparator()
         m.addAction("저장 폴더 바꾸기…", self.pick_out)
         speed = m.addMenu("처리 속도")
@@ -210,6 +213,7 @@ class MainWindow(QMainWindow):
         m.addAction("바로가기 만들기(바탕화면·시작 메뉴)", lambda: self.offer_shortcuts(ask=False))
         m.addAction("프로그램 폴더 열기", self.open_program_folder)
         m.addAction("학습앱 설치(PC·휴대폰)…", lambda: self.show_app_install())
+        m.addAction("동료에게 보내기…", self.show_share)
         m.addAction("라이선스·사용한 오픈소스", self.show_licenses)
         m.addAction(f"{APP_NAME} 정보", lambda: QMessageBox.about(
             self, APP_NAME, f"{APP_NAME} v{__version__}\n기출 PDF → 원큐합격 문제팩(.zip)"))
@@ -229,7 +233,8 @@ class MainWindow(QMainWindow):
         self.flow: list[tuple[QLabel, QLabel]] = []
         steps = [("종목 선택(출제기준 다운로드)", "종목 이름 입력 → [조회]"),
                  ("기출 PDF 업로드", "2-1 comcbt 자동 받기 → 2-2 직접 올리기(조건 셋 확인)"),
-                 ("팩 만들기", "아래 [팩 만들기] → 생긴 묶음 파일을 학습앱 [문제팩 가져오기]로")]
+                 ("팩 만들기", "아래 [팩 만들기] → 생긴 묶음 파일을 학습앱 [문제팩 가져오기]로 — "
+                  "학습앱이 없으면 <a href='#app'>학습앱 설치</a>, 동료에게는 <a href='#share'>보내기</a>")]
         for i, (t, h) in enumerate(steps, 1):
             row = QHBoxLayout()
             row.setSpacing(10)
@@ -243,6 +248,10 @@ class MainWindow(QMainWindow):
             hl = QLabel(h)
             hl.setObjectName("muted")
             hl.setWordWrap(True)
+            if "<a " in h:                            # 3단계의 서브 링크(학습앱 설치·보내기)
+                hl.setTextFormat(Qt.RichText)
+                hl.linkActivated.connect(lambda link: self.show_app_install() if link == "#app" else self.show_share())
+                self.flow_links = hl
             v.addWidget(tl)
             v.addWidget(hl)
             row.addLayout(v, 1)
@@ -332,8 +341,25 @@ class MainWindow(QMainWindow):
         ConditionDialog(index, CONDITIONS[index][1], self).exec()
 
     def show_app_install(self, tab: str = "pc") -> None:
-        """[학습앱 설치] 창(설치 경로 일원화, 사용자 2026-11-11) — PC·Android·iPhone 중 골라 직접 설치."""
+        """[학습앱 설치] 창(전처리기 경로의 서브, 사용자 2026-11-12) — PC·Android·iPhone 중 골라 설치."""
         AppInstallDialog(self, tab, self.status).exec()
+
+    def latest_bundle(self) -> Path | None:
+        """보낼 종목 묶음 — 이번에 만든 것, 없으면 저장 폴더에서 지금 종목(없으면 아무 종목)의 가장 새 묶음."""
+        if self.bundle and self.bundle.exists():
+            return self.bundle
+        code = self.picker.code or ""
+        try:
+            found = [p for p in self.out_dir.glob("**/oneq-*-bundle-*.zip") if not code or p.name.startswith(f"oneq-{code}-")]
+        except OSError:
+            return None
+        return max(found, key=lambda p: p.stat().st_mtime) if found else None
+
+    def show_share(self) -> None:
+        """[동료에게 보내기] — 공부할 동료(학습앱 링크+문제팩) / 문제팩을 만들 동료(전처리기 링크)."""
+        b = self.latest_bundle()
+        cert = self.picker.current.name if self.picker.current else ""
+        ShareDialog(self, cert, b, self.out_dir, self.status).exec()
 
     # ── 설치 없는 zip 배포: 바로가기·임시 폴더 경고(🖥P14, 2026-11-11) ──
     def first_run_checks(self) -> None:
@@ -1023,7 +1049,7 @@ class MainWindow(QMainWindow):
             self.bundle_note.set("ok", f"종목 묶음 저장: {self.bundle.name}",
                                  [f"이번에 새로 만든 회차 {ok - sum(1 for r in rows if r.prepared and r.prepared.unchanged)}개를 파일 하나에 담았어요.",
                                   "원큐합격 학습앱(폰·PC 각각)에서 [문제팩 가져오기]로 이 파일을 넣으세요. [팩 폴더 열기]로 위치를 볼 수 있어요.",
-                                  "학습앱이 아직 없으면 위쪽 [학습앱 설치]에서 PC·휴대폰을 골라 설치하세요."])
+                                  "학습앱이 아직 없으면 왼쪽 작업 순서 3단계의 [학습앱 설치], 동료에게는 위쪽 [동료에게 보내기]."])
         else:
             self.bundle_note.setVisible(False)
         lines = law_summary(self.rows)

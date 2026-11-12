@@ -15,6 +15,15 @@ export const PREP_SETUP_URL = `${PREP_REPO}/releases/latest/download/${PREP_SETU
 export const PREP_DOWNLOAD_URL = `${PREP_REPO}/releases/latest/download/${PREP_ASSET}`;
 export const PREP_RELEASES_URL = `${PREP_REPO}/releases/latest`;
 
+/**
+ * 설치 경로 두 갈래(사용자 2026-11-12, ADR 021 7절):
+ *  A 학습앱 링크(앱 주소) — 공부할 사람. 메인 = 이 기기에 학습앱 설치 → 설치한 앱에서 받은 문제팩 가져오기, 서브 = 전처리기
+ *  B 전처리기 링크(앱 주소?prep) — 문제팩을 만들 사람. 메인 = 전처리기 설치, 서브 = 학습앱
+ */
+export const PREP_PARAM = 'prep';
+export const prepLink = (appUrl: string) => `${appUrl.replace(/[?#].*$/, '')}?${PREP_PARAM}`;
+export const isPrepLink = (search = window.location.search) => new URLSearchParams(search).has(PREP_PARAM);
+
 /** 이 기기에서 전처리기 안내를 어떻게 보일지 */
 export type PrepOffer = 'download' | 'windows-only' | 'use-pc';
 
