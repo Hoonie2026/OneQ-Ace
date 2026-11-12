@@ -30,7 +30,9 @@ class WrapLabel(QLabel):
 
     def resizeEvent(self, e):  # noqa: N802
         super().resizeEvent(e)
-        if self.height() != self._h():
+        h = self._h()
+        if h != getattr(self, "_told", None):     # 높이가 실제로 바뀔 때만 다시 배치(끝없는 재배치 → 멈춤 방지)
+            self._told = h
             self.updateGeometry()
 
 
@@ -182,7 +184,7 @@ class DropZone(QFrame):
         t.setObjectName("dropTitle")
         self.title = t
         t.setAlignment(Qt.AlignCenter)
-        s = QLabel("폴더째 놓아도 됩니다 · 누르면 파일을 고를 수 있어요\n종목·시행일·회차는 문서 내용에서 읽습니다(파일 이름은 상관없어요)")
+        s = QLabel("폴더째 놓아도 됩니다 · 누르면 파일 고르기")
         s.setObjectName("muted")
         s.setAlignment(Qt.AlignCenter)
         for w in (icon, t, s):

@@ -195,8 +195,8 @@ def guide(res: Result | None, cert_name: str) -> list[str]:
         oldest = min(p.date for p in res.posts)
         lines.append(f"comcbt.com '{cert_name}' 게시판 첫 쪽의 최근 {len(res.posts)}회차"
                      f"({oldest[:4]}년~)만 자동으로 받습니다.")
-    lines.append("그보다 이전 회차와, 게시판에 아직 올라오지 않은 최신 회차는 comcbt.com 등에서 직접 내려받아 "
-                 "이 목록에 끌어다 놓아 주세요(정답이 표시된 '교사용' PDF).")
+    lines.append("자동 받기 안 된 이전 회차 또는 최신 회차는 comcbt.com 등에서 직접 내려받아 "
+                 "아래 「사용자 직접 올리기」에 추가해 주세요.")
     return lines
 
 

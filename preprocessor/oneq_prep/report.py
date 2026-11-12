@@ -187,7 +187,7 @@ def write_report(prepared: list, out: Path) -> Path:
         kept = [it for it in p.items if not it.excluded]
         src = Counter(_src_label(it) for it in kept)
         status = ('<span class="ok">✓ 팩 생성</span>' if p.zip_path else
-                  (f'<span class="bad">검수 필요 {len(p.issues)}</span>' if p.issues else '<span class="mut">보고서만</span>'))
+                  (f'<span class="bad">만들지 못함 {len(p.issues)}</span>' if p.issues else '<span class="mut">보고서만</span>'))
         tags = "".join(f'<span class="chip">{t}</span>' for t in
                        (["OCR"] if p.ocr else []) + (["구기준"] if p.legacy else []) +
                        (["과목별 번호"] if p.numbering == "per-subject" else []))

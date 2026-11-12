@@ -3828,6 +3828,37 @@ a.btn {
 .toggle-row { display: flex; gap: 10px; align-items: flex-start; margin-top: 10px; font-size: 15px; line-height: 1.45; }
 .toggle-row input { width: 20px; height: 20px; margin-top: 2px; flex: none; }
 
+/* 안드로이드 설치 중 → 완료(실기기 2026-11-12): 짧게 */
+.install-done-lead {
+  margin: 4px 0 8px;
+  font-size: 17px;
+  line-height: 1.55;
+}
+.install-done h2 {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.spinner {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 3px solid color-mix(in srgb, var(--primary) 25%, transparent);
+  border-top-color: var(--primary);
+  animation: oneq-spin 0.9s linear infinite;
+  flex: none;
+}
+@keyframes oneq-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .spinner {
+    animation-duration: 3s;
+  }
+}
+
 /* 설치 루트 재설계(2026-11-12 세션 #19): 설치 안내 PC·모바일 탭, 첫 실행 [문제팩 가져오기] + 생성기 서브 */
 .install-kicker {
   margin: 0 0 8px;

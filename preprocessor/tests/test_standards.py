@@ -45,3 +45,14 @@ def test_safety_profile_merges_old_subjects():
     assert p.resolve("건설재료학") == ("std", 3, "건설재료")
     assert p.resolve("건설시공학") == ("std", 4, "건설시공")
     assert p.resolve("건설안전기술") == ("std", 5, "건설공사 안전관리")
+
+
+def test_guess_subject_without_review():
+    """검수 없이 과목명 자동 대응(사용자 2026-11-12 — 건축기사 20회차가 '건축법규' 한 건으로 모두 검수 대기였음)."""
+    p = S.Profile("Q1630", "건축기사", "기사", "t", {}, [{"name": n, "count": 20} for n in
+                  ["건축계획", "건축시공", "건축구조", "건축설비", "건축관계법규"]])
+    assert p.resolve("건축법규")[0] == "unknown"
+    assert p.guess("건축법규", 5, 5) == ("건축관계법규", "이름이 비슷함")
+    assert p.guess("건축법규", 5, 5, {S.norm("건축관계법규")}) is None          # 이미 다른 과목이 차지
+    assert p.guess("제5과목", 5, 5) == ("건축관계법규", "과목 순서")             # 이름이 전혀 달라도 과목 수가 같으면 순번
+    assert p.guess("조경학", 6, 6) is None                                        # 과목 수가 다르면(폐지 과목 등) 추정하지 않음

@@ -88,6 +88,41 @@ class Profile:
             return "excluded", None, raw
         return "unknown", None, raw
 
+    def guess(self, raw: str, sno: int | None = None, pdf_subjects: int | None = None,
+              taken: set[str] | frozenset = frozenset()) -> tuple[str, str] | None:
+        """정확히 맞지 않는 PDF 과목명 → 표준 과목 추정(사람 검수 대신, 사용자 2026-11-12 — "건축법규" → "건축관계법규").
+        ① 이름: 한쪽이 다른 쪽에 들어 있거나(글자 순서대로) 비슷함 0.6 이상이고 2등과 차이가 날 때
+        ② 순서: PDF 과목 수가 출제기준과 같으면 같은 순번 과목. 이미 다른 과목이 차지한 표준 과목은 쓰지 않는다.
+        반환 (표준이름, 근거) 또는 None."""
+        from difflib import SequenceMatcher
+
+        def subseq(a: str, b: str) -> bool:
+            it = iter(b)
+            return all(ch in it for ch in a)
+
+        n = norm(raw)
+        if n and not re.fullmatch(r"\d과목", n):
+            cands = []
+            for sub in self.subjects:
+                m = norm(sub["name"])
+                if m in taken:
+                    continue
+                if n in m or m in n:
+                    score = 0.95
+                elif len(n) >= 3 and (subseq(n, m) or subseq(m, n)):
+                    score = 0.9
+                else:
+                    score = SequenceMatcher(None, n, m).ratio()
+                cands.append((score, sub["name"]))
+            cands.sort(reverse=True)
+            if cands and cands[0][0] >= 0.6 and (len(cands) == 1 or cands[0][0] - cands[1][0] >= 0.1):
+                return cands[0][1], "이름이 비슷함"
+        if sno and pdf_subjects == len(self.subjects) and 1 <= sno <= len(self.subjects):
+            name = self.subjects[sno - 1]["name"]
+            if norm(name) not in taken:
+                return name, "과목 순서"
+        return None
+
     def std_index(self, name: str) -> int | None:
         for i, s in enumerate(self.subjects):
             if norm(s["name"]) == norm(name):

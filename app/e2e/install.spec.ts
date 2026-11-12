@@ -4,12 +4,14 @@
  * - 설치한 앱의 첫 화면: [문제팩 가져오기]가 메인, 그 아래 서브로 생성기 — PC는 받기 링크, 휴대폰은 안내 문구만(링크 없음)
  * - 옛 생성기 링크(?prep)도 학습앱 설치 안내로
  * - v0.10.1~0.10.3(실기기 Z4·Z5): 데스크톱 모드 안드로이드 태블릿은 Chrome으로, 안드로이드 설치 중 안내
+ * - v0.15.1(실기기 2026-11-12): 설치 중 → 완료가 끊김 없이, 안드로이드 파일 고르기 형식 하나, 미설치 브라우저는 기록이 있어도 설치 안내만
  */
 import { expect, test } from '@playwright/test';
 import { asInstalledApp } from './fixtures';
 
 const EDGE = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/156.0.0.0 Safari/537.36 Edg/156.0.0.0';
 const ANDROID = 'Mozilla/5.0 (Linux; Android 14; SM-S918N) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/156.0.0.0 Mobile Safari/537.36';
+const SAMSUNG = 'Mozilla/5.0 (Linux; Android 14; SM-S918N) AppleWebKit/537.36 (KHTML, like Gecko) SamsungBrowser/27.0 Chrome/125.0.0.0 Mobile Safari/537.36';
 const FIREFOX_TABLET_DESKTOP = 'Mozilla/5.0 (X11; Linux x86_64; rv:144.0) Gecko/20100101 Firefox/144.0';
 
 test('설치 루트: 브라우저는 설치 안내만(PC·모바일 탭), 설치한 앱의 첫 화면은 문제팩 가져오기 + 생성기 서브(PC만 링크)', async ({ browser }, info) => {
@@ -21,6 +23,7 @@ test('설치 루트: 브라우저는 설치 안내만(PC·모바일 탭), 설치
   const g1 = p1.getByTestId('install-guide');
   await expect(g1).toContainText('PC에 원큐합격 학습앱 설치');
   await expect(g1).toContainText('바탕 화면 바로 가기');
+  await expect(g1).toContainText('제어판'); // Edge 설치는 설정 › 설치된 앱에만 → Chrome 권장 안내
   await expect(g1.getByText('나중에')).toHaveCount(0); // 첫 화면 메인은 숨기기 없음
   await expect(p1.getByTestId('install-tab-pc')).toHaveAttribute('aria-selected', 'true');
   await expect(p1.getByTestId('empty-home')).toHaveCount(0); // 설치 안내에는 문제팩 가져오기 없음
@@ -42,6 +45,7 @@ test('설치 루트: 브라우저는 설치 안내만(PC·모바일 탭), 설치
   await expect(p2.getByTestId('install-guide')).toHaveCount(0);
   await expect(p2.getByTestId('empty-home').getByRole('heading')).toHaveText('문제팩 가져오기');
   await expect(p2.getByTestId('empty-home').getByTestId('pack-input')).toHaveCount(1);
+  await expect(p2.getByTestId('pack-input')).toHaveAttribute('accept', /application\/zip/);
   const sub = p2.getByTestId('maker-sub');
   await expect(sub).toContainText('문제팩이 없는 경우 원큐합격 문제팩 생성기를 이 PC에 설치하여 문제팩을 만드세요');
   await expect(sub.getByTestId('maker-download')).toHaveAttribute('href', /OneQ-PackMaker-Setup\.exe$/);
@@ -53,6 +57,7 @@ test('설치 루트: 브라우저는 설치 안내만(PC·모바일 탭), 설치
   const p3 = await phoneApp.newPage();
   await p3.goto('./');
   await expect(p3.getByTestId('empty-home').getByTestId('pack-input')).toHaveCount(1);
+  await expect(p3.getByTestId('pack-input')).toHaveAttribute('accept', '.zip'); // 안드로이드: 형식 하나 → 파일 앱(카메라·사진 선택창 아님)
   await expect(p3.getByTestId('maker-sub')).toContainText('PC에서 원큐합격 학습앱을 설치');
   await expect(p3.getByTestId('maker-download')).toHaveCount(0);
   await expect(p3.locator('a[href*="OneQ-PackMaker"]')).toHaveCount(0);
@@ -74,7 +79,7 @@ test('설치 루트: 브라우저는 설치 안내만(PC·모바일 탭), 설치
   await expect(p4.getByTestId('open-chrome')).toBeVisible();
   await tab.close();
 
-  // ⑤ v0.10.3: 안드로이드는 설치를 눌러도 브라우저 화면이 남고 아이콘은 1~2분 뒤 → "설치하고 있습니다 · 이 화면은 브라우저 · 닫고 아이콘으로"(새로 고쳐도 유지)
+  // ⑤ 안드로이드: 설치를 누르면 '설치하고 있어요'(다른 안내가 끼어들지 않음) → 새로 고쳐도 유지. 파일 고르기 형식은 하나(.zip)
   const phone = await browser.newContext({ viewport: { width: 412, height: 915 }, userAgent: ANDROID });
   const p5 = await phone.newPage();
   await p5.goto('./');
@@ -82,9 +87,17 @@ test('설치 루트: 브라우저는 설치 안내만(PC·모바일 탭), 설치
   await expect(p5.getByTestId('install-guide')).toContainText('앱 목록과 홈 화면');
   await expect(p5.getByTestId('empty-home')).toHaveCount(0);
   await p5.evaluate(() => window.dispatchEvent(new Event('appinstalled')));
-  await expect(p5.getByTestId('install-guide')).toContainText('설치하고 있습니다');
-  await expect(p5.getByTestId('install-guide')).toContainText('브라우저 화면을 닫습니다');
+  await expect(p5.getByTestId('install-guide')).toContainText('설치하고 있어요');
+  await expect(p5.getByTestId('install-guide')).not.toContainText('Chrome');
   await p5.reload();
-  await expect(p5.getByTestId('install-guide')).toContainText('설치하고 있습니다');
+  await expect(p5.getByTestId('install-guide')).toContainText('설치하고 있어요');
   await phone.close();
+
+  // ⑥ 삼성 인터넷(카카오톡 링크가 기본 브라우저로 열림): Chrome으로 보내지 않고 그 자리에서 설치 안내
+  const sam = await browser.newContext({ viewport: { width: 412, height: 915 }, userAgent: SAMSUNG });
+  const p6 = await sam.newPage();
+  await p6.goto('./');
+  await expect(p6.getByTestId('install-guide')).toContainText('현재 페이지 추가');
+  await expect(p6.getByTestId('open-chrome')).toHaveCount(0);
+  await sam.close();
 });

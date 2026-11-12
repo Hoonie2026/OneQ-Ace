@@ -39,3 +39,16 @@ def test_parallel_equals_sequential(tmp_path):
 def test_stop_skips_rest(tmp_path):
     rows = run_batch(BatchSpec(GOOD, "SAFETY", tmp_path / "o", "시험", workers=1), should_stop=lambda: True)
     assert [r.status for r in rows] == ["skipped", "skipped"]
+
+
+def test_unsure_answer_auto_exclude():
+    """정답을 믿을 수 없는 문항은 검수 대신 자동으로 뺀다(사용자 2026-11-12)."""
+    from oneq_prep.pack import AUTO_EXCLUDE, Item, unsure_answer
+
+    def item(ans, warns):
+        return Item(1, 1, "과목", "과목", ans, "inline-mark", "single", [], 4, b"", (1, 1), "", [], warns)
+    assert unsure_answer(item(None, ["정답을 찾지 못함"]), None) == AUTO_EXCLUDE + "정답 못 찾음"
+    assert unsure_answer(item(2, ["보기 표시 2 ≠ 정답표 3"]), None).endswith("정답표가 다름")
+    assert unsure_answer(item(2, ["정답 표시 2개: [1, 2]"]), None).endswith("여러 개")
+    assert unsure_answer(item(2, []), [(0, 0, 1, 1)]).endswith("남아 보임")
+    assert unsure_answer(item(2, ["OCR: 보기 번호 3개만 찾음"]), None) is None      # 정답이 있으면 모양 경고로는 빼지 않음

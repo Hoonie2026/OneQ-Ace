@@ -31,7 +31,24 @@ from .render import (crop_question, mark_leaks, mask_filled_labels, mask_ocr_fil
                      remove_highlight_near_labels, render_pages)
 
 REVIEW_DIR = "review"
-REASSIGN_MIN_CONF = 0.6     # 이보다 낮은 재배정 제안은 보고서에서 '확인 필요'로 강조
+REASSIGN_MIN_CONF = 0.6     # 이 이상인 재배정 제안만 자동 적용(낮으면 시험지 과목 그대로), 보고서에서 낮은 것은 강조
+AUTO_EXCLUDE = "자동 제외: "  # 정답을 믿을 수 없어 뺀 문항의 사유 머리(manifest.excluded reason "other")
+
+
+def unsure_answer(it: "Item", leak) -> str | None:
+    """정답을 믿을 수 없는 이유 — 있으면 그 문항은 팩에서 뺀다(사용자 2026-11-12, 검수 대신)."""
+    w = " ".join(it.warnings)
+    if it.answer is None:
+        return AUTO_EXCLUDE + "정답 못 찾음"
+    if "≠ 정답표" in w:
+        return AUTO_EXCLUDE + "보기 표시와 정답표가 다름"
+    if "보기 수" in w and "벗어남" in w:
+        return AUTO_EXCLUDE + "정답 번호가 보기 수를 벗어남"
+    if re.search(r"정답 표시 \d+개", w):
+        return AUTO_EXCLUDE + "정답 표시가 여러 개"
+    if leak:
+        return AUTO_EXCLUDE + "정답 표시가 남아 보임"
+    return None
 
 
 # ───────────────────────── 회차 정보 ─────────────────────────
@@ -179,20 +196,21 @@ def prepare(pdf_path: Path, profile: S.Profile, out_dir: Path,
     review = load_review(out_dir, pack_id)
 
     step("문항 나누기")
+    # 검수 없이 항상 팩을 만든다(사용자 2026-11-12 — 시험 준비생에게 검수를 맡기는 것은 비현실적, ADR 024):
+    # 파일 단위 경고는 참고(notes)로, 문항 단위로 정답을 믿을 수 없으면 그 문항만 자동으로 뺀다(manifest.excluded)
     layout = analyze(pdf_path, ocr_pages=doc.pages if doc else None)
-    issues += [w for w in layout.warnings if not w.startswith("스캔본:")]
-    notes += [w for w in layout.warnings if w.startswith("스캔본:")]     # 빠진 번호는 아래에서 번호마다
+    notes += list(layout.warnings)                                     # 빠진 번호는 아래에서 번호마다
+    table_ok = True
     if doc and doc.answer_pages:
         layout.answer_table = doc.answers      # 끝 쪽 정답표(칸 나눠 읽기, ADR 022 4절)
         msg = f"정답표({', '.join(str(p + 1) for p in doc.answer_pages)}쪽)에서 정답 {len(doc.answers)}개를 읽음"
         if doc.shape_answers:
             msg += f"(그중 {doc.shape_answers}개는 OCR이 못 읽어 같은 표의 글자 모양으로 맞춤)"
-        if doc.unread_answers:
-            issues.append(msg + f" — {doc.unread_answers}칸은 못 읽음(검수에서 정답 입력)")
-        else:
-            notes.append(msg)
+        notes.append(msg + (f" — {doc.unread_answers}칸은 못 읽어 그 문항은 뺌" if doc.unread_answers else ""))
         if len(doc.answers) + doc.unread_answers != len(layout.questions) + len(layout.missing):
-            issues.append(f"정답표 칸 {len(doc.answers) + doc.unread_answers}개 ≠ 문항 {len(layout.questions)}개 — 정답 순서 확인")
+            table_ok = False                       # 칸 수가 어긋나면 정답이 밀렸을 수 있음 → 정답표는 믿지 않음
+            notes.append(f"정답표 칸 {len(doc.answers) + doc.unread_answers}개 ≠ 문항 {len(layout.questions)}개 — "
+                         "정답표는 쓰지 않음(보기 표시가 없는 문항은 뺌)")
 
     step("정답")
     # 렌더링 + 정답 표시 제거
@@ -201,7 +219,7 @@ def prepare(pdf_path: Path, profile: S.Profile, out_dir: Path,
         method = ["highlight-remove"]
         n_hl = sum(len(v) for v in layout.highlights.values())
         if masked != n_hl:
-            issues.append(f"형광 표시 {n_hl}개 중 {masked}개만 지움")
+            notes.append(f"형광 표시 {n_hl}개 중 {masked}개만 지움(남은 문항은 아래 '정답 표시가 남음'으로 뺌)")
     else:
         pages = render_pages(pdf_path)
         if layout.ocr:
@@ -212,14 +230,14 @@ def prepare(pdf_path: Path, profile: S.Profile, out_dir: Path,
         method = ["filled-glyph-replace"] if masked else ["none-needed"]
     leaks = {q.no: mark_leaks(pages, q) for q in layout.questions}
     leaks = {k: v for k, v in leaks.items() if v}
-    if leaks:
-        issues.append(f"정답 표시 잔존 의심: {leaks}")
+
     regions = regions_for(layout)
     figs = _figure_boxes(pdf_path) if not layout.ocr else {}
 
-    # 과목 정리(출제기준 프로필)
+    # 과목 정리(출제기준 프로필) — 이름이 정확히 맞지 않으면 비슷한 이름·과목 순서로 자동 대응(검수 없음, 2026-11-12)
     smap: dict[int, tuple[str, str | None]] = {}     # PDF 과목번호 → (PDF 이름, 표준 이름 또는 None=제외)
     renamed: list[str] = []
+    pending: list[tuple[int, str]] = []
     for sno, raw in sorted(layout.subjects.items()):
         override = review.get("subjectMap", {}).get(raw)
         if not override and layout.ocr and 1 <= sno <= len(profile.subjects) \
@@ -237,8 +255,19 @@ def prepare(pdf_path: Path, profile: S.Profile, out_dir: Path,
         elif kind == "excluded":
             smap[sno] = (raw, None)
         else:
-            smap[sno] = (raw, raw)
-            issues.append(f"출제기준 프로필({profile.code})에 없는 과목명: '{raw}' — 검수 파일 subjectMap에 표준 과목명 또는 \"제외\"를 적으세요")
+            pending.append((sno, raw))
+    taken = {S.norm(std) for _, std in smap.values() if std}
+    for sno, raw in pending:
+        g = profile.guess(raw, sno, len(layout.subjects), taken)
+        if g:
+            std, why = g
+            smap[sno] = (raw, std)
+            taken.add(S.norm(std))
+            renamed.append(f"{raw} → {std}")
+            notes.append(f"과목명 '{raw}' → 출제기준 '{std}'(자동 — {why})")
+        else:
+            smap[sno] = (raw, None)
+            notes.append(f"과목 '{raw}'은 현행 출제기준 과목과 맞추지 못해 이 회차에서 뺌")
 
     # 과목별 문항 수를 프로필과 대조 — 스캔본에서 문항 경계를 놓치거나 잘못 나눈 경우를 잡는다
     if not profile.is_legacy(exam["date"]):
@@ -250,8 +279,7 @@ def prepare(pdf_path: Path, profile: S.Profile, out_dir: Path,
         want = {s["name"]: s["count"] for s in profile.subjects}
         for sno, (raw, std) in smap.items():
             if std in want and per.get(sno, 0) != want[std]:
-                msg = f"{raw}: 문항 {per.get(sno, 0)}개(출제기준 {want[std]}개)"
-                (issues if layout.ocr else notes).append(msg + (" — 문항 경계 확인 필요(스캔 품질)" if layout.ocr else ""))
+                notes.append(f"{raw}: 문항 {per.get(sno, 0)}개(출제기준 {want[std]}개)")
 
     legacy = profile.is_legacy(exam["date"])
     answers = {int(k): int(v) for k, v in review.get("answers", {}).items()}
@@ -262,7 +290,7 @@ def prepare(pdf_path: Path, profile: S.Profile, out_dir: Path,
     items: list[Item] = []
     for q in layout.questions:
         raw, std = smap.get(q.subject_no, (f"{q.subject_no}과목", None))
-        inline, table = q.inline_answer, layout.answer_table.get(q.no)
+        inline, table = q.inline_answer, (layout.answer_table.get(q.no) if table_ok else None)
         warn = [w for w in q.warnings if not w.startswith("info:")]
         manual = answers.get(q.no)
         ans, src, check = None, None, None
@@ -319,34 +347,36 @@ def prepare(pdf_path: Path, profile: S.Profile, out_dir: Path,
             elif target != std:
                 it.subject = target
                 it.flags.append("subject-reassigned")
+        elif legacy and it.suggestion and it.suggestion.suggested != std \
+                and it.suggestion.confidence >= REASSIGN_MIN_CONF and profile.std_index(it.suggestion.suggested):
+            it.subject = it.suggestion.suggested                    # 구기준 회차: 확신 있는 제안은 자동 재배정(검수 없음)
+            it.flags.append("subject-reassigned")
+        # 정답을 믿을 수 없는 문항은 자동으로 뺀다(잘못된 정답으로 공부하는 것보다 낫다 — 5~10년치라 몇 문항은 빠져도 됨)
+        if it.excluded is None and q.no not in answers:
+            why = unsure_answer(it, leaks.get(q.no))
+            if why:
+                it.excluded = why
         items.append(it)
 
     step("분류")
     _classify_items(items, profile, review)
     if legacy:
-        if not review.get("reviewed"):
-            issues.append(f"구기준 회차({exam['date']} < {profile.legacy['before']}): 문항별 과목 재배정 검수 필요 — "
-                          "검수 파일의 reassign(자동 제안)을 확인하고 reviewed를 true로")
-        if reference is None:
-            notes.append("재배정 제안용 참조 문항이 없음(같은 종목의 현행 회차를 함께 넣거나 출력 폴더에 팩이 있어야 함)")
-    for it in items:
-        if it.excluded is None:
-            # OCR의 보기 번호 개수·순서 경고는 정답만 확보되면 막지 않는다(카드에는 표시)
-            soft = layout.ocr and it.answer is not None
-            issues += [f"{it.no}번: {w}" for w in it.warnings
-                       if not (soft and (w.startswith("OCR:") or w.startswith("보기 번호 순서")
-                                         or (w.startswith("스캔본:") and review.get("reviewed"))))]
+        n_re = sum(1 for it in items if "subject-reassigned" in it.flags)
+        notes.append(f"구기준 회차({exam['date']} < {profile.legacy['before']}): {n_re}문항을 현행 과목으로 자동 재배정"
+                     + ("" if reference is not None else " — 참조 문항이 없어 시험지 과목 그대로(현행 회차를 함께 넣으면 나아짐)"))
     note = classify_note(items, profile)
     if note:
         notes.append(note)
+    auto = [it for it in items if it.excluded and it.excluded.startswith(AUTO_EXCLUDE)]
+    if auto:
+        notes.append(f"정답을 확신할 수 없어 자동으로 뺀 문항 {len(auto)}개: "
+                     + ", ".join(f"{it.no}번({it.excluded[len(AUTO_EXCLUDE):]})" for it in auto[:8])
+                     + (" …" if len(auto) > 8 else ""))
     n_ex = sum(1 for it in items if it.excluded)
     if n_ex:
         notes.append(f"제외 {n_ex}문항")
     for no, sno in layout.missing:
-        # 검수자가 확인(reviewed)하면 막지 않음 — 그 번호는 manifest.excluded "unreadable"로 빠진 채 팩을 만든다
-        (notes if review.get("reviewed") else issues).append(
-            f"{no}번: 스캔본에서 문항을 찾지 못함 — 팩에서 빠짐(판독 불가)"
-            + ("" if review.get("reviewed") else " · 확인했으면 검수를 마침으로"))
+        notes.append(f"{no}번: 스캔본에서 문항을 찾지 못함 — 팩에서 빠짐(판독 불가)")
     if layout.numbering == "per-subject":
         notes.append("원본은 과목마다 번호가 1부터 다시 시작 — 팩 번호(no)는 시험지 전체 순번")
     missing = [(no, (lambda r, st: st if st and re.fullmatch(r"\d과목", r) else r)(*smap.get(sno, (f"{sno}과목", None))))
@@ -604,7 +634,7 @@ def main(argv=None):
         sys.exit(str(e))
     ok = sum(r.status == "packed" for r in rows)
     bad = sum(r.status in ("review", "error") for r in rows)
-    print(f"\n팩 {ok}개 / 검수 필요·오류 {bad}개. 보고서: {a.out / REVIEW_DIR / 'report.html'}")
+    print(f"\n팩 {ok}개 / 만들지 못함·오류 {bad}개. 보고서: {a.out / REVIEW_DIR / 'report.html'}")
     sys.exit(1 if bad else 0)
 
 

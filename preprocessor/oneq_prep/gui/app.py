@@ -43,9 +43,9 @@ C_FILE, C_KIND, C_ROUND, C_PROG, C_STATUS, C_MSG = range(6)
 C_DATE = C_ROUND          # v0.4 이름(시험 호환)
 DATE_RE = re.compile(r"^(19|20)\d{2}-\d{2}-\d{2}$")
 STAGES = ["읽기", "문항 나누기", "정답", "분류", "팩"]     # ADR 021 6절 — 파일별 진행 막대의 단계
-CONDITIONS = [("한 파일 = 한 회차", "여러 회차를 한 파일에 합친 PDF는 회차별로 나눠 주세요"),
-              ("정답이 파일 안에", "보기에 정답 표시(칠한 번호·형광펜) 또는 끝에 정답표"),
-              ("알아볼 수 있는 품질", "사진보다 스캔, 심하게 기울지 않게 — 글자 PDF면 가장 좋아요")]
+CONDITIONS = [("한 파일 = 한 회차", "여러 회차가 합쳐진 PDF는 나눠서"),
+              ("정답이 파일 안에", "칠한 번호·형광펜, 또는 끝에 정답표"),
+              ("알아볼 수 있는 품질", "스캔본도 됨 — 심하게 기울지 않게")]
 
 
 def round_text(r: RoundResult) -> str:
@@ -232,10 +232,7 @@ class MainWindow(QMainWindow):
         """작업 순서 한눈에(사용자 2026-11-11, 네 단계로 2026-11-12) — 끝난 단계 ✓(초록), 지금 할 단계(파랑), 남은 단계(회색)."""
         c = Card("작업 순서", "", "")
         self.flow: list[tuple[QLabel, QLabel]] = []
-        steps = [("종목 선택", "종목 이름 입력 → [조회] — Q-Net 최신 출제기준을 받아 옵니다"),
-                 ("기출 PDF 업로드", "comcbt.com 최근 기출 받기, 또는 사용자 직접 올리기(조건 셋)"),
-                 ("문제팩 만들기", "아래 [문제팩 만들기] → 종목 묶음 파일이 문제팩 폴더에 생깁니다"),
-                 ("문제팩 보내기", "아래 [문제팩 공유하기] → 내 휴대폰·동료에게 보내 학습앱 [문제팩 가져오기]로")]
+        steps = [("종목 선택", ""), ("기출 PDF 업로드", ""), ("문제팩 만들기", ""), ("문제팩 보내기", "")]   # 설명은 뺌(2026-11-12)
         for i, (t, h) in enumerate(steps, 1):
             row = QHBoxLayout()
             row.setSpacing(10)
@@ -246,11 +243,12 @@ class MainWindow(QMainWindow):
             v.setSpacing(0)
             tl = QLabel(t)
             tl.setObjectName("flowText")
-            hl = QLabel(h)
-            hl.setObjectName("muted")
-            hl.setWordWrap(True)
             v.addWidget(tl)
-            v.addWidget(hl)
+            if h:
+                hl = QLabel(h)
+                hl.setObjectName("muted")
+                hl.setWordWrap(True)
+                v.addWidget(hl)
             row.addLayout(v, 1)
             c.body.addLayout(row)
             self.flow.append((n, tl))
@@ -291,9 +289,9 @@ class MainWindow(QMainWindow):
         v = QVBoxLayout(f)
         v.setContentsMargins(14, 10, 14, 10)
         v.setSpacing(6)
-        head = WrapLabel("직접 올리는 기출 PDF 조건 — 어디서 구했든 괜찮아요. 아래 셋만 맞으면 됩니다(그림을 누르면 크게, "
-                      "한글·워드 파일은 그 프로그램에서 PDF로 저장해 넣으세요)")
-        head.setObjectName("muted")
+        head = WrapLabel("문제팩 생성이 가능한 PDF 업로드 조건")
+        head.setObjectName("condHead")
+        head.setToolTip("어디서 구했든 셋만 맞으면 됩니다. 그림을 누르면 크게 · 한글·워드 파일은 그 프로그램에서 PDF로 저장")
         v.addWidget(head)
         cols = QHBoxLayout()
         cols.setSpacing(12)
@@ -387,7 +385,7 @@ class MainWindow(QMainWindow):
         folder = exe.parent if exe else Path(__file__).resolve().parents[2]
         QDesktopServices.openUrl(QUrl.fromLocalFile(str(folder)))
 
-    def _source_area(self, name: str, title: str, hint: str) -> tuple[QFrame, QVBoxLayout, QHBoxLayout, QLabel]:
+    def _source_area(self, name: str, title: str, hint: str = "") -> tuple[QFrame, QVBoxLayout, QHBoxLayout, QLabel]:
         """기출 PDF를 넣는 두 영역(comcbt.com 최근 기출 받기 / 사용자 직접 올리기) — 제목 줄(오른쪽에 단추) + 설명 + 내용."""
         f = QFrame()
         f.setObjectName("srcArea")
@@ -403,6 +401,7 @@ class MainWindow(QMainWindow):
         v.addLayout(top)
         hl = WrapLabel(hint)
         hl.setObjectName("muted")
+        hl.setVisible(bool(hint))
         v.addWidget(hl)
         return f, v, top, hl
 
@@ -417,8 +416,7 @@ class MainWindow(QMainWindow):
         # comcbt.com 게시판 첫 쪽의 최근 기출 받기(사용자 결정 2026-10-24 — 이전·최신 회차는 직접 올림)
         from ..comcbt import FIRST_PAGE_HINT
         a1, v1, top1, self.comcbt_hint = self._source_area(
-            "comcbt", "comcbt.com 최근 기출 받기",
-            f"comcbt.com 종목 게시판 첫 쪽에 올라온 회차({FIRST_PAGE_HINT})만 받아 아래 목록에 넣어요")
+            "comcbt", "comcbt.com 최근 기출 받기", f"종목 게시판 첫 쪽의 최근 회차({FIRST_PAGE_HINT})")
         self.comcbt_btn = QPushButton("최근 기출 받기")
         self.comcbt_btn.setObjectName("primarySmall")
         self.comcbt_btn.setToolTip("comcbt.com 종목 게시판 첫 쪽의 최근 기출(정답 표시된 교사용 PDF)을 받아 목록에 넣습니다")
@@ -430,9 +428,7 @@ class MainWindow(QMainWindow):
         v1.addWidget(self.comcbt_note)
         c.body.addWidget(a1)
         # 사용자 직접 올리기 — 끌어다 놓는 상자 + 바로 아래 조건 셋(늘 보임)
-        a2, v2, top2, _ = self._source_area(
-            "upload", "사용자 직접 올리기",
-            "comcbt에서 못 받은 이전·최신 회차 — 아래 조건 셋에 맞는 PDF를 끌어다 놓거나 [PDF 추가]·[폴더 추가]")
+        a2, v2, top2, _ = self._source_area("upload", "사용자 직접 올리기")
         for text, fn in (("PDF 추가", self.add_files), ("폴더 추가", self.add_folder)):
             b = QPushButton(text)
             b.clicked.connect(fn)
@@ -460,7 +456,7 @@ class MainWindow(QMainWindow):
         c.body.addLayout(bar)
 
         self.stack = QStackedWidget()
-        empty = QLabel("아직 올린 기출 PDF가 없어요 — 위 두 영역 중 하나로 넣으면 여기에 회차별로 나옵니다")
+        empty = QLabel("올린 기출 PDF가 여기에 회차별로 나옵니다")
         empty.setObjectName("listEmpty")
         empty.setAlignment(Qt.AlignCenter)
         empty.setWordWrap(True)
@@ -534,7 +530,7 @@ class MainWindow(QMainWindow):
         mid.addWidget(self.progress)
         self.open_out_btn = QPushButton("문제팩 폴더 열기")
         self.open_out_btn.clicked.connect(self.open_out)
-        self.open_report_btn = QPushButton("검수 보고서(웹)")
+        self.open_report_btn = QPushButton("처리 보고서")
         self.open_report_btn.setEnabled(False)
         self.open_report_btn.clicked.connect(lambda: self.report and QDesktopServices.openUrl(QUrl.fromLocalFile(str(self.report))))
         lay.addWidget(self.run_btn)
@@ -619,6 +615,23 @@ class MainWindow(QMainWindow):
         self.picker.set_qnet("ok" if not up else "info", title, lines)
 
     def on_qnet_failed(self, msg: str) -> None:
+        """조회 실패. 전에 받아 둔 이 종목 출제기준(기간 안)이 있으면 그것으로 계속(실기기 2026-11-12: 한 번 받았는데
+        다시 조회가 실패하자 올리기 상자로 막힘) — 없을 때만 올리기 상자."""
+        cert = self.picker.current
+        code = cert.profile if cert else None
+        if code:
+            from .. import qnet
+            try:
+                prof = S.load(code)
+            except Exception:  # noqa: BLE001
+                prof = None
+            if prof and prof.period and not qnet.needs_fetch(code):
+                self._use_profile(code)
+                why = msg.rsplit("(", 1)[-1].rstrip(")") if msg.endswith(")") else ""
+                self.picker.set_qnet("info", f"Q-Net에 연결하지 못해 전에 받은 출제기준을 씁니다 "
+                                     f"({prof.period['from'].replace('-', '.')}~{prof.period['to'].replace('-', '.')})",
+                                     [f"원인: {why}"] if why else [])
+                return
         self.picker.show_failed(msg)
         self.update_ready()
 
@@ -661,7 +674,7 @@ class MainWindow(QMainWindow):
     def on_comcbt_done(self, res) -> None:
         from .. import comcbt
         self.comcbt_hint.setText(f"comcbt.com '{self.picker.current.name if self.picker.current else ''}' 게시판 첫 쪽: "
-                                 f"{comcbt.first_page_text(res)} — 이전 회차는 2-2로 직접 올려 주세요")
+                                 f"{comcbt.first_page_text(res)}")
         if res.saved:
             self.add_paths(res.saved)
         head = f"comcbt.com에서 {len(res.saved)}회차를 받아 목록에 넣었어요" if res.saved else "새로 받을 회차가 없어요"
@@ -1031,15 +1044,15 @@ class MainWindow(QMainWindow):
         rev = sum(r.status == "review" for r in rows)
         err = sum(r.status == "error" for r in rows)
         skip = sum(r.status == "skipped" for r in rows)
-        text = f"끝 — 팩 {ok}개 · 검수 필요 {rev}개 · 오류 {err}개" + (f" · 건너뜀 {skip}개" if skip else "") + \
+        text = f"끝 — 문제팩 {ok}개" + (f" · 만들지 못함 {rev}개" if rev else "") + (f" · 오류 {err}개" if err else "") + \
+               (f" · 건너뜀 {skip}개" if skip else "") + \
                f" · {sec // 60}분 {sec % 60}초"
         units = getattr(self, "unit_summary", "")
-        self.status.setText(text + (f" · {units}" if units else "") + ("  — '검수 필요' 파일을 눌러 확인하세요" if rev else ""))
+        self.status.setText(text + (f" · {units}" if units else ""))
         if self.bundle:
             self.bundle_note.set("ok", f"종목 묶음 저장: {self.bundle.name}",
-                                 [f"이번에 새로 만든 회차 {ok - sum(1 for r in rows if r.prepared and r.prepared.unchanged)}개를 파일 하나에 담았어요.",
-                                  "원큐합격 학습앱(폰·PC 각각)에서 [문제팩 가져오기]로 이 파일을 넣으세요. [문제팩 폴더 열기]로 위치를 볼 수 있어요.",
-                                  "내 휴대폰이나 동료에게는 아래 ④ [문제팩 공유하기]."])
+                                 [f"새로 만든 {ok - sum(1 for r in rows if r.prepared and r.prepared.unchanged)}회차를 파일 하나에 담았어요 — "
+                                  "학습앱 [문제팩 가져오기]로 넣거나 ④ [문제팩 공유하기]로 보내세요."])
         else:
             self.bundle_note.setVisible(False)
         lines = law_summary(self.rows)
@@ -1107,8 +1120,47 @@ class MainWindow(QMainWindow):
         e.accept()
 
 
+def log_dir() -> Path:
+    """오류 기록 폴더(%APPDATA%\\OneQ-Ace\\logs) — 갑자기 꺼진 원인을 다음에 알 수 있게(실기기 2026-11-12)."""
+    from .. import standards as S
+    d = S.user_root().parent / "logs"
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
+def install_error_log() -> None:
+    """처리되지 않은 오류는 기록하고 창으로 알림(꺼지지 않게), 파이썬이 통째로 죽는 경우(faulthandler)도 기록."""
+    import datetime
+    import faulthandler
+    import traceback
+    try:
+        d = log_dir()
+        crash = open(d / "crash.log", "a", encoding="utf-8")  # noqa: SIM115 — 프로그램이 끝날 때까지 열어 둠
+        crash.write(f"\n=== {datetime.datetime.now():%Y-%m-%d %H:%M:%S} 시작 v{__version__} ===\n")
+        crash.flush()
+        faulthandler.enable(crash)
+    except OSError:
+        return
+
+    def hook(kind, value, tb):
+        text = "".join(traceback.format_exception(kind, value, tb))
+        try:
+            with open(d / "error.log", "a", encoding="utf-8") as f:
+                f.write(f"\n=== {datetime.datetime.now():%Y-%m-%d %H:%M:%S} v{__version__} ===\n{text}")
+        except OSError:
+            pass
+        sys.__stderr__ and sys.__stderr__.write(text)
+        try:
+            QMessageBox.warning(None, APP_NAME, f"예상하지 못한 오류가 났어요(프로그램은 계속 씁니다).\n\n"
+                                f"{kind.__name__}: {value}\n\n기록: {d / 'error.log'}")
+        except Exception:  # noqa: BLE001
+            pass
+    sys.excepthook = hook
+
+
 def main() -> None:
     app = QApplication(sys.argv)
+    install_error_log()
     app.setApplicationName(APP_NAME)
     theme.apply(app)
     icon = resource_path("oneq_prep/gui/icon.png")

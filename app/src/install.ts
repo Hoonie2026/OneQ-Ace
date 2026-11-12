@@ -25,11 +25,7 @@ if (typeof window !== 'undefined') {
   });
   window.addEventListener('appinstalled', () => {
     installed = true;
-    try {
-      localStorage.setItem(INSTALLED_KEY, String(Date.now()));
-    } catch {
-      /* 기록 못 해도 이번 화면에서는 안내 */
-    }
+    markInstalling();
     deferred = null;
     notify();
   });
@@ -48,15 +44,46 @@ export function onInstallChange(f: () => void): () => void {
   return () => listeners.delete(f);
 }
 
-/** 설치 창을 띄운다. 설치하면 true */
+/** 설치를 시작한 시각을 남김(새로 고쳐도 '설치하고 있어요' 화면 유지) */
+export function markInstalling(): void {
+  try {
+    if (!localStorage.getItem(INSTALLED_KEY)) localStorage.setItem(INSTALLED_KEY, String(Date.now()));
+  } catch {
+    /* 기록 못 해도 이번 화면에서는 안내 */
+  }
+}
+
+/**
+ * 설치 창을 띄운다. 설치하면 true.
+ * 실기기(2026-11-12, 안드로이드 삼성 인터넷): 설치를 누르는 순간 설치 창 신호가 사라져 화면이 'Chrome으로 설치하세요'로 잠깐
+ * 바뀌었다 → 수락하면 appinstalled를 기다리지 않고 바로 '설치하고 있어요'로(installing 먼저 알림)
+ */
 export async function promptInstall(): Promise<boolean> {
   const e = deferred;
   if (!e) return false;
-  deferred = null;
+  installing = true;
+  notify();
   await e.prompt();
   const r = await e.userChoice.catch(() => ({ outcome: 'dismissed' as const }));
+  installing = false;
+  if (r.outcome === 'accepted') {
+    deferred = null;
+    markInstalling();
+    acceptedInstall = true;
+  }
   notify();
   return r.outcome === 'accepted';
+}
+
+let installing = false;
+let acceptedInstall = false;
+/** 설치 창이 떠 있는 동안(수락 전) — 안내 화면을 바꾸지 않는다 */
+export function installPromptOpen(): boolean {
+  return installing;
+}
+/** 이번 화면에서 설치를 수락했는지(appinstalled 전에도) */
+export function installAccepted(): boolean {
+  return acceptedInstall || installed;
 }
 
 /** 앱 안 브라우저에서 바깥 브라우저로 여는 주소 */

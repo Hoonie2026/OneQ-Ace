@@ -1,5 +1,14 @@
 import { useEffect, useRef, useState } from 'react';
 import { clearPick, markPickStart, PICK_FAIL_MS, PICK_WAIT_NOTE, PICK_WAIT_SHOW_MS, PICK_WAIT_TIP } from '../importFlow';
+import { deviceEnv } from '../util';
+
+/**
+ * 파일 고르기 형식 — 안드로이드 Chrome은 형식이 둘 이상이면 '아무 파일' 선택창(카메라·캠코더·사진 및 동영상)을 띄운다
+ * (Chromium SelectFileDialog: 형식이 정확히 하나일 때만 그 형식의 파일 앱을 연다). 실기기 2026-11-12 → 안드로이드는 하나만.
+ */
+export function packAccept(os: string = deviceEnv().os): string {
+  return os === 'android' ? '.zip' : '.zip,application/zip,application/x-zip-compressed';
+}
 
 /**
  * 문제팩(zip) 파일 선택 버튼. iOS 파일 선택기가 낯선 확장자를 회색 처리하지 않도록 .zip만 지정(5.3).
@@ -63,7 +72,7 @@ export function PackPicker(props: { busy: boolean; onFiles: (files: File[], pick
       <input
         ref={ref}
         type="file"
-        accept=".zip,application/zip,application/x-zip-compressed"
+        accept={packAccept()}
         multiple
         hidden
         disabled={props.busy}

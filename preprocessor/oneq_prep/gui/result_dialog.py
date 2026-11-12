@@ -15,9 +15,15 @@ QTYPE = {"calc": "계산", "law": "기준·법령", "concept": "개념·실무"}
 
 
 def suspects(p) -> list:
-    """학습 엔진 필수 정보(문항 경계·정답·과목)의 의심 문항(ADR 021 6절)."""
-    return [it for it in p.items if [w for w in it.warnings if not w.startswith("info:")] or it.answer is None
-            or (it.suggestion and it.suggestion.suggested != it.suggestion.current)]
+    """학습 엔진 필수 정보(문항 경계·정답·과목)의 의심 문항(ADR 021 6절). 자동으로 뺀 문항은 셈하지 않음(2026-11-12)."""
+    return [it for it in p.items if not it.excluded and (
+        [w for w in it.warnings if not w.startswith("info:")] or it.answer is None
+        or (it.suggestion and it.suggestion.suggested != it.suggestion.current))]
+
+
+def auto_excluded(p) -> list:
+    from ..pack import AUTO_EXCLUDE
+    return [it for it in p.items if it.excluded and it.excluded.startswith(AUTO_EXCLUDE)]
 
 
 def summary(p) -> dict:
@@ -65,21 +71,23 @@ class ResultDialog(QDialog):
         head.setWordWrap(True)
         lay.addWidget(head)
 
-        n_sus = s["suspects"]
-        if n_sus or p.issues:
+        # 검수는 선택(사용자 2026-11-12 — 시험 준비생에게 검수를 요구하지 않음): 정답이 불확실한 문항은 이미 자동으로 뺐다
+        auto = auto_excluded(p)
+        if p.issues:
             note = Note("warn")
-            lines = [x for x in p.issues[:6]]
-            note.set("warn", f"확인할 문항 {n_sus}건" if n_sus else "확인할 것이 있어요", lines)
-            b = QPushButton(f"확인하기 ({n_sus}건)" if n_sus else "확인하기")
-            b.setObjectName("primary")
-            b.clicked.connect(self._review)
-            note.layout().addWidget(b, 0, Qt.AlignLeft)
+            note.set("warn", "이 파일은 문제팩을 만들지 못했어요", p.issues[:4])
             lay.addWidget(note)
         else:
             ok = Note("ok")
-            ok.set("ok", "확인할 문항 없음 — " + ("다른 회차가 끝나면 그대로 팩이 만들어져요" if pending
-                                              else "그대로 팩이 만들어졌어요"), [])
+            ok.set("ok", ("다른 회차가 끝나면 문제팩이 만들어져요" if pending else "문제팩을 만들었어요"),
+                   [f"정답을 확신할 수 없는 {len(auto)}문항은 자동으로 뺐어요: "
+                    + ", ".join(f"{it.no}번" for it in auto[:12]) + (" …" if len(auto) > 12 else "")] if auto else [])
             lay.addWidget(ok)
+        fix = QPushButton("직접 고치기(선택)")
+        fix.setObjectName("link")
+        fix.setToolTip("정답을 아는 경우에만 — 뺀 문항의 정답을 넣거나 과목을 바꿔 다시 만듭니다")
+        fix.clicked.connect(self._review)
+        lay.addWidget(fix, 0, Qt.AlignLeft)
         if pending:
             wait = Note("info")
             wait.set("info", "다른 회차를 처리하는 중이에요",

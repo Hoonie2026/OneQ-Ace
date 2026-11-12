@@ -144,6 +144,12 @@ def test_qnet_result_messages(win):
     win.on_qnet({"code": "CIVIL", "post": post, "upcoming": None, "warnings": [], "same": True})
     assert "최신 출제기준과 같아요" in win.picker.qnet.title.text() and not win.picker.busy.isVisibleTo(win.picker)
     from oneq_prep import qnet
+    from oneq_prep.gui.cert_picker import Cert
+    # 전에 받은 출제기준(기간 안)이 있으면 조회가 실패해도 그것으로 계속(실기기 2026-11-12)
+    win.on_qnet_failed(str(qnet.QnetOffline("TimeoutError")))
+    assert "전에 받은 출제기준" in win.picker.qnet.title.text() and "TimeoutError" in win.picker.qnet.text.text()
+    assert not win.picker.fail.isVisibleTo(win.picker) and win.picker.code == "CIVIL"
+    win.picker.current = Cert("없는종목기사")                      # 받아 둔 것이 없으면 올리기 상자
     win.on_qnet_failed(str(qnet.QnetChanged()))
     assert "화면이 바뀌어" in win.picker.fail.title.text() and "직접 내려받아" in win.picker.fail.text.text()
 

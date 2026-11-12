@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import qrcode from 'qrcode-generator';
-import { appInstalledOnDevice, canPromptInstall, externalOpenUrl, forgetInstalled, installedAt, justInstalled, onInstallChange, promptInstall } from '../install';
+import { appInstalledOnDevice, canPromptInstall, externalOpenUrl, forgetInstalled, installAccepted, installedAt, installPromptOpen, onInstallChange, promptInstall } from '../install';
 import { deviceEnv, deviceNoun, type DeviceEnv } from '../util';
 
 /**
@@ -82,10 +82,16 @@ function guideFor(env: DeviceEnv, canPrompt: boolean, url: string, copy: () => v
                 '시작 메뉴·바탕화면의 원큐합격 아이콘으로 엽니다',
               ]
             : ['이 브라우저는 설치를 지원하지 않습니다 — Chrome 또는 Edge로 이 주소를 엽니다', '주소창 오른쪽의 설치 아이콘을 누릅니다'],
+      // 실기기(2026-11-12): Chrome 설치는 제어판 '프로그램 제거'와 설정 › 설치된 앱 둘 다, Edge 설치는 설정 › 설치된 앱에만 나옴
+      note:
+        env.browser === 'Edge'
+          ? 'Edge로 설치하면 Windows 설정 › 설치된 앱에만 나옵니다. 제어판 「프로그램 제거」 목록에도 보이게 하려면 Chrome으로 이 주소를 열어 설치하세요.'
+          : undefined,
       dismissible: true,
     };
   // 안드로이드에서 Chrome이 아닌 브라우저(Firefox·Edge·웨일 등 — 기본 브라우저면 메일·메신저 링크가 여기로 열림, 실기기 Z4)
-  if (env.browser !== 'Chrome' && !(canPrompt && env.browser === '삼성 인터넷')) {
+  // 삼성 인터넷은 그 자리에서 설치(설치를 누르는 순간 Chrome으로 보내는 화면이 끼어들던 혼선 — 실기기 2026-11-12)
+  if (env.browser !== 'Chrome' && env.browser !== '삼성 인터넷') {
     const ext = externalOpenUrl('other', 'android', url);
     return {
       title: `${dev}에서는 Chrome으로 설치하세요`,
@@ -112,8 +118,8 @@ function guideFor(env: DeviceEnv, canPrompt: boolean, url: string, copy: () => v
             '잠시 뒤 앱 목록과 홈 화면에 원큐합격 아이콘이 생깁니다. 홈 화면에 없으면 앱 목록에서 아이콘을 길게 눌러 「홈 화면에 추가」',
           ]
         : [
-            canPrompt ? '[원큐합격 앱 설치]를 누릅니다' : 'Chrome으로 이 주소를 엽니다(설치가 가장 쉽습니다)',
-            '설치가 끝나면 앱 목록·홈 화면의 원큐합격 아이콘으로 엽니다(홈 화면에 없으면 앱 목록에서 길게 눌러 「홈 화면에 추가」)',
+            canPrompt ? '[원큐합격 앱 설치]를 누르거나, 주소창의 설치 아이콘(↓)을 누릅니다' : '주소창의 설치 아이콘(↓)을 누르거나, 아래 ≡ 메뉴 → 「현재 페이지 추가」 → 「홈 화면」',
+            '설치가 끝나면 앱 목록·홈 화면의 원큐합격 아이콘으로 엽니다',
           ],
     dismissible: true,
   };
@@ -184,6 +190,8 @@ export function InstallGuide(props: { url: string; onCopy: () => void; compact?:
       const ok = await appInstalledOnDevice();
       if (!alive) return;
       if (ok) return setMobileInstall('done');
+      // 설치 확인 기능이 없는 브라우저: 설치 완료 신호(appinstalled)를 받았으면 30초 뒤 완료로
+      if (ok === null && installAccepted() && Date.now() - (installedAt() ?? Date.now()) > 30_000) return setMobileInstall('done');
       // 설치 뒤 5분이 지나도 확인이 안 되면(앱을 지웠거나 설치 실패, 확인 기능이 없는 브라우저) 다시 설치 안내로
       const since = Date.now() - (installedAt() ?? Date.now());
       if (since > 5 * 60_000) {
@@ -200,10 +208,11 @@ export function InstallGuide(props: { url: string; onCopy: () => void; compact?:
   }, [mobileInstall]);
   useEffect(() => {
     const off = onInstallChange(() => {
+      if (installPromptOpen()) return; // 설치 창이 떠 있는 동안은 화면을 그대로(설치 단추가 사라지며 다른 안내로 바뀌던 혼선)
       setCanPrompt(canPromptInstall());
-      if (justInstalled()) {
+      if (installAccepted()) {
         if (env.kind === 'pc') setInstalledNow(true); // PC는 지금 탭이 앱 창으로 옮겨짐
-        else setMobileInstall('pending');
+        else setMobileInstall((m) => (m === 'done' ? m : 'pending'));
       }
     });
     const mq = window.matchMedia?.('(display-mode: standalone)');
@@ -232,18 +241,20 @@ export function InstallGuide(props: { url: string; onCopy: () => void; compact?:
   if (!installedHere && env.kind !== 'pc' && mobileInstall !== 'none') {
     return (
       <section className={`card guide install-guide install-done${props.compact ? '' : ' plain'}`} data-testid={props.testId ?? 'install-guide'} role="status">
-        <h2>{mobileInstall === 'done' ? '설치 완료 — 앱 아이콘으로 여세요' : '설치하고 있습니다(1~2분)'}</h2>
-        <p className="hint">
-          {mobileInstall === 'done'
-            ? `${deviceNoun(env)}의 앱 목록에 원큐합격이 생겼습니다. 지금 이 화면은 앱이 아니라 브라우저입니다.`
-            : '앱 목록에 원큐합격 아이콘이 생기기까지 1~2분 걸릴 수 있습니다. 지금 이 화면은 앱이 아니라 브라우저입니다.'}
-        </p>
-        <ol className="install-steps">
-          <li>이 브라우저 화면을 닫습니다(뒤로 가기, 또는 최근 앱 목록에서 위로 밀기)</li>
-          <li>앱 목록(또는 홈 화면)에서 <b>원큐합격</b> 아이콘을 누릅니다</li>
-          <li>홈 화면에 없으면 앱 목록에서 아이콘을 길게 눌러 「홈 화면에 추가」</li>
-        </ol>
-        <p className="hint">아이콘이 3분이 지나도 안 보이면 이 화면을 새로 고쳐 다시 설치하세요. 브라우저에서 공부해도 기록은 앱과 같은 곳에 저장됩니다.</p>
+        {mobileInstall === 'done' ? (
+          <>
+            <h2>설치 완료</h2>
+            <p className="install-done-lead">앱 목록에서 <b>원큐합격</b> 아이콘을 눌러 여세요.</p>
+            <p className="hint">홈 화면에 두려면 앱 목록에서 아이콘을 길게 눌러 「홈 화면에 추가」. 이 브라우저 화면은 닫아도 됩니다.</p>
+          </>
+        ) : (
+          <>
+            <h2>
+              <span className="spinner" aria-hidden="true" /> 설치하고 있어요
+            </h2>
+            <p className="install-done-lead">잠시만 기다려 주세요(1~2분). 끝나면 이 화면이 「설치 완료」로 바뀝니다.</p>
+          </>
+        )}
       </section>
     );
   }

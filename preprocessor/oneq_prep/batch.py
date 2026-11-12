@@ -71,7 +71,7 @@ class Event:
     units: str = ""                   # 단원 확정 요약(finish) — unitlearn.ApplyStats.summary
 
 
-STATUS_TEXT = {"waiting": "대기", "running": "처리 중", "packed": "팩 생성", "review": "검수 필요",
+STATUS_TEXT = {"waiting": "대기", "running": "처리 중", "packed": "문제팩 생성", "review": "만들지 못함",
                "error": "오류", "skipped": "건너뜀"}
 
 
@@ -251,7 +251,7 @@ def _finish_round(spec: BatchSpec, r: RoundResult, p: Prepared) -> None:
                                                   [it.suggestion for it in p.items if it.suggestion])
             r.review_file = p.review_file
             r.status = "review"
-            r.message = f"검수 필요 {len(p.issues)}건"
+            r.message = p.issues[0] if p.issues else "만들지 못함"
         else:
             r.status, r.message = "skipped", "보고서만"
         return
@@ -260,5 +260,8 @@ def _finish_round(spec: BatchSpec, r: RoundResult, p: Prepared) -> None:
     r.size = p.zip_path.stat().st_size
     r.questions = m["questionCount"]
     r.status = "packed"
-    r.message = f"{m['questionCount']}문항 · 정답 표시 {p.masked}개 제거 · {r.size / 1e6:.2f}MB" + \
+    from .pack import AUTO_EXCLUDE
+    n_auto = sum(1 for it in p.items if it.excluded and it.excluded.startswith(AUTO_EXCLUDE))
+    r.message = f"{m['questionCount']}문항" + (f" · 정답 불확실 {n_auto}문항 뺌" if n_auto else "") + \
+        f" · 정답 표시 {p.masked}개 제거 · {r.size / 1e6:.2f}MB" + \
         (" · 전과 같은 내용(묶음에서 뺌)" if p.unchanged else (f" · 판 {m['packVersion']}" if m["packVersion"] > spec.pack_version else ""))

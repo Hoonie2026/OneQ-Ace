@@ -81,7 +81,8 @@ QLabel#cardStep {{ color: white; background: {PRIMARY}; border-radius: 11px; fon
 /* 작업 순서(① 종목 선택 → ② 기출 PDF 업로드 → ③ 문제팩 만들기 → ④ 문제팩 보내기)와 조건 표시 — 순서 번호(동그라미)와 조건(네모 칩)을 구분.
    ② 안은 번호 상자 대신 두 영역(comcbt.com 최근 기출 받기 / 사용자 직접 올리기, 2026-11-12) */
 QFrame#srcArea {{ background: {SURFACE}; border: 1px solid {LINE}; border-left: 4px solid {PRIMARY}; border-radius: 10px; }}
-QLabel#srcTitle {{ font-size: 15px; font-weight: 700; }}
+QLabel#srcTitle {{ font-size: 18px; font-weight: 800; color: {PRIMARY}; }}
+QLabel#condHead {{ font-size: 14px; font-weight: 700; color: {INK}; }}
 QLabel#listEmpty {{ color: {MUTED}; background: #f8fafc; border: 1px dashed {LINE}; border-radius: 10px; padding: 18px; font-size: 13px; }}
 QFrame#vsep {{ background: {LINE}; }}
 QListWidget#shareList {{ background: {SURFACE}; border: 1px solid {LINE}; border-radius: 10px; padding: 4px; }}

@@ -146,23 +146,36 @@ export function Home(props: {
       .then(() => props.toast('학습앱 주소를 복사했습니다'))
       .catch(() => props.toast(appUrl));
 
+  const header = (
+    <header className="header">
+      <div className="brand">
+        <BrandLogo size={44} />
+        <div>
+          <h1>원큐합격</h1>
+          <p className="sub">{certName ?? '기사·산업기사 필기 기출'}</p>
+        </div>
+      </div>
+      <button className="icon-btn" onClick={props.onSettings} aria-label="백업·설정">
+        <Icon name="settings" size={24} />
+      </button>
+    </header>
+  );
+  // 설치하지 않은 브라우저 화면은 설치 안내만 — 학습 기록이 남아 있어도(앱을 지운 뒤 링크를 다시 연 경우, 실기기 2026-11-12).
+  // 웹앱의 기록은 브라우저 저장소에 있어 앱을 지워도 남는다(안드로이드는 다시 설치하면 이어짐) — 지우는 길은 브라우저 사이트 데이터
+  if (!installed)
+    return (
+      <div className="app">
+        {header}
+        <InstallGuide compact main url={appUrl} onCopy={copyUrl} />
+      </div>
+    );
+
   return (
     <div className="app">
       {/* v0.9.1(design-upgrade-guide 작업 2): 홈 안 보기(예상 점수 계산·추천·과목별·모의고사·학습 원리)에서는 [‹ 홈] 제목 머리 하나만 — 로고 머리와 2층으로 겹쳤다 */}
       {!inSub && (
         <>
-          <header className="header">
-            <div className="brand">
-              <BrandLogo size={44} />
-              <div>
-                <h1>원큐합격</h1>
-                <p className="sub">{certName ?? '기사·산업기사 필기 기출'}</p>
-              </div>
-            </div>
-            <button className="icon-btn" onClick={props.onSettings} aria-label="백업·설정">
-              <Icon name="settings" size={24} />
-            </button>
-          </header>
+          {header}
 
           {certs.length > 1 && (
             <label className="cert-select">
@@ -177,13 +190,11 @@ export function Home(props: {
             </label>
           )}
 
-          {/* 브라우저 화면: 이 기기에 학습앱 설치가 메인(설치 내용만). 설치한 앱에서는 안 보임 */}
-          {!installed && <InstallGuide compact main={empty} url={appUrl} onCopy={copyUrl} />}
         </>
       )}
 
       {/* 설치한 앱을 처음 열면: 문제팩 가져오기가 메인, 그 아래 서브로 문제팩 생성기(PC만 받기 링크, 휴대폰은 안내 문구만) */}
-      {empty && installed && (
+      {empty && (
         <section className="card empty first-run" data-testid="empty-home">
           <h2>문제팩 가져오기</h2>
           <p>

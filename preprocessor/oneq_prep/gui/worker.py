@@ -43,7 +43,12 @@ class QnetWorker(QObject):
         from .. import qnet
         try:
             if self.fetch:
-                got = qnet.fetch_standard(self.cert_name, self.code)
+                try:
+                    got = qnet.fetch_standard(self.cert_name, self.code)
+                except qnet.QnetOffline:          # 잠깐 끊김·시간 초과는 한 번 더(실기기 2026-11-12)
+                    import time
+                    time.sleep(2)
+                    got = qnet.fetch_standard(self.cert_name, self.code)
                 self.done.emit({"kind": "fetched", "code": got.profile_path.stem, "post": got.post,
                                 "upcoming": got.upcoming, "warnings": got.warnings})
             else:
