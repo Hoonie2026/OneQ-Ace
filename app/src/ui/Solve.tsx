@@ -404,6 +404,12 @@ export function Solve(props: { target: Target; /** 나가기 — 과목별 학�
                   {attempt.chosen !== 0 && !chosenOk && ` · 내 답 ${CIRCLED[attempt.chosen]}`}
                 </span>
               </p>
+              {q.flags?.includes('answer-unsure') && (
+                // ADR 024 B(사용자 2026-11-12): 원본에서 정답을 확실히 읽지 못했고 다른 회차와도 맞춰 보지 못한 문항 — 학습 중에 확인하도록
+                <p className="unsure-note" data-testid="answer-unsure">
+                  ⚠ 정답 확인 필요 — 원본에서 정답을 확실히 읽지 못한 문항이에요{(q.acceptAlso ?? []).length ? '(표시된 번호 모두 정답으로 인정)' : ''}. 아래 [웹검색]이나 교재로 정답을 확인해 보세요.
+                </p>
+              )}
               {!noteOpen && (note || otherNote) && (
                 <div className="memo-box" data-testid="memo-box">
                   <span className="memo-label">{note ? '내 메모' : '다른 회차 같은 문항 메모'}</span>

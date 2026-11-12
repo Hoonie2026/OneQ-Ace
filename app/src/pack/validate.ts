@@ -45,7 +45,7 @@ export interface PackQuestion {
   answer: number;
   acceptAlso?: number[];
   choiceCount: number;
-  answerSource: 'inline-mark' | 'answer-table' | 'manual';
+  answerSource: 'inline-mark' | 'answer-table' | 'manual' | 'cross-check';
   answerCheck: 'agree' | 'single' | 'corrected';
   img: string;
   imgSize: [number, number];

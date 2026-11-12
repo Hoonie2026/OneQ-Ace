@@ -213,6 +213,9 @@ def run_batch(spec: BatchSpec, on_event: Callable[[Event], None] | None = None,
 
     ready = [i for i, r in enumerate(rows) if r.status == "running" and r.prepared is not None]
     unit_summary = ""
+    if ready:                                   # 정답을 믿을 수 없는 문항 → 다른 회차의 같은 문항으로 교차 확인(ADR 024 C)
+        from . import crosscheck
+        crosscheck.apply([rows[i].prepared for i in ready], spec.out, prof.code)
     if ready and spec.learn_units:
         for i in ready:
             on_stage(str(rows[i].pdf), "단원 학습")
@@ -262,6 +265,9 @@ def _finish_round(spec: BatchSpec, r: RoundResult, p: Prepared) -> None:
     r.status = "packed"
     from .pack import AUTO_EXCLUDE
     n_auto = sum(1 for it in p.items if it.excluded and it.excluded.startswith(AUTO_EXCLUDE))
-    r.message = f"{m['questionCount']}문항" + (f" · 정답 불확실 {n_auto}문항 뺌" if n_auto else "") + \
+    n_flag = sum(1 for it in p.items if not it.excluded and "answer-unsure" in it.flags)
+    n_cross = sum(1 for it in p.items if not it.excluded and it.answer_source == "cross-check")
+    r.message = f"{m['questionCount']}문항" + (f" · 교차 확인 {n_cross}" if n_cross else "") + \
+        (f" · 정답 확인 필요 {n_flag}" if n_flag else "") + (f" · 뺌 {n_auto}" if n_auto else "") + \
         f" · 정답 표시 {p.masked}개 제거 · {r.size / 1e6:.2f}MB" + \
         (" · 전과 같은 내용(묶음에서 뺌)" if p.unchanged else (f" · 판 {m['packVersion']}" if m["packVersion"] > spec.pack_version else ""))

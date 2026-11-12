@@ -85,6 +85,7 @@ QLabel#srcTitle {{ font-size: 18px; font-weight: 800; color: {PRIMARY}; }}
 QLabel#condHead {{ font-size: 14px; font-weight: 700; color: {INK}; }}
 QLabel#listEmpty {{ color: {MUTED}; background: #f8fafc; border: 1px dashed {LINE}; border-radius: 10px; padding: 18px; font-size: 13px; }}
 QFrame#vsep {{ background: {LINE}; }}
+QCheckBox#certCheck {{ font-size: 15px; padding: 4px 0; }}
 QListWidget#shareList {{ background: {SURFACE}; border: 1px solid {LINE}; border-radius: 10px; padding: 4px; }}
 QListWidget#shareList::item {{ padding: 8px 6px; border-bottom: 1px solid #edf1f6; }}
 QListWidget#shareList::item:selected {{ background: {PRIMARY_SOFT}; color: {INK}; }}

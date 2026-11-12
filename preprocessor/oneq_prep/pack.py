@@ -32,6 +32,7 @@ from .render import (crop_question, mark_leaks, mask_filled_labels, mask_ocr_fil
 
 REVIEW_DIR = "review"
 REASSIGN_MIN_CONF = 0.6     # 이 이상인 재배정 제안만 자동 적용(낮으면 시험지 과목 그대로), 보고서에서 낮은 것은 강조
+LEAK_DOUBT = "정답 표시가 남아 보임"
 AUTO_EXCLUDE = "자동 제외: "  # 정답을 믿을 수 없어 뺀 문항의 사유 머리(manifest.excluded reason "other")
 
 
@@ -47,7 +48,7 @@ def unsure_answer(it: "Item", leak) -> str | None:
     if re.search(r"정답 표시 \d+개", w):
         return AUTO_EXCLUDE + "정답 표시가 여러 개"
     if leak:
-        return AUTO_EXCLUDE + "정답 표시가 남아 보임"
+        return AUTO_EXCLUDE + LEAK_DOUBT
     return None
 
 
@@ -142,6 +143,8 @@ class Item:
     sequence: bool = False
     unsure: list[str] = field(default_factory=list)     # 자동 판정 확신 낮음("unit"/"qtype")
     unit_candidates: list[str] = field(default_factory=list)   # 단원 미정 → 앱에서 학습자가 고르는 후보(최대 3)
+    doubt: str | None = None      # 정답을 믿을 수 없는 이유(ADR 024) — 교차 확인(C) → 안 되면 표시(B) 또는 제외
+    alts: list[int] = field(default_factory=list)       # 다른 정답 후보(정답표 값·여러 표시) — 표시(B)일 때 함께 인정
 
 
 @dataclass
@@ -351,11 +354,20 @@ def prepare(pdf_path: Path, profile: S.Profile, out_dir: Path,
                 and it.suggestion.confidence >= REASSIGN_MIN_CONF and profile.std_index(it.suggestion.suggested):
             it.subject = it.suggestion.suggested                    # 구기준 회차: 확신 있는 제안은 자동 재배정(검수 없음)
             it.flags.append("subject-reassigned")
-        # 정답을 믿을 수 없는 문항은 자동으로 뺀다(잘못된 정답으로 공부하는 것보다 낫다 — 5~10년치라 몇 문항은 빠져도 됨)
+        # 정답을 믿을 수 없는 문항(ADR 024, 사용자 2026-11-12): 우선 표시만 해 두고 —
+        # 다른 회차의 같은 문항과 교차 확인(C, crosscheck.apply) → 안 되면 '정답 확인 필요'로 넣거나(B) 정답이 없으면 뺀다(settle_doubts)
         if it.excluded is None and q.no not in answers:
             why = unsure_answer(it, leaks.get(q.no))
             if why:
-                it.excluded = why
+                it.doubt = why[len(AUTO_EXCLUDE):]
+                marks = re.search(r"정답 표시 \d+개: \[([\d, ]+)\]", " ".join(warn))
+                if marks:
+                    nums = [int(x) for x in re.findall(r"\d+", marks.group(1))]
+                    if it.answer is None and nums:
+                        it.answer = nums[0]
+                    it.alts = [x for x in nums if x != it.answer]
+                if table and inline and table != inline:
+                    it.alts = sorted(set(it.alts) | {table})
         items.append(it)
 
     step("분류")
@@ -367,11 +379,6 @@ def prepare(pdf_path: Path, profile: S.Profile, out_dir: Path,
     note = classify_note(items, profile)
     if note:
         notes.append(note)
-    auto = [it for it in items if it.excluded and it.excluded.startswith(AUTO_EXCLUDE)]
-    if auto:
-        notes.append(f"정답을 확신할 수 없어 자동으로 뺀 문항 {len(auto)}개: "
-                     + ", ".join(f"{it.no}번({it.excluded[len(AUTO_EXCLUDE):]})" for it in auto[:8])
-                     + (" …" if len(auto) > 8 else ""))
     n_ex = sum(1 for it in items if it.excluded)
     if n_ex:
         notes.append(f"제외 {n_ex}문항")
@@ -426,9 +433,34 @@ def _classify_items(items: list[Item], profile: S.Profile, review: dict) -> None
 
 # ───────────────────────── 팩 쓰기 ─────────────────────────
 
+def settle_doubts(p: "Prepared") -> None:
+    """교차 확인(C) 뒤에도 남은 '정답을 믿을 수 없는' 문항(ADR 024, 사용자 2026-11-12):
+    정답 후보가 있으면 넣고 flags "answer-unsure"(학습앱이 답한 뒤 '정답 확인 필요' 안내, 다른 후보도 정답 인정) — B,
+    정답 후보가 없거나 보기 수를 벗어나면 뺀다. 여러 번 불러도 같다."""
+    marked, dropped = [], []
+    for it in p.items:
+        if not it.doubt or it.excluded:
+            continue
+        if it.answer is None or not 1 <= it.answer <= it.choice_count or it.doubt == LEAK_DOUBT:
+            it.excluded = AUTO_EXCLUDE + it.doubt                 # 정답 표시가 그림에 남은 문항은 정답이 새므로 뺌
+            dropped.append(it)
+            continue
+        if "answer-unsure" not in it.flags:
+            it.flags.append("answer-unsure")
+            it.accept_also = sorted({x for x in it.accept_also + it.alts if x != it.answer and 1 <= x <= it.choice_count})
+            marked.append(it)
+    if marked:
+        p.notes.append(f"정답 확인 필요로 넣은 문항 {len(marked)}개(학습앱이 답한 뒤 안내): "
+                       + ", ".join(f"{it.no}번({it.doubt})" for it in marked[:8]) + (" …" if len(marked) > 8 else ""))
+    if dropped:
+        p.notes.append(f"정답이 없어 뺀 문항 {len(dropped)}개: "
+                       + ", ".join(f"{it.no}번({it.doubt})" for it in dropped[:8]) + (" …" if len(dropped) > 8 else ""))
+
+
 def write_pack(p: Prepared, out_dir: Path, prepared_by: str, source_type: str | None = None,
                source_origin: str = "", pack_version: int = 1) -> tuple[Path, dict]:
     """source_type·source_origin을 비우면 문서에서 읽은 출처(ADR 021 6절)."""
+    settle_doubts(p)
     prof = p.profile
     kept = [it for it in p.items if not it.excluded]
     std_order = {s["name"]: i + 1 for i, s in enumerate(prof.subjects)}

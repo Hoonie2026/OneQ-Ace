@@ -11,19 +11,27 @@ import { asInstalledApp } from './fixtures';
 
 const EDGE = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/156.0.0.0 Safari/537.36 Edg/156.0.0.0';
 const ANDROID = 'Mozilla/5.0 (Linux; Android 14; SM-S918N) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/156.0.0.0 Mobile Safari/537.36';
+const CHROME_PC = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/156.0.0.0 Safari/537.36';
 const SAMSUNG = 'Mozilla/5.0 (Linux; Android 14; SM-S918N) AppleWebKit/537.36 (KHTML, like Gecko) SamsungBrowser/27.0 Chrome/125.0.0.0 Mobile Safari/537.36';
 const FIREFOX_TABLET_DESKTOP = 'Mozilla/5.0 (X11; Linux x86_64; rv:144.0) Gecko/20100101 Firefox/144.0';
 
 test('설치 루트: 브라우저는 설치 안내만(PC·모바일 탭), 설치한 앱의 첫 화면은 문제팩 가져오기 + 생성기 서브(PC만 링크)', async ({ browser }, info) => {
   test.skip(info.project.name !== 'pixel', '한 번만');
   // ① PC 브라우저: 설치 안내만
-  const pc = await browser.newContext({ viewport: { width: 1366, height: 768 }, userAgent: EDGE });
+  // PC는 Chrome 하나로(사용자 2026-11-12 — Edge 설치는 제어판 목록에 안 나옴): Edge로 열면 Chrome으로 옮기라는 안내만
+  const edge = await browser.newContext({ viewport: { width: 1366, height: 768 }, userAgent: EDGE });
+  const pe = await edge.newPage();
+  await pe.goto('./');
+  await expect(pe.getByTestId('install-guide')).toContainText('PC에서는 Chrome으로 설치하세요');
+  await expect(pe.getByTestId('copy-for-chrome')).toBeVisible();
+  await expect(pe.getByTestId('install-guide')).not.toContainText('edge://');
+  await edge.close();
+  const pc = await browser.newContext({ viewport: { width: 1366, height: 768 }, userAgent: CHROME_PC });
   const p1 = await pc.newPage();
   await p1.goto('./');
   const g1 = p1.getByTestId('install-guide');
   await expect(g1).toContainText('PC에 원큐합격 학습앱 설치');
-  await expect(g1).toContainText('바탕 화면 바로 가기');
-  await expect(g1).toContainText('제어판'); // Edge 설치는 설정 › 설치된 앱에만 → Chrome 권장 안내
+  await expect(g1).not.toContainText('Edge');
   await expect(g1.getByText('나중에')).toHaveCount(0); // 첫 화면 메인은 숨기기 없음
   await expect(p1.getByTestId('install-tab-pc')).toHaveAttribute('aria-selected', 'true');
   await expect(p1.getByTestId('empty-home')).toHaveCount(0); // 설치 안내에는 문제팩 가져오기 없음
@@ -38,7 +46,7 @@ test('설치 루트: 브라우저는 설치 안내만(PC·모바일 탭), 설치
   await pc.close();
 
   // ② PC 학습앱(설치한 앱) 첫 실행: 문제팩 가져오기 메인 + 생성기 받기 서브
-  const pcApp = await browser.newContext({ viewport: { width: 1366, height: 768 }, userAgent: EDGE });
+  const pcApp = await browser.newContext({ viewport: { width: 1366, height: 768 }, userAgent: CHROME_PC });
   await pcApp.addInitScript(asInstalledApp);
   const p2 = await pcApp.newPage();
   await p2.goto('./');

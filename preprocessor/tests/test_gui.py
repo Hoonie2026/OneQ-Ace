@@ -177,46 +177,59 @@ def test_comcbt_button_adds_files_and_guides(win, qtbot, tmp_path, monkeypatch):
 
 
 def test_share_dialog(win, tmp_path, monkeypatch):
-    """④ [문제팩 공유하기](사용자 2026-11-12): 학습앱·생성기 안내 없이 문제팩만 — 폴더에서 여러 개(또는 여러 번 나눠) 고르고
-    [선택 완료 · 메시지 복사] → 메시지가 클립보드에, [문제팩 파일 복사]로 파일 자체(Ctrl+V 첨부)."""
-    from PySide6.QtWidgets import QApplication, QLabel, QPlainTextEdit
+    """④ [문제팩 공유하기](사용자 2026-11-12): 학습앱·생성기 안내 없이 문제팩만 — 종목에 체크하면 그 종목의 **모든 회차**를
+    묶음 하나로 새로 만들어(예전 일부 묶음은 지움) [선택 완료 · 메시지 복사] → 메시지가 클립보드에, [문제팩 파일 복사]로 파일 자체."""
+    import json
+    import zipfile
+
+    from PySide6.QtWidgets import QApplication, QCheckBox, QLabel, QPlainTextEdit
 
     from oneq_prep.appinfo import APP_URL
     from oneq_prep.batch import RoundResult
     from oneq_prep.gui import share_dialog as sd
 
     win.out_dir = tmp_path
-    a = tmp_path / "oneq-SAFETY-bundle-2020-2022.zip"
-    b = tmp_path / "oneq-SAFETY-2022-2.zip"
-    for f in (a, b):
-        f.write_bytes(b"z" * 2048)
+
+    def pack(pid):
+        f = tmp_path / f"oneq-{pid}.zip"
+        with zipfile.ZipFile(f, "w") as z:
+            z.writestr("manifest.json", json.dumps({"packId": pid}))
+        return f
+    r1, r2, r3, c1 = pack("SAFETY-2020-1"), pack("SAFETY-2021-2"), pack("SAFETY-2022-2"), pack("CIVIL-2022-1")
+    old = tmp_path / "oneq-SAFETY-bundle-2022-2022.zip"                          # 지난번에 새로 만든 회차만 든 묶음
+    old.write_bytes(b"z")
     shown = []
     monkeypatch.setattr(sd.ShareDialog, "exec", lambda self: shown.append(self) or 0)
     win.show_share()
     d = shown[0]
     assert d.windowTitle() == "문제팩 공유하기"
     labels = " ".join(q.text() for q in d.findChildren(QLabel))
-    assert "문제팩 폴더" in labels and "oneq-" in labels                          # 폴더를 열어 파일을 고르라는 안내
+    assert "종목에 체크" in labels
     assert "학습앱 설치" not in labels and "생성기" not in labels and APP_URL not in labels
-    assert not d.done_btn.isEnabled() and not d.result.isVisibleTo(d)
-    picks = iter([[str(a)], [str(b), str(a)]])                                   # 한 번에 하나씩 두 번(같은 파일은 한 번만)
-    monkeypatch.setattr(sd.QFileDialog, "getOpenFileNames", lambda *x, **k: (next(picks), ""))
-    d.pick()
-    d.pick()
-    assert d.list.paths() == [a, b] and d.done_btn.isEnabled() and "2개" in d.count.text()
+    checks = {cb.text().split(" — ")[0]: cb for cb in d.findChildren(QCheckBox)}
+    assert set(checks) == {"건설안전기사", "토목기사"} and "3회차 · 2020~2022년" in checks["건설안전기사"].text()
+    checks["건설안전기사"].setChecked(True)
+    checks["토목기사"].setChecked(False)
+    assert d.done_btn.isEnabled() and not d.result.isVisibleTo(d)
     d.done_btn.click()
+    full = tmp_path / "oneq-SAFETY-bundle-2020-2022.zip"
+    assert d.list.paths() == [full] and not old.exists()
+    assert sorted(zipfile.ZipFile(full).namelist()) == sorted(f.name for f in (r1, r2, r3))
     msg = d.findChild(QPlainTextEdit, "msg_pack").toPlainText()
     assert QApplication.clipboard().text() == msg and d.result.isVisibleTo(d) and d.shared
-    assert a.name in msg and b.name in msg and "건설안전기사 2020~2022년 묶음" in msg and "2022년 2회" in msg
+    assert full.name in msg and "건설안전기사 2020~2022년 묶음" in msg
     assert "http" not in msg and "학습앱" not in msg and "생성기" not in msg       # 순수하게 문제팩만
     d.copy_files_btn.click()
     urls = [u.toLocalFile() for u in QApplication.clipboard().mimeData().urls()]
-    assert [Path(u) for u in urls] == [a, b]
+    assert [Path(u) for u in urls] == [full]
     md = d.list.mimeData([d.list.item(0)])                                       # 목록에서 끌어다 놓기 = 파일
-    assert [Path(u.toLocalFile()) for u in md.urls()] == [a]
+    assert [Path(u.toLocalFile()) for u in md.urls()] == [full]
+    monkeypatch.setattr(sd.QFileDialog, "getOpenFileNames", lambda *x, **k: ([str(c1)], ""))
+    d.pick()                                                                     # 보조: 파일 직접 고르기
+    assert c1 in d.list.paths()
     win.shared = True                                                            # ④까지 하면 작업 순서 끝(앞 단계가 끝났을 때)
-    win.picker.current, win.bundle = win.picker.current, a
-    win.rows = [RoundResult(pdf=a, pack_id="SAFETY-2022-1", status="packed")]
+    win.bundle = full
+    win.rows = [RoundResult(pdf=r1, pack_id="SAFETY-2022-1", status="packed")]
     assert win.flow_state() == ["done", "done", "done", "done"]
 
 
@@ -387,3 +400,25 @@ def test_comcbt_hint_round_count(win):
     win.on_comcbt_done(comcbt.Result("nj", posts, [], skipped=["a", "b"]))
     assert "2회차 · 2016년 5월 ~ 2022년 4월" in win.comcbt_hint.text()
     assert comcbt.first_page_text(comcbt.Result("nj", [])) == "첫 쪽에 필기 기출 글이 없어요"
+
+
+def test_reset_all_keeps_source_pdfs(win, tmp_path, monkeypatch):
+    """도움말 › 처음 상태로 되돌리기(사용자 2026-11-12): 출제기준·문제팩·처리 보고서·오류 기록만 지우고 기출 PDF는 남김."""
+    from oneq_prep.gui import app as appmod
+    home = tmp_path / "home"
+    monkeypatch.setenv("ONEQ_PREP_HOME", str(home))
+    for f in ("standards/Q1.json", "qnet/Q1-1-1.pdf", "logs/error.log"):
+        (home / f).parent.mkdir(parents=True, exist_ok=True)
+        (home / f).write_text("x")
+    win.out_dir = tmp_path / "packs"
+    (win.out_dir / "review" / "Q1-2020-1").mkdir(parents=True)
+    (win.out_dir / "oneq-Q1-2020-1.zip").write_text("x")
+    src = win.out_dir / "기출 PDF" / "종목" / "a.pdf"
+    src.parent.mkdir(parents=True)
+    src.write_text("x")
+    assert len(win.reset_targets()) == 5
+    monkeypatch.setattr(appmod.QMessageBox, "question", lambda *a, **k: appmod.QMessageBox.Yes)
+    win.reset_all()
+    assert src.exists() and not (win.out_dir / "review").exists() and not list(win.out_dir.glob("oneq-*.zip"))
+    assert not list((home / "standards").iterdir()) and not list((home / "qnet").iterdir())
+    assert win.picker.current is None and "처음 상태" in win.status.text()

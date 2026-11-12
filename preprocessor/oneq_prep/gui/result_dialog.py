@@ -79,9 +79,19 @@ class ResultDialog(QDialog):
             lay.addWidget(note)
         else:
             ok = Note("ok")
-            ok.set("ok", ("다른 회차가 끝나면 문제팩이 만들어져요" if pending else "문제팩을 만들었어요"),
-                   [f"정답을 확신할 수 없는 {len(auto)}문항은 자동으로 뺐어요: "
-                    + ", ".join(f"{it.no}번" for it in auto[:12]) + (" …" if len(auto) > 12 else "")] if auto else [])
+            flag = [it for it in p.items if not it.excluded
+                    and ("answer-unsure" in getattr(it, "flags", []) or getattr(it, "doubt", None))]
+            cross = [it for it in p.items if not it.excluded and getattr(it, "answer_source", "") == "cross-check"]
+            lines = []
+            if cross:
+                lines.append(f"다른 회차의 같은 문항으로 정답을 맞춘 문항 {len(cross)}개")
+            if flag:
+                lines.append(f"'정답 확인 필요'로 넣은 문항 {len(flag)}개(학습앱이 답한 뒤 확인하도록 안내): "
+                             + ", ".join(f"{it.no}번" for it in flag[:12]) + (" …" if len(flag) > 12 else ""))
+            if auto:
+                lines.append(f"정답이 없어 뺀 문항 {len(auto)}개: " + ", ".join(f"{it.no}번" for it in auto[:12])
+                             + (" …" if len(auto) > 12 else ""))
+            ok.set("ok", ("다른 회차가 끝나면 문제팩이 만들어져요" if pending else "문제팩을 만들었어요"), lines)
             lay.addWidget(ok)
         fix = QPushButton("직접 고치기(선택)")
         fix.setObjectName("link")

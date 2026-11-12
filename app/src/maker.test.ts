@@ -27,3 +27,14 @@ describe('문제팩 생성기 받기(D1, 설치 루트 재설계)', () => {
     expect(MAKER_SETUP_ASSET).toBe('OneQ-PackMaker-Setup.exe');
   });
 });
+
+describe('문제팩 고르기 형식(실기기 2026-11-12)', () => {
+  it('안드로이드만 하나(.zip), 아이폰·아이패드·PC는 그대로(아이폰은 실기기에서 문제없음)', async () => {
+    const { packAccept } = await import('./ui/PackPicker');
+    expect(packAccept('android')).toBe('.zip');
+    expect(packAccept('ios')).toBe('.zip,application/zip,application/x-zip-compressed');
+    expect(packAccept('windows')).toBe('.zip,application/zip,application/x-zip-compressed');
+    // 아이패드 데스크톱 모드(맥 UA + 터치)도 ios로 판정되어 그대로
+    expect(deviceEnv('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15', 5, false).os).toBe('ios');
+  });
+});

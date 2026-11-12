@@ -13,6 +13,10 @@ export interface FakeQ {
   qtype?: 'calc' | 'law' | 'concept';
   sequence?: boolean;
   lawRefs?: string[];
+  /** ADR 024: 'answer-unsure' 등 */
+  flags?: string[];
+  acceptAlso?: number[];
+  answerSource?: 'inline-mark' | 'answer-table' | 'manual' | 'cross-check';
 }
 
 const enc = (o: unknown) => new TextEncoder().encode(JSON.stringify(o));
@@ -51,7 +55,8 @@ export async function makePack(opts: { code?: string; year?: number; round?: num
       noInSubject: counters.get(s)!,
       answer: q.answer ?? 1,
       choiceCount: 4,
-      answerSource: 'answer-table',
+      answerSource: q.answerSource ?? 'answer-table',
+      ...(q.acceptAlso ? { acceptAlso: q.acceptAlso } : {}),
       answerCheck: 'single',
       img,
       imgSize: [8, 8],
@@ -60,7 +65,7 @@ export async function makePack(opts: { code?: string; year?: number; round?: num
       keywords: [],
       lawRefs: q.lawRefs ?? [],
       clusterId: null,
-      flags: q.lawRefs?.length ? ['law'] : [],
+      flags: [...(q.lawRefs?.length ? ['law'] : []), ...(q.flags ?? [])],
       ...(q.unit ? { unit: q.unit } : {}),
       ...(q.unitCandidates ? { unitCandidates: q.unitCandidates } : {}),
       ...(q.qtype ? { qtype: q.qtype } : {}),

@@ -169,7 +169,7 @@
           "description": "복수정답·전항정답 처리된 문항의 추가 인정 번호"
         },
         "choiceCount": { "type": "integer", "minimum": 2, "maximum": 5 },
-        "answerSource": { "enum": ["inline-mark", "answer-table", "manual"], "description": "정답을 어디서 읽었는지" },
+        "answerSource": { "enum": ["inline-mark", "answer-table", "manual", "cross-check"], "description": "정답을 어디서 읽었는지(cross-check: 다른 회차의 같은 문항으로 교차 확인, ADR 024)" },
         "answerCheck": { "enum": ["agree", "single", "corrected"], "description": "agree: 보기 표시와 정답표가 일치 / single: 한쪽만 있음 / corrected: 불일치를 사람이 검수해 확정" },
         "img": { "type": "string", "pattern": "^images/[A-Za-z0-9_-]+\\.webp$", "description": "정답 표시를 지운 문항 전체 이미지(지문+보기)" },
         "imgSize": {
@@ -192,7 +192,7 @@
         "flags": {
           "type": "array",
           "uniqueItems": true,
-          "items": { "enum": ["law", "has-figure", "spans-column", "stem-has-circled-glyph", "needs-review", "subject-reassigned", "ocr"] }
+          "items": { "enum": ["law", "has-figure", "spans-column", "stem-has-circled-glyph", "needs-review", "subject-reassigned", "ocr", "answer-unsure"] }
         }
       }
     },

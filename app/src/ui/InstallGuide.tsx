@@ -61,34 +61,29 @@ function guideFor(env: DeviceEnv, canPrompt: boolean, url: string, copy: () => v
       dismissible: false,
     };
   }
-  if (env.kind === 'pc')
-    // 사용자 2026-11-12: PC도 Chrome·Edge 정식 설치(PWA)로 통일 — 바탕화면·시작 메뉴 아이콘, Windows 설정 › 앱에 올라가 거기서 제거
+  if (env.kind === 'pc') {
+    // PC는 Chrome 설치 하나로(사용자 2026-11-12): Chrome 설치만 제어판 「프로그램 제거」와 설정 › 설치된 앱 모두에 나온다
+    if (env.browser !== 'Chrome')
+      return {
+        title: 'PC에서는 Chrome으로 설치하세요',
+        lead: `지금은 ${env.browser === '브라우저' ? '다른 브라우저' : env.browser}에서 열렸습니다. 원큐합격은 Chrome으로 설치합니다.`,
+        action: { label: '주소 복사', run: copy, testId: 'copy-for-chrome' },
+        steps: ['[주소 복사]를 누릅니다', 'Chrome을 열고 주소창에 붙여 넣은 뒤(Ctrl+V) Enter', 'Chrome 화면의 [PC에 설치]를 누릅니다'],
+        note: 'Chrome이 없으면 google.com/chrome 에서 먼저 설치하세요.',
+        dismissible: false,
+      };
     return {
       title: 'PC에 원큐합격 학습앱 설치',
-      lead: '설치하면 Windows 앱 목록(시작 메뉴)과 바탕화면에 원큐합격 아이콘이 생기고, 창으로 열립니다. Windows 설정 › 앱에서 지울 수 있고, 실행은 인터넷이 필요 없으며 학습 기록은 이 PC에 저장됩니다.',
+      lead: '설치하면 시작 메뉴와 바탕화면에 원큐합격 아이콘이 생기고 창으로 열립니다. 학습 기록은 이 PC에 저장됩니다.',
       action: canPrompt ? { label: 'PC에 설치', run: install, testId: 'install-app' } : undefined,
-      steps:
-        env.browser === 'Edge'
-          ? [
-              canPrompt ? '[PC에 설치]를 누르거나, 주소창 오른쪽의 「앱 사용 가능」 아이콘 · ⋯ → 앱 → 「이 사이트를 앱으로 설치」' : '주소창 오른쪽의 「앱 사용 가능」 아이콘을 누르거나, ⋯ → 앱 → 「이 사이트를 앱으로 설치」',
-              '「설치」를 누릅니다',
-              '설치 뒤 뜨는 창에서 「시작에 고정」과 「바탕 화면 바로 가기 만들기」를 켜 둔 채 「허용」을 누릅니다(창이 지나갔으면 주소창에 edge://apps → 원큐합격 「세부 정보」에서 켭니다)',
-              '시작 메뉴·바탕화면의 원큐합격 아이콘으로 엽니다',
-            ]
-          : env.browser === 'Chrome' || env.browser === '웨일'
-            ? [
-                canPrompt ? '[PC에 설치]를 누르거나, 주소창 오른쪽 끝의 설치 아이콘(모니터 모양)' : '주소창 오른쪽 끝의 설치 아이콘(모니터 모양)을 누릅니다',
-                '「설치」를 누릅니다 — 시작 메뉴(Windows 앱 목록)와 바탕화면에 원큐합격 아이콘이 생깁니다',
-                '시작 메뉴·바탕화면의 원큐합격 아이콘으로 엽니다',
-              ]
-            : ['이 브라우저는 설치를 지원하지 않습니다 — Chrome 또는 Edge로 이 주소를 엽니다', '주소창 오른쪽의 설치 아이콘을 누릅니다'],
-      // 실기기(2026-11-12): Chrome 설치는 제어판 '프로그램 제거'와 설정 › 설치된 앱 둘 다, Edge 설치는 설정 › 설치된 앱에만 나옴
-      note:
-        env.browser === 'Edge'
-          ? 'Edge로 설치하면 Windows 설정 › 설치된 앱에만 나옵니다. 제어판 「프로그램 제거」 목록에도 보이게 하려면 Chrome으로 이 주소를 열어 설치하세요.'
-          : undefined,
+      steps: [
+        canPrompt ? '[PC에 설치]를 누르거나, 주소창 오른쪽 끝의 설치 아이콘(모니터 모양)' : '주소창 오른쪽 끝의 설치 아이콘(모니터 모양)을 누릅니다',
+        '「설치」를 누릅니다',
+        '시작 메뉴·바탕화면의 원큐합격 아이콘으로 엽니다',
+      ],
       dismissible: true,
     };
+  }
   // 안드로이드에서 Chrome이 아닌 브라우저(Firefox·Edge·웨일 등 — 기본 브라우저면 메일·메신저 링크가 여기로 열림, 실기기 Z4)
   // 삼성 인터넷은 그 자리에서 설치(설치를 누르는 순간 Chrome으로 보내는 화면이 끼어들던 혼선 — 실기기 2026-11-12)
   if (env.browser !== 'Chrome' && env.browser !== '삼성 인터넷') {
@@ -134,7 +129,7 @@ function otherGuide(target: Platform): Guide {
       title: 'PC(Windows)에 설치하려면',
       steps: [
         'PC에서 이 학습앱 주소를 엽니다 — 아래 [주소 복사]·[보내기]로 PC에 보내세요(카카오톡 PC·메일 등)',
-        'PC의 Chrome 또는 Edge에서 주소창 오른쪽의 설치 아이콘 → 「설치」',
+        'PC의 Chrome에서 주소창 오른쪽의 설치 아이콘 → 「설치」',
         'Windows 앱 목록(시작 메뉴)과 바탕화면에 원큐합격 아이콘이 생깁니다',
       ],
       dismissible: false,
@@ -181,7 +176,15 @@ export function InstallGuide(props: { url: string; onCopy: () => void; compact?:
   const [installedNow, setInstalledNow] = useState(false);
   // 휴대폰·태블릿(v0.10.3, 실기기): 설치를 눌러도 브라우저 화면은 그대로 남고 앱 아이콘은 1~2분 뒤에 생긴다 →
   // 카드를 숨기지 말고 "설치 중 → 설치 완료, 이 브라우저 화면은 닫고 앱 아이콘으로 여세요"로 바꾼다
-  const [mobileInstall, setMobileInstall] = useState<'none' | 'pending' | 'done'>(() => (installedAt() ? 'pending' : 'none'));
+  // 예전에 설치했다가 앱을 지운 뒤 다시 연 경우(실기기 2026-11-12): 오래된 설치 기록은 처음부터 버림 — '설치하고 있어요'가 잠깐 뜨지 않게
+  const [mobileInstall, setMobileInstall] = useState<'none' | 'pending' | 'done'>(() => {
+    const at = installedAt();
+    if (at && Date.now() - at > 10 * 60_000) {
+      forgetInstalled();
+      return 'none';
+    }
+    return at ? 'pending' : 'none';
+  });
   useEffect(() => {
     if (env.kind === 'pc' || env.standalone || mobileInstall === 'none' || mobileInstall === 'done') return;
     let alive = true;

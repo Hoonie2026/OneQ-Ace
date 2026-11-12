@@ -215,6 +215,8 @@ class MainWindow(QMainWindow):
         m.addAction("바로가기 만들기(바탕화면·시작 메뉴)", lambda: self.offer_shortcuts(ask=False))
         m.addAction("프로그램 폴더 열기", self.open_program_folder)
         m.addAction("문제팩 공유하기…", self.show_share)
+        m.addSeparator()
+        m.addAction("처음 상태로 되돌리기…", self.reset_all)
         m.addAction("라이선스·사용한 오픈소스", self.show_licenses)
         m.addAction(f"{APP_NAME} 정보", lambda: QMessageBox.about(
             self, APP_NAME, f"{APP_NAME} v{__version__}\n기출 PDF → 원큐합격 문제팩(.zip)"))
@@ -730,6 +732,52 @@ class MainWindow(QMainWindow):
             self.picker.select_code(dlg.code)
 
     # ───────────────── PDF 목록 ─────────────────
+    def reset_targets(self) -> list[Path]:
+        """처음 상태로 되돌릴 때 지울 것 — 기출 PDF(문제팩 폴더의 '기출 PDF')는 남긴다(사용자 2026-11-12)."""
+        root = S.user_root().parent                      # %APPDATA%\OneQ-Ace
+        out = []
+        for sub in ("standards", "qnet", "logs"):
+            d = root / sub
+            if d.exists():
+                out += [f for f in d.iterdir() if f.is_file()]
+        if self.out_dir.exists():
+            out += sorted(self.out_dir.glob("oneq-*.zip"))
+            if (self.out_dir / "review").exists():
+                out.append(self.out_dir / "review")
+        return out
+
+    def reset_all(self) -> None:
+        """도움말 › 처음 상태로 되돌리기 — 받아 둔 출제기준·만든 문제팩·처리 보고서·오류 기록을 지움(기출 PDF는 그대로)."""
+        if self.worker is not None:
+            return
+        targets = self.reset_targets()
+        root = S.user_root().parent
+        msg = ("다음을 지웁니다(기출 PDF는 그대로 둡니다):\n"
+               f"· 받아 둔 출제기준 — {root / 'standards'}, {root / 'qnet'}\n"
+               f"· 만든 문제팩(oneq-….zip)·처리 보고서(review 폴더) — {self.out_dir}\n"
+               f"· 오류 기록 — {root / 'logs'}\n\n"
+               f"모두 {len(targets)}개. 되돌릴 수 없습니다. 학습앱에 넣어 둔 문제팩·학습 기록은 그대로입니다.")
+        if QMessageBox.question(self, "처음 상태로 되돌리기", msg) != QMessageBox.Yes:
+            return
+        import shutil
+        failed = 0
+        for t in targets:
+            try:
+                shutil.rmtree(t) if t.is_dir() else t.unlink()
+            except OSError:
+                failed += 1                               # 열려 있는 오류 기록 등
+        self.clear_files()
+        self.bundle, self.report, self.shared = None, None, False
+        self.picker.reload()
+        self.picker.current = None
+        self.picker.edit.clear()
+        self.picker.info.setVisible(False)
+        self.picker.qnet.setVisible(False)
+        self.picker.fail.setVisible(False)
+        self.refresh_plan()
+        self.update_ready()
+        self.status.setText("처음 상태로 되돌렸어요" + (f"(지우지 못한 파일 {failed}개 — 열려 있는 기록 파일)" if failed else ""))
+
     def pick_out(self) -> None:
         d = QFileDialog.getExistingDirectory(self, "팩 저장 폴더", str(self.out_dir))
         if d:

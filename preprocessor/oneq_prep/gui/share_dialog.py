@@ -1,8 +1,10 @@
 """④ [문제팩 공유하기] 창 — 문제팩 파일만 공유(사용자 2026-11-12 세션 #19).
 
 설치 루트를 학습앱 하나로 모았으므로(학습앱 설치 → 학습앱 안에서 생성기 받기) 여기에는 학습앱·생성기 링크를 두지 않는다.
-흐름: [문제팩 폴더에서 고르기] → 문제팩 폴더에서 문제팩 파일(oneq-….zip)을 고름(한 번에 여러 개, 또는 여러 번 나눠서)
-→ [선택 완료 · 메시지 복사] → 메시지가 클립보드에 들어가고, 보내는 방법과 [문제팩 파일 복사]가 나온다.
+흐름(종목별 묶음, 사용자 2026-11-12 저녁 — 회차별로 일일이 보내지 않게):
+보낼 종목에 체크(문제팩 폴더의 회차 팩을 종목별로 보여 줌) → [선택 완료 · 메시지 복사] → 종목마다 그 종목의 **모든 회차**를
+묶음 1개(oneq-종목-bundle-첫해-끝해.zip)로 새로 만들고 메시지를 클립보드에 → 보내는 방법과 [문제팩 파일 복사].
+받은 파일을 다시 보내는 경우 등은 [파일 직접 고르기…](보조).
 생성기가 직접 보내지는 않는다(ADR 021 7절) — 메신저·메일 창에 사용자가 붙여 넣는다(파일 복사 → Ctrl+V, 또는 목록에서 끌어다 놓기).
 """
 from __future__ import annotations
@@ -15,7 +17,36 @@ from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (QAbstractItemView, QApplication, QDialog, QFileDialog, QFrame, QHBoxLayout, QLabel,
                                QListWidget, QListWidgetItem, QPlainTextEdit, QPushButton, QVBoxLayout, QWidget)
 
+from PySide6.QtWidgets import QCheckBox
+
 from .widgets import Note, WrapLabel
+
+ROUND_RE = re.compile(r"^oneq-([A-Za-z0-9]+)-(\d{4})-(\d+)\.zip$")
+
+
+def rounds_by_cert(out_dir: Path | None) -> dict[str, list[Path]]:
+    """문제팩 폴더의 회차 팩(oneq-종목-연도-회.zip)을 종목 코드별로."""
+    out: dict[str, list[Path]] = {}
+    if out_dir and Path(out_dir).exists():
+        for f in sorted(Path(out_dir).glob("oneq-*.zip")):
+            m = ROUND_RE.match(f.name)
+            if m:
+                out.setdefault(m.group(1), []).append(f)
+    return out
+
+
+def full_bundle(code: str, rounds: list[Path], out_dir: Path) -> Path | None:
+    """종목의 모든 회차를 묶음 하나로(같은 종목의 예전 묶음 — 일부 회차만 든 것 — 은 지움)."""
+    from ..bundle import write_bundle
+    path = write_bundle(rounds, out_dir, code)
+    if path:
+        for old in Path(out_dir).glob(f"oneq-{code}-bundle-*.zip"):
+            if old != path:
+                try:
+                    old.unlink()
+                except OSError:
+                    pass
+    return path
 
 PACK_FILTER = "원큐합격 문제팩 (oneq-*.zip);;zip 파일 (*.zip)"
 EXAMPLE = "oneq-종목-bundle-2016-2025.zip"
@@ -106,27 +137,50 @@ class ShareDialog(QDialog):
         lay.addWidget(t)
 
         guide = Note("info")
-        guide.set("info", "문제팩 폴더를 열어 보낼 문제팩 파일을 찾아 선택하세요", [
-            f"[문제팩 폴더에서 고르기]를 누르면 문제팩 폴더가 열립니다 — 문제팩 파일(예: <b>{(example.name if example else EXAMPLE)}</b>)을 고릅니다",
-            "한 번에 여러 개를 골라도 되고, 한 개씩 여러 번 골라도 됩니다",
-            "다 골랐으면 [선택 완료 · 메시지 복사]"])
+        guide.set("info", "보낼 종목에 체크하세요 — 종목마다 모든 회차를 파일 하나(묶음)로 보냅니다", [])
         lay.addWidget(guide)
 
+        self.cert_box = QVBoxLayout()
+        self.cert_box.setSpacing(6)
+        self.cert_checks: list[tuple[QCheckBox, str, list[Path]]] = []
+        groups = rounds_by_cert(out_dir)
+        prefer = None
+        if example is not None and (m := re.match(r"^oneq-([A-Za-z0-9]+)-", example.name)):
+            prefer = m.group(1)
+        for code, files in groups.items():
+            years = sorted({int(ROUND_RE.match(f.name).group(2)) for f in files if int(ROUND_RE.match(f.name).group(2)) > 0})
+            span = f" · {years[0]}~{years[-1]}년" if years else ""
+            size = sum(f.stat().st_size for f in files if f.exists())
+            cb = QCheckBox(f"{cert_name(code)} — {len(files)}회차{span} · {size / 1_048_576:.0f}MB")
+            cb.setObjectName("certCheck")
+            cb.setChecked(code == prefer or len(groups) == 1)
+            cb.toggled.connect(lambda _on: self.update_state())
+            self.cert_box.addWidget(cb)
+            self.cert_checks.append((cb, code, files))
+        if not groups:
+            none = QLabel("문제팩 폴더에 만든 문제팩이 없어요 — ③ [문제팩 만들기]를 먼저 하거나 [파일 직접 고르기…]")
+            none.setObjectName("muted")
+            none.setWordWrap(True)
+            self.cert_box.addWidget(none)
+        lay.addLayout(self.cert_box)
+
         row = QHBoxLayout()
-        self.pick_btn = QPushButton("문제팩 폴더에서 고르기…")
-        self.pick_btn.setObjectName("primarySmall")
+        self.pick_btn = QPushButton("파일 직접 고르기…")
+        self.pick_btn.setObjectName("link")
+        self.pick_btn.setToolTip("받은 문제팩을 다시 보내는 경우 등 — 문제팩 폴더에서 파일을 골라 아래 목록에 더함")
         self.pick_btn.clicked.connect(self.pick)
         row.addWidget(self.pick_btn)
         self.remove_btn = QPushButton("선택 빼기")
         self.remove_btn.clicked.connect(self.remove_selected)
         row.addWidget(self.remove_btn)
         row.addStretch(1)
-        self.count = QLabel("고른 문제팩 없음")
+        self.count = QLabel("")
         self.count.setObjectName("muted")
         row.addWidget(self.count)
         lay.addLayout(row)
 
-        self.list = PackList()
+        self.list = PackList()                   # 보낼 파일(종목 묶음 + 직접 고른 파일)
+        self.list.setMinimumHeight(70)
         lay.addWidget(self.list, 1)
 
         self.done_btn = QPushButton("선택 완료 · 메시지 복사")
@@ -207,11 +261,16 @@ class ShareDialog(QDialog):
             self.list.takeItem(self.list.row(it))
         self.update_state()
 
+    def checked(self) -> list[tuple[str, list[Path]]]:
+        return [(code, files) for cb, code, files in self.cert_checks if cb.isChecked()]
+
     def update_state(self) -> None:
         n = self.list.count()
-        self.count.setText(f"고른 문제팩 {n}개" if n else "고른 문제팩 없음")
-        self.done_btn.setEnabled(n > 0)
+        k = len(self.checked())
+        self.count.setText(" · ".join(x for x in (f"종목 {k}개" if k else "", f"보낼 파일 {n}개" if n else "") if x))
+        self.done_btn.setEnabled(n > 0 or k > 0)
         self.remove_btn.setEnabled(n > 0)
+        self.list.setVisible(n > 0)               # 처음엔 빈 상자를 보이지 않음
         if self.result.isVisible() and n:          # 다 고른 뒤 더 고르거나 빼면 메시지를 새로
             self.msg.setPlainText(pack_message(self.list.paths()))
         elif not n:
@@ -219,6 +278,15 @@ class ShareDialog(QDialog):
 
     # ── 선택 완료 ──
     def finish(self) -> None:
+        """체크한 종목마다 모든 회차를 묶음 하나로 새로 만들어 목록에 넣고(직접 고른 파일은 그대로) 메시지 복사."""
+        made = []
+        for code, rounds in self.checked():
+            b = full_bundle(code, rounds, self.out_dir or rounds[0].parent)
+            if b:
+                made.append(b)
+        keep = [f for f in self.list.paths() if f.exists()]          # 직접 고른 파일(지워진 옛 묶음은 빠짐)
+        self.list.clear()
+        self.add(made + [f for f in keep if f not in made])
         files = self.list.paths()
         if not files:
             return
