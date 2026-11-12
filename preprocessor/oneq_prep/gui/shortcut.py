@@ -127,16 +127,84 @@ def app_args(url: str) -> str:
     return f"--app={url}"
 
 
-def app_ps_script(browser: Path, url: str, icon: Path) -> str:
-    return ps_script(browser, name=APP_LINK_NAME, args=app_args(url), icon=f"{icon},0", workdir=str(browser.parent),
-                     description="원큐합격 학습앱 — 기사·산업기사 필기 기출 학습")
+# ── 'Windows 설정 › 앱'·'제어판 › 프로그램 제거'에 학습앱 올리기(🖥 사용자 2026-11-12) ──
+# Chrome·Edge가 웹앱을 정식 설치할 때와 같은 방식: 사용자별(HKCU) Uninstall 키 — 관리자 권한 불필요.
+# 제거 = 바로가기 둘 + 아이콘 폴더 + 이 키만 지움. 학습 기록(브라우저 저장소)은 남겨 다시 설치하면 이어짐.
+APP_DISPLAY_NAME = "원큐합격 학습앱"
+APP_UNINSTALL_KEY = r"Software\Microsoft\Windows\CurrentVersion\Uninstall\OneQAce.StudyApp"
 
 
-def make_app_shortcuts(browser: Path, url: str, icon: Path) -> list[str]:
-    """바탕화면·시작 메뉴에 '원큐합격 학습앱'(기본 브라우저의 앱 창). 기록은 그 브라우저에 저장."""
-    return _run_ps(app_ps_script(browser, url, icon))
+def app_home(env: dict | None = None) -> Path:
+    """학습앱 아이콘을 둘 곳(%LOCALAPPDATA%\\OneQ-Ace\\StudyApp) — 전처리기를 지워도 학습앱 아이콘은 남게."""
+    env = env if env is not None else os.environ
+    return Path(env.get("LOCALAPPDATA") or Path.home() / "AppData" / "Local") / "OneQ-Ace" / "StudyApp"
 
 
-def open_app_window(browser: Path, url: str) -> None:
-    flags = getattr(subprocess, "DETACHED_PROCESS", 0)
-    subprocess.Popen([str(browser), app_args(url)], creationflags=flags, close_fds=True)
+def _encoded(script: str) -> str:
+    import base64
+    return base64.b64encode(script.encode("utf-16-le")).decode("ascii")
+
+
+def uninstall_script(home: Path) -> str:
+    """제어판에서 [제거]를 누르면 도는 PowerShell."""
+    msg = ("원큐합격 학습앱(바탕화면·시작 메뉴 아이콘)을 지웠습니다.`n"
+           "학습 기록은 브라우저에 남아 있어 전처리기의 [학습앱 설치]로 다시 설치하면 이어집니다.")
+    return "\n".join([
+        "$ErrorActionPreference = 'SilentlyContinue'",
+        "foreach ($f in 'Desktop', 'Programs') { Remove-Item -Force (Join-Path ([Environment]::GetFolderPath($f)) "
+        f"{_ps_quote(APP_LINK_NAME)}) }}",
+        f"Remove-Item -Recurse -Force {_ps_quote(str(home))}",
+        f"Remove-Item -Recurse -Force {_ps_quote('HKCU:' + chr(92) + APP_UNINSTALL_KEY)}",
+        f"(New-Object -ComObject WScript.Shell).Popup(\"{msg}\", 0, {_ps_quote(APP_DISPLAY_NAME + ' 제거')}, 64) | Out-Null",
+    ])
+
+
+def uninstall_command(home: Path) -> str:
+    return ("powershell.exe -NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -EncodedCommand "
+            + _encoded(uninstall_script(home)))
+
+
+def register_ps(icon: Path, home: Path, version: str = "") -> str:
+    k = _ps_quote("HKCU:" + chr(92) + APP_UNINSTALL_KEY)
+    props = [("DisplayName", APP_DISPLAY_NAME, "String"), ("DisplayIcon", f"{icon},0", "String"),
+             ("Publisher", "OneQ-Ace", "String"), ("InstallLocation", str(home), "String"),
+             ("UninstallString", uninstall_command(home), "String"), ("NoModify", "1", "DWord"),
+             ("NoRepair", "1", "DWord"), ("EstimatedSize", "64", "DWord")]
+    if version:
+        props.append(("DisplayVersion", version, "String"))
+    lines = [f"$k = {k}", "New-Item -Path $k -Force | Out-Null"]
+    lines += [f"New-ItemProperty -Path $k -Name {n} -Value {_ps_quote(v) if t == 'String' else v} "
+              f"-PropertyType {t} -Force | Out-Null" for n, v, t in props]
+    lines.append("New-ItemProperty -Path $k -Name InstallDate -Value (Get-Date -Format yyyyMMdd) -PropertyType String -Force | Out-Null")
+    return "\n".join(lines)
+
+
+def app_ps_script(browser: Path, url: str, icon: Path, home: Path | None = None, version: str = "") -> str:
+    """바로가기 둘 + (home이 있으면) 프로그램 목록 등록."""
+    s = ps_script(browser, name=APP_LINK_NAME, args=app_args(url), icon=f"{icon},0", workdir=str(browser.parent),
+                  description="원큐합격 학습앱 — 기사·산업기사 필기 기출 학습")
+    if home is None:
+        return s
+    head, tail = s.rsplit("\n", 1)              # 마지막 줄(만든 경로 출력)은 맨 끝에
+    return "\n".join([head, register_ps(icon, home, version), tail])
+
+
+def make_app_shortcuts(browser: Path, url: str, icon: Path, version: str = "") -> list[str]:
+    """바탕화면·시작 메뉴에 '원큐합격 학습앱'(기본 브라우저의 앱 창) + Windows 프로그램 목록 등록. 기록은 그 브라우저에 저장.
+    아이콘은 %LOCALAPPDATA%\\OneQ-Ace\\StudyApp에 복사해 쓴다(전처리기를 지워도 학습앱 아이콘이 깨지지 않게)."""
+    import shutil
+    home = app_home()
+    home.mkdir(parents=True, exist_ok=True)
+    own = home / "app-icon.ico"
+    shutil.copyfile(icon, own)
+    return _run_ps(app_ps_script(browser, url, own, home, version))
+
+
+def app_installed() -> bool:
+    """학습앱이 이 PC에 설치(프로그램 목록 등록)돼 있는지."""
+    try:
+        import winreg
+        winreg.CloseKey(winreg.OpenKey(winreg.HKEY_CURRENT_USER, APP_UNINSTALL_KEY))
+        return True
+    except Exception:  # noqa: BLE001 — 윈도가 아니거나 없음
+        return False

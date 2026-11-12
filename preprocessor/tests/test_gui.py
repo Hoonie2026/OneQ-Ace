@@ -191,7 +191,15 @@ def test_app_install_dialog(win, monkeypatch, tmp_path):
     d.install_pc()
     assert made and made[0][1] == APP_URL and made[0][2].name == "app-icon.ico" and made[0][2].exists()
     assert "설치했어요" in d.pc_note.text()
-    d.copy_url()
+    # 사용자 2026-11-12: [학습앱 열기]·아래쪽 [주소 복사] 없앰, 주소 복사는 휴대폰 탭(방법 2: 주소 보내기)에만
+    from PySide6.QtWidgets import QPushButton
+    texts = [b.text() for b in d.findChildren(QPushButton)]
+    assert "학습앱 열기" not in texts and texts.count("주소 복사") == 2
+    assert {b.objectName() for b in d.findChildren(QPushButton) if b.text() == "주소 복사"} == {"copy_android", "copy_ios"}
+    labels = " ".join(q.text() for q in d.findChildren(QLabel))
+    assert "실행은 인터넷이 필요 없고" in labels and "백업 파일로만 가능" in labels
+    assert "Chrome</b>에서 엽니다" not in labels and "Safari</b>에서 엽니다" not in labels   # 브라우저를 단정하지 않음
+    d.findChild(QPushButton, "copy_ios").click()
     assert QApplication.clipboard().text() == APP_URL
 
 

@@ -67,3 +67,30 @@ def test_app_browser_follows_default(tmp_path):
     assert shortcut.app_browser("MSEdgeHTM", env) == (chrome, "Chrome")
     chrome.unlink()
     assert shortcut.app_browser("ChromeHTML", env) is None
+
+
+def test_app_registered_in_windows_programs(tmp_path, monkeypatch):
+    """사용자 2026-11-12: 학습앱이 '설정 › 앱'·'제어판 › 프로그램 제거'에 보이도록 HKCU Uninstall 키 등록,
+    제거는 바로가기·아이콘 폴더·키만 지우고 학습 기록(브라우저 저장소)은 남김."""
+    import base64
+    home = tmp_path / "la" / "OneQ-Ace" / "StudyApp"
+    assert shortcut.app_home({"LOCALAPPDATA": str(tmp_path / "la")}) == home
+    s = shortcut.app_ps_script(Path("C:/e/msedge.exe"), "https://x/", home / "app-icon.ico", home)
+    key = "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\OneQAce.StudyApp"
+    assert f"$k = '{key}'" in s and "DisplayName -Value '원큐합격 학습앱'" in s
+    assert "-Name NoModify -Value 1 -PropertyType DWord" in s and "UninstallString" in s
+    assert s.splitlines()[-1] == '$made -join "`n"'          # 만든 경로 출력은 맨 끝
+    enc = shortcut.uninstall_command(home).rsplit(" ", 1)[1]
+    un = base64.b64decode(enc).decode("utf-16-le")
+    assert "원큐합격 학습앱.lnk" in un and f"Remove-Item -Recurse -Force '{key}'" in un and str(home) in un
+    assert "학습 기록은 브라우저에 남아" in un
+
+    # 아이콘은 %LOCALAPPDATA%로 복사해 씀(전처리기를 지워도 깨지지 않게)
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path / "la"))
+    ran = []
+    monkeypatch.setattr(shortcut, "_run_ps", lambda script: ran.append(script) or ["ok"])
+    icon = tmp_path / "app-icon.ico"
+    icon.write_bytes(b"ico")
+    assert shortcut.make_app_shortcuts(Path("C:/e/msedge.exe"), "https://x/", icon) == ["ok"]
+    assert (home / "app-icon.ico").read_bytes() == b"ico" and str(home / "app-icon.ico") + ",0" in ran[0]
+    assert shortcut.app_installed() is False                 # 윈도가 아니면 False
