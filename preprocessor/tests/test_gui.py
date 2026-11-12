@@ -199,6 +199,7 @@ def test_app_install_dialog(win, monkeypatch, tmp_path):
     labels = " ".join(q.text() for q in d.findChildren(QLabel))
     assert "실행은 인터넷이 필요 없고" in labels and "백업 파일로만 가능" in labels
     assert "Chrome</b>에서 엽니다" not in labels and "Safari</b>에서 엽니다" not in labels   # 브라우저를 단정하지 않음
+    assert "문제팩 가져오기" not in labels          # 설치 단계엔 팩 안내 없음(앱을 처음 열 때 안내, 사용자 2026-11-12)
     d.findChild(QPushButton, "copy_ios").click()
     assert QApplication.clipboard().text() == APP_URL
 

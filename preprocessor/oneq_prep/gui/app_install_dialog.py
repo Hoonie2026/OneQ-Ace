@@ -24,8 +24,8 @@ from . import shortcut
 INTRO = ("원큐합격 학습앱은 문제를 푸는 앱이고, 이 전처리기는 Q-Net 출제기준과 기출 PDF로 학습앱에 넣을 "
          "문제팩을 만드는 프로그램입니다. 공부할 기기를 골라 학습앱을 직접 설치하세요(여러 기기에 설치해도 됩니다).")
 
-PACK_TO_PHONE = ("문제팩 넣기: 전처리기가 만든 <b>oneq-종목-bundle-….zip</b>을 휴대폰으로 옮긴 뒤(카카오톡 ‘나와의 채팅’, "
-                 "구글 드라이브·iCloud Drive, 메일 등) 학습앱의 <b>[문제팩 가져오기]</b>로 고릅니다. 기록은 기기마다 따로 저장됩니다.")
+# 문제팩 가져오기 안내는 이 창에 두지 않는다 — 설치 단계에서는 아직 앱이 없음. 학습앱을 처음 열면 빈 화면(PrepCard)이
+# 팩 옮기기·[문제팩 가져오기]를 안내한다(사용자 2026-11-12)
 
 
 def _steps(items: list[str]) -> QLabel:
@@ -94,10 +94,6 @@ class AppInstallDialog(QDialog):
         self.pc_note = _hint("")
         self.pc_note.setVisible(False)
         v.addWidget(self.pc_note)
-        v.addWidget(_steps([
-            "설치한 뒤 학습앱을 엽니다",
-            "학습앱의 <b>[문제팩 가져오기]</b> → 전처리기의 <b>[팩 폴더 열기]</b> 위치에 있는 oneq-종목-bundle-….zip을 고릅니다",
-        ]))
         if self.edge is None:
             self.pc_btn.setEnabled(False)
             self.pc_note.setText("Chrome·Edge를 찾지 못해 설치할 수 없어요 — 둘 중 하나를 설치한 뒤 다시 여세요.")
@@ -163,7 +159,6 @@ class AppInstallDialog(QDialog):
         how += (" 카카오톡·네이버 앱 안에서 열리면 안내대로 바깥 브라우저로 다시 엽니다." if os_ == "android" else
                 " 브라우저 화면과 홈 화면 앱은 기록이 따로이니, 홈 화면에 생긴 <b>원큐합격</b>으로 공부하세요.")
         v.addWidget(_hint(how))
-        v.addWidget(_hint(PACK_TO_PHONE))
         v.addStretch(1)
         h.addLayout(v, 1)
         return w
