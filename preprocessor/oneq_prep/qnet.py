@@ -24,7 +24,7 @@ from pathlib import Path
 BASE = "https://www.q-net.or.kr"
 LIST_URL = BASE + "/cst006.do"
 REPORT_URL = BASE + "/ReportingServer/service"
-UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) OneQ-Prep"
+UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) OneQ-PackMaker"
 ROW_RE = re.compile(r"<td[^>]*title=\"([^\"]+)\"[^>]*>\s*<a[^>]*cst006Report\('(\d+)'\s*,\s*'(\d+)'\)[^>]*>([\s\S]*?)</a>")
 PERIOD_RE = re.compile(r"\((\d{4})\.(\d{1,2})\.(\d{1,2})\s*~\s*(\d{4})\.(\d{1,2})\.(\d{1,2})\)")
 

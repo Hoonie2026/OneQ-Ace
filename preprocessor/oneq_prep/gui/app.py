@@ -1,7 +1,9 @@
-"""원큐합격 전처리기 — 창 프로그램 본체(ADR 018·019, v0.5 처리 화면 ADR 021 6절).
+"""원큐합격 문제팩 생성기(구 전처리기) — 창 프로그램 본체(ADR 018·019, v0.5 처리 화면 ADR 021 6절, 메인 화면 재설계 ADR 023).
 
-머리 띠 | 왼쪽: ① 종목 선택(출제기준 다운로드) + 작업 순서 | 오른쪽: ② 기출 PDF 업로드(2-1 comcbt 자동 받기 →
-2-2 직접 올리기 + 올리는 기출 PDF 조건 셋 → 한 목록 · 글자/스캔 · 파일별 진행 막대) | 아래: ③ 팩 만들기 실행 띠(사용자 2026-11-11). 입력 칸 없음(만든 사람·출처·문제 종류·처리 속도 자동, 저장 폴더는 기본 폴더 — 도움말 메뉴에서 바꿈).
+머리 띠 | 왼쪽: ① 종목 선택(처음엔 빈칸) + 작업 순서 ①~④ | 오른쪽: ② 기출 PDF 업로드 — 두 영역
+「comcbt.com 최근 기출 받기」·「사용자 직접 올리기」(끌어다 놓는 상자 + 바로 아래 조건 셋 상시 표시) → 한 목록(글자/스캔·파일별 진행 막대)
+| 아래 실행 띠: ③ 문제팩 만들기 · ④ 문제팩 공유하기(사용자 2026-11-12 세션 #19).
+입력 칸 없음(만든 사람·출처·문제 종류·처리 속도 자동, 저장 폴더는 기본 폴더 — 도움말 메뉴에서 바꿈).
 끝난 파일을 누르면 결과 화면(과목별 문항·정답·유형·단원·미리 보기, 의심 문항 [확인하기]).
 """
 from __future__ import annotations
@@ -16,14 +18,12 @@ from PySide6.QtCore import QObject, QSettings, QStandardPaths, Qt, QThread, QTim
 from PySide6.QtGui import QColor, QDesktopServices, QIcon, QPixmap
 from PySide6.QtWidgets import (QAbstractItemView, QApplication, QFileDialog, QFrame,
                                QHBoxLayout, QHeaderView, QLabel, QMainWindow, QMenu, QMessageBox,
-                               QProgressBar, QPushButton, QScrollArea, QStackedWidget, QTableWidget, QTableWidgetItem,
-                               QToolButton, QVBoxLayout, QWidget)
+                               QProgressBar, QPushButton, QScrollArea, QStackedWidget, QTableWidget,
+                               QTableWidgetItem, QToolButton, QVBoxLayout, QWidget)
 
 from .. import __version__
 from .. import standards as S
-from ..appinfo import APP_URL
 from . import shortcut
-from .app_install_dialog import AppInstallDialog
 from ..batch import STATUS_TEXT, BatchSpec, RoundResult, plan_rounds
 from ..summary import law_summary, peek_subjects, subject_change
 from . import theme
@@ -33,10 +33,11 @@ from .result_dialog import ResultDialog, suspects
 from .review_dialog import ReviewDialog
 from .samples import ConditionDialog, ConditionPicture
 from .share_dialog import ShareDialog
-from .widgets import BadgeDelegate, Card, DropZone, Note, ProgressDelegate
+from .widgets import BadgeDelegate, Card, DropZone, Note, ProgressDelegate, WrapLabel
 from .worker import BatchWorker, ComcbtWorker, QnetWorker
 
-APP_NAME = "원큐합격 전처리기"
+APP_NAME = "원큐합격 문제팩 생성기"
+EXE_NAME = "OneQ-PackMaker.exe"
 COLS = ["PDF 파일", "종류", "회차", "진행", "상태", "결과"]
 C_FILE, C_KIND, C_ROUND, C_PROG, C_STATUS, C_MSG = range(6)
 C_DATE = C_ROUND          # v0.4 이름(시험 호환)
@@ -110,6 +111,7 @@ class MainWindow(QMainWindow):
         self.report: Path | None = None
         self.bundle: Path | None = None
         self.pending_rerun: list[Path] = []      # 처리 중에 검수하고 [다시 만들기]를 누른 회차 — 처리가 끝나면 이어서
+        self.shared = False                       # ④ 문제팩 공유하기에서 메시지까지 복사했는지
         self.out_dir = Path(".")
         self._building = False
 
@@ -140,7 +142,13 @@ class MainWindow(QMainWindow):
         scroll.viewport().setObjectName("sideViewport")
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         body.addWidget(scroll)
-        body.addWidget(self._card_pdfs(), 1)
+        right = QScrollArea()                    # 작은 화면에서도 목록이 눌리지 않게(조건 셋이 늘 보이므로)
+        right.setObjectName("main")
+        right.setWidget(self._card_pdfs())
+        right.setWidgetResizable(True)
+        right.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        right.viewport().setObjectName("sideViewport")
+        body.addWidget(right, 1)
         root.addLayout(body, 1)
         root.addWidget(self._action_bar())
         self.setCentralWidget(page)
@@ -186,13 +194,6 @@ class MainWindow(QMainWindow):
         v = QLabel(f"v{__version__}")
         v.setObjectName("versionChip")
         lay.addWidget(v)
-        # 설치 경로 두 갈래(사용자 2026-11-12): 머리말에는 [동료에게 보내기](학습앱+팩 / 전처리기), [학습앱 설치]는 서브
-        # (작업 순서 3단계·팩 완료 안내·도움말 메뉴)
-        share_btn = QPushButton("동료에게 보내기")
-        share_btn.setObjectName("appInstall")
-        share_btn.setToolTip("공부할 동료에게 학습앱 링크+문제팩, 문제팩을 만들 동료에게 전처리기 링크를 보냅니다")
-        share_btn.clicked.connect(self.show_share)
-        lay.addWidget(share_btn)
         help_btn = QToolButton()
         help_btn.setText("도움말 ▾")
         help_btn.setPopupMode(QToolButton.InstantPopup)
@@ -200,11 +201,12 @@ class MainWindow(QMainWindow):
                                "QToolButton::menu-indicator{image:none;}")
         m = QMenu(help_btn)
         m.addAction("사용 안내", lambda: QMessageBox.information(self, APP_NAME, (
-            "① 종목을 찾아 고릅니다(예: 측량, 건안기).\n② 기출 PDF를 끌어다 놓고 [팩 만들기].\n"
-            "③ 끝난 파일을 누르면 결과 화면 — 의심 문항이 있으면 [확인하기].\n\n"
-            "끝나면 종목 묶음(oneq-종목-bundle-….zip) 하나가 저장 폴더에 생깁니다.\n"
-            "그 파일을 휴대폰·PC의 원큐합격 학습앱에서 [문제팩 가져오기]로 넣으세요(기기마다 따로).\n"
-            "학습앱이 아직 없으면 도움말 › 학습앱 설치, 동료에게는 위쪽 [동료에게 보내기].")))
+            "① 종목 선택 — 종목 이름을 넣고 [조회](예: 측량, 건안기).\n"
+            "② 기출 PDF 업로드 — comcbt.com 최근 기출 받기, 또는 직접 올리기(조건 셋 확인).\n"
+            "③ 문제팩 만들기 — 끝난 파일을 누르면 결과 화면, 의심 문항이 있으면 [확인하기].\n"
+            "④ 문제팩 보내기 — [문제팩 공유하기]로 내 휴대폰이나 동료에게.\n\n"
+            "끝나면 종목 묶음(oneq-종목-bundle-….zip) 하나가 문제팩 폴더에 생깁니다.\n"
+            "그 파일을 원큐합격 학습앱의 [문제팩 가져오기]로 넣으세요(기기마다 따로).")))
         m.addSeparator()
         m.addAction("저장 폴더 바꾸기…", self.pick_out)
         speed = m.addMenu("처리 속도")
@@ -212,8 +214,7 @@ class MainWindow(QMainWindow):
             speed.addAction(t, lambda v=v: self.settings.setValue("workers", v))
         m.addAction("바로가기 만들기(바탕화면·시작 메뉴)", lambda: self.offer_shortcuts(ask=False))
         m.addAction("프로그램 폴더 열기", self.open_program_folder)
-        m.addAction("학습앱 설치(PC·휴대폰)…", lambda: self.show_app_install())
-        m.addAction("동료에게 보내기…", self.show_share)
+        m.addAction("문제팩 공유하기…", self.show_share)
         m.addAction("라이선스·사용한 오픈소스", self.show_licenses)
         m.addAction(f"{APP_NAME} 정보", lambda: QMessageBox.about(
             self, APP_NAME, f"{APP_NAME} v{__version__}\n기출 PDF → 원큐합격 문제팩(.zip)"))
@@ -222,19 +223,19 @@ class MainWindow(QMainWindow):
         return h
 
     def _card_cert(self) -> Card:
-        c = Card("종목 선택(출제기준 다운로드)", "1")
+        c = Card("종목 선택", "1")
         self.picker = CertPicker()
         c.body.addWidget(self.picker)
         return c
 
     def _card_flow(self) -> Card:
-        """작업 순서 한눈에(사용자 2026-11-11) — 끝난 단계 ✓(초록), 지금 할 단계(파랑), 남은 단계(회색)."""
+        """작업 순서 한눈에(사용자 2026-11-11, 네 단계로 2026-11-12) — 끝난 단계 ✓(초록), 지금 할 단계(파랑), 남은 단계(회색)."""
         c = Card("작업 순서", "", "")
         self.flow: list[tuple[QLabel, QLabel]] = []
-        steps = [("종목 선택(출제기준 다운로드)", "종목 이름 입력 → [조회]"),
-                 ("기출 PDF 업로드", "2-1 comcbt 자동 받기 → 2-2 직접 올리기(조건 셋 확인)"),
-                 ("팩 만들기", "아래 [팩 만들기] → 생긴 묶음 파일을 학습앱 [문제팩 가져오기]로 — "
-                  "학습앱이 없으면 <a href='#app'>학습앱 설치</a>, 동료에게는 <a href='#share'>보내기</a>")]
+        steps = [("종목 선택", "종목 이름 입력 → [조회] — Q-Net 최신 출제기준을 받아 옵니다"),
+                 ("기출 PDF 업로드", "comcbt.com 최근 기출 받기, 또는 사용자 직접 올리기(조건 셋)"),
+                 ("문제팩 만들기", "아래 [문제팩 만들기] → 종목 묶음 파일이 문제팩 폴더에 생깁니다"),
+                 ("문제팩 보내기", "아래 [문제팩 공유하기] → 내 휴대폰·동료에게 보내 학습앱 [문제팩 가져오기]로")]
         for i, (t, h) in enumerate(steps, 1):
             row = QHBoxLayout()
             row.setSpacing(10)
@@ -248,10 +249,6 @@ class MainWindow(QMainWindow):
             hl = QLabel(h)
             hl.setObjectName("muted")
             hl.setWordWrap(True)
-            if "<a " in h:                            # 3단계의 서브 링크(학습앱 설치·보내기)
-                hl.setTextFormat(Qt.RichText)
-                hl.linkActivated.connect(lambda link: self.show_app_install() if link == "#app" else self.show_share())
-                self.flow_links = hl
             v.addWidget(tl)
             v.addWidget(hl)
             row.addLayout(v, 1)
@@ -260,12 +257,13 @@ class MainWindow(QMainWindow):
         return c
 
     def flow_state(self) -> list[str]:
-        """작업 순서 세 단계의 상태 — done / now / todo."""
+        """작업 순서 네 단계의 상태 — done / now / todo."""
         s1 = bool(self.picker.code)
         s2 = any(r.pack_id and r.status != "error" for r in self.rows)
         s3 = self.bundle is not None and self.worker is None and any(r.status in ("packed", "review") for r in self.rows)
+        s4 = self.shared
         out, now = [], False
-        for d in (s1, s2, s3):
+        for d in (s1, s2, s3, s4):
             if d and not now:
                 out.append("done")
             elif not now:
@@ -287,15 +285,15 @@ class MainWindow(QMainWindow):
                     w.style().polish(w)
 
     def _conditions_panel(self) -> QFrame:
-        """2-2 직접 올리기 아래의 '올리는 기출 PDF 조건' 셋(ADR 021 3절) — 조건 1·2·3(작업 순서 번호와 다른 모양) + 예시 그림."""
+        """끌어다 놓는 상자 바로 아래에 늘 보이는 '올리는 기출 PDF 조건' 셋(ADR 021 3절, 상시 표시 2026-11-12) — 조건 1·2·3 + 예시 그림."""
         f = QFrame()
         f.setObjectName("condPanel")
         v = QVBoxLayout(f)
         v.setContentsMargins(14, 10, 14, 10)
-        v.setSpacing(8)
-        head = QLabel("올리는 기출 PDF 조건 — 어디서 구했든 괜찮아요. 아래 셋만 맞으면 됩니다(그림을 누르면 크게)")
+        v.setSpacing(6)
+        head = WrapLabel("직접 올리는 기출 PDF 조건 — 어디서 구했든 괜찮아요. 아래 셋만 맞으면 됩니다(그림을 누르면 크게, "
+                      "한글·워드 파일은 그 프로그램에서 PDF로 저장해 넣으세요)")
         head.setObjectName("muted")
-        head.setWordWrap(True)
         v.addWidget(head)
         cols = QHBoxLayout()
         cols.setSpacing(12)
@@ -312,37 +310,19 @@ class MainWindow(QMainWindow):
             tl.setStyleSheet("font-weight:600")
             top.addWidget(tl, 1)
             col.addLayout(top)
-            hl = QLabel(h)
+            hl = WrapLabel(h)
             hl.setObjectName("muted")
-            hl.setWordWrap(True)
             col.addWidget(hl)
-            col.addStretch(1)
             pic = ConditionPicture(i - 1)            # 예시 그림(B3 ①) — 누르면 크게
             pic.clicked.connect(self.show_condition)
             col.addWidget(pic)
             self.condition_pictures.append(pic)
             cols.addLayout(col, 1)
         v.addLayout(cols)
-        tip = QLabel("한글(HWP)·워드 파일은 그 프로그램에서 PDF로 저장해 넣으세요.")
-        tip.setObjectName("hint")
-        tip.setWordWrap(True)
-        v.addWidget(tip)
         return f
-
-    def toggle_conditions(self, show: bool | None = None) -> None:
-        """조건 셋 펼치기·접기. 목록이 비었으면 펼쳐 두고, 파일이 들어오면 표 자리를 위해 접음(직접 누르면 그대로 따름)."""
-        if show is None:
-            show = not self.cond_panel.isVisible()
-            self._cond_user = show
-        self.cond_panel.setVisible(show)
-        self.cond_btn.setText("조건 접기 ▴" if show else "조건 보기 ▾")
 
     def show_condition(self, index: int) -> None:
         ConditionDialog(index, CONDITIONS[index][1], self).exec()
-
-    def show_app_install(self, tab: str = "pc") -> None:
-        """[학습앱 설치] 창(전처리기 경로의 서브, 사용자 2026-11-12) — PC·Android·iPhone 중 골라 설치."""
-        AppInstallDialog(self, tab, self.status).exec()
 
     def latest_bundle(self) -> Path | None:
         """보낼 종목 묶음 — 이번에 만든 것, 없으면 저장 폴더에서 지금 종목(없으면 아무 종목)의 가장 새 묶음."""
@@ -356,10 +336,12 @@ class MainWindow(QMainWindow):
         return max(found, key=lambda p: p.stat().st_mtime) if found else None
 
     def show_share(self) -> None:
-        """[동료에게 보내기] — 공부할 동료(학습앱 링크+문제팩) / 문제팩을 만들 동료(전처리기 링크)."""
-        b = self.latest_bundle()
-        cert = self.picker.current.name if self.picker.current else ""
-        ShareDialog(self, cert, b, self.out_dir, self.status).exec()
+        """④ [문제팩 공유하기] — 문제팩 폴더에서 파일을 골라 메시지와 함께 보냄(학습앱·생성기 안내 없음, 사용자 2026-11-12)."""
+        d = ShareDialog(self, self.out_dir, self.status, self.latest_bundle())
+        d.exec()
+        if d.shared and not self.shared:
+            self.shared = True
+            self.update_flow()
 
     # ── 설치 없는 zip 배포: 바로가기·임시 폴더 경고(🖥P14, 2026-11-11) ──
     def first_run_checks(self) -> None:
@@ -371,7 +353,7 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(self, APP_NAME, (
                 "zip 파일을 풀지 않고 그 안에서 바로 실행했어요.\n"
                 "이대로면 창을 닫을 때 프로그램이 임시 폴더에서 지워지고 바로가기도 만들 수 없어요.\n\n"
-                "창을 닫고 → 받은 zip을 오른쪽 클릭 → [모두 압축 풀기] → 풀린 폴더의 OneQ-Prep.exe를 여세요."))
+                f"창을 닫고 → 받은 zip을 오른쪽 클릭 → [모두 압축 풀기] → 풀린 폴더의 {EXE_NAME}를 여세요."))
             return
         if shortcut.installed(exe) or self.settings.value("shortcut_asked", False, type=bool):
             return
@@ -381,13 +363,13 @@ class MainWindow(QMainWindow):
     def offer_shortcuts(self, ask: bool) -> None:
         exe = shortcut.exe_path()
         if exe is None:
-            QMessageBox.information(self, APP_NAME, "바로가기는 실행파일(OneQ-Prep.exe)로 열었을 때 만들 수 있어요.")
+            QMessageBox.information(self, APP_NAME, f"바로가기는 실행파일({EXE_NAME})로 열었을 때 만들 수 있어요.")
             return
         if shortcut.inside_zip_temp(exe):
             self.first_run_checks()
             return
         if ask and QMessageBox.question(self, APP_NAME, (
-                "원큐합격 전처리기는 설치 없이 이 폴더에서 바로 실행됩니다:\n"
+                f"{APP_NAME}는 설치 없이 이 폴더에서 바로 실행됩니다:\n"
                 f"{exe.parent}\n\n이 폴더를 지우거나 옮기지 말고 두세요.\n"
                 "바탕화면과 시작 메뉴에 바로가기를 만들까요?")) != QMessageBox.Yes:
             return
@@ -396,7 +378,7 @@ class MainWindow(QMainWindow):
         except Exception as e:  # noqa: BLE001
             QMessageBox.warning(self, APP_NAME, f"바로가기를 만들지 못했어요 — {e}\n\n프로그램 위치: {exe}")
             return
-        self.status.setText("바로가기를 만들었어요: 바탕화면·시작 메뉴의 '원큐합격 전처리기'")
+        self.status.setText(f"바로가기를 만들었어요: 바탕화면·시작 메뉴의 '{APP_NAME}'")
         if not ask:
             QMessageBox.information(self, APP_NAME, "바로가기를 만들었어요.\n" + "\n".join(made))
 
@@ -405,67 +387,64 @@ class MainWindow(QMainWindow):
         folder = exe.parent if exe else Path(__file__).resolve().parents[2]
         QDesktopServices.openUrl(QUrl.fromLocalFile(str(folder)))
 
-    def copy_app_url(self) -> None:
-        QApplication.clipboard().setText(APP_URL)
-        self.status.setText(f"앱 주소를 복사했습니다: {APP_URL}")
-
-    def _sub_row(self, tag: str, title: str, hint: str) -> QHBoxLayout:
-        """하위 작업 줄(2-1·2-2). 설명 글은 row.hint로 바꿀 수 있음."""
-        row = QHBoxLayout()
-        row.setSpacing(10)
-        t = QLabel(tag)
-        t.setObjectName("subStep")
-        row.addWidget(t, 0, Qt.AlignVCenter)
-        v = QVBoxLayout()
-        v.setSpacing(0)
+    def _source_area(self, name: str, title: str, hint: str) -> tuple[QFrame, QVBoxLayout, QHBoxLayout, QLabel]:
+        """기출 PDF를 넣는 두 영역(comcbt.com 최근 기출 받기 / 사용자 직접 올리기) — 제목 줄(오른쪽에 단추) + 설명 + 내용."""
+        f = QFrame()
+        f.setObjectName("srcArea")
+        f.setAccessibleName(name)
+        v = QVBoxLayout(f)
+        v.setContentsMargins(16, 12, 16, 14)
+        v.setSpacing(8)
+        top = QHBoxLayout()
+        top.setSpacing(8)
         tl = QLabel(title)
-        tl.setStyleSheet("font-weight:600")
-        hl = QLabel(hint)
+        tl.setObjectName("srcTitle")
+        top.addWidget(tl, 1)
+        v.addLayout(top)
+        hl = WrapLabel(hint)
         hl.setObjectName("muted")
-        hl.setWordWrap(True)
-        v.addWidget(tl)
         v.addWidget(hl)
-        row.addLayout(v, 1)
-        row.hint = hl
-        return row
+        return f, v, top, hl
 
     def _card_pdfs(self) -> Card:
-        """② 기출 PDF 업로드 = 2-1 comcbt 자동 받기(먼저) → 2-2 직접 올리기(+ 조건 셋) → 목록(사용자 2026-11-11)."""
+        """② 기출 PDF 업로드 = 「comcbt.com 최근 기출 받기」 → 「사용자 직접 올리기」(끌어다 놓는 상자 + 조건 셋 상시) → 목록
+        (영역 구분 2026-11-12 — 2-1·2-2 번호 상자 대신)."""
         c = Card("기출 PDF 업로드", "2")
         self.summary = QLabel()
         self.summary.setObjectName("muted")
         c.head.addWidget(self.summary)
         self.pdf_buttons = []
-        # 2-1 comcbt 게시판 첫 쪽의 최근 기출 받기(사용자 결정 2026-10-24 — 이전·최신 회차는 직접 올림)
+        # comcbt.com 게시판 첫 쪽의 최근 기출 받기(사용자 결정 2026-10-24 — 이전·최신 회차는 직접 올림)
         from ..comcbt import FIRST_PAGE_HINT
-        r1 = self._sub_row("2-1", "comcbt 최근 기출 자동 받기",
-                           f"comcbt.com 종목 게시판 첫 쪽에 올라온 회차({FIRST_PAGE_HINT})만 받아 목록에 넣어요")
-        self.comcbt_hint = r1.hint
-        self.comcbt_btn = QPushButton("comcbt 최근 기출 받기")
+        a1, v1, top1, self.comcbt_hint = self._source_area(
+            "comcbt", "comcbt.com 최근 기출 받기",
+            f"comcbt.com 종목 게시판 첫 쪽에 올라온 회차({FIRST_PAGE_HINT})만 받아 아래 목록에 넣어요")
+        self.comcbt_btn = QPushButton("최근 기출 받기")
         self.comcbt_btn.setObjectName("primarySmall")
         self.comcbt_btn.setToolTip("comcbt.com 종목 게시판 첫 쪽의 최근 기출(정답 표시된 교사용 PDF)을 받아 목록에 넣습니다")
         self.comcbt_btn.clicked.connect(self.comcbt_fetch)
-        r1.addWidget(self.comcbt_btn)
+        top1.addWidget(self.comcbt_btn)
         self.pdf_buttons.append(self.comcbt_btn)
-        c.body.addLayout(r1)
         self.comcbt_note = Note("info")
         self.comcbt_note.setVisible(False)
-        c.body.addWidget(self.comcbt_note)
-        # 2-2 직접 올리기 — 바로 아래에 조건 셋을 미리 보여 줌
-        r2 = self._sub_row("2-2", "직접 올리기", "자동으로 못 받은 이전·최신 회차 — 아래 조건 셋에 맞는 PDF")
+        v1.addWidget(self.comcbt_note)
+        c.body.addWidget(a1)
+        # 사용자 직접 올리기 — 끌어다 놓는 상자 + 바로 아래 조건 셋(늘 보임)
+        a2, v2, top2, _ = self._source_area(
+            "upload", "사용자 직접 올리기",
+            "comcbt에서 못 받은 이전·최신 회차 — 아래 조건 셋에 맞는 PDF를 끌어다 놓거나 [PDF 추가]·[폴더 추가]")
         for text, fn in (("PDF 추가", self.add_files), ("폴더 추가", self.add_folder)):
             b = QPushButton(text)
             b.clicked.connect(fn)
-            r2.addWidget(b)
+            top2.addWidget(b)
             self.pdf_buttons.append(b)
-        self.cond_btn = QPushButton("조건 접기 ▴")
-        self.cond_btn.setObjectName("link")
-        self.cond_btn.clicked.connect(lambda: self.toggle_conditions())
-        r2.addWidget(self.cond_btn)
-        c.body.addLayout(r2)
-        self._cond_user: bool | None = None
+        self.drop = DropZone()
+        self.drop.clicked.connect(lambda: self.drop.isEnabled() and self.add_files())
+        self.drop_hint = self.drop.title
+        v2.addWidget(self.drop)
         self.cond_panel = self._conditions_panel()
-        c.body.addWidget(self.cond_panel)
+        v2.addWidget(self.cond_panel)
+        c.body.addWidget(a2)
         # 목록(자동 받은 것·직접 올린 것 한 목록)
         bar = QHBoxLayout()
         bar.setSpacing(8)
@@ -481,9 +460,10 @@ class MainWindow(QMainWindow):
         c.body.addLayout(bar)
 
         self.stack = QStackedWidget()
-        self.drop = DropZone()
-        self.drop.clicked.connect(lambda: self.drop.isEnabled() and self.add_files())
-        self.drop_hint = self.drop.title
+        empty = QLabel("아직 올린 기출 PDF가 없어요 — 위 두 영역 중 하나로 넣으면 여기에 회차별로 나옵니다")
+        empty.setObjectName("listEmpty")
+        empty.setAlignment(Qt.AlignCenter)
+        empty.setWordWrap(True)
         self.table = QTableWidget(0, len(COLS))
         self.table.setHorizontalHeaderLabels(COLS)
         self.table.setAlternatingRowColors(True)
@@ -505,7 +485,8 @@ class MainWindow(QMainWindow):
             self.table.setColumnWidth(col, w)
         self.table.itemChanged.connect(self.on_item_changed)
         self.table.cellClicked.connect(self.open_result)
-        self.stack.addWidget(self.drop)
+        self.table.setMinimumHeight(150)
+        self.stack.addWidget(empty)
         self.stack.addWidget(self.table)
         c.body.addWidget(self.stack, 1)
 
@@ -533,10 +514,10 @@ class MainWindow(QMainWindow):
         lay = QHBoxLayout(f)
         lay.setContentsMargins(24, 14, 24, 14)
         lay.setSpacing(14)
-        step3 = QLabel("3")                      # ③ 작업 순서의 마지막 단계(사용자 2026-11-11)
+        step3 = QLabel("3")                      # ③ 문제팩 만들기 · ④ 문제팩 공유하기(작업 순서, 사용자 2026-11-12)
         step3.setObjectName("cardStep")
         lay.addWidget(step3, 0, Qt.AlignVCenter)
-        self.run_btn = QPushButton("팩 만들기")
+        self.run_btn = QPushButton("문제팩 만들기")
         self.run_btn.setObjectName("primary")
         self.run_btn.setMinimumWidth(160)
         self.run_btn.clicked.connect(lambda: self.start())
@@ -545,13 +526,13 @@ class MainWindow(QMainWindow):
         self.stop_btn.clicked.connect(self.stop)
         mid = QVBoxLayout()
         mid.setSpacing(6)
-        self.status = QLabel("종목을 고르고 기출 PDF를 넣은 뒤 [팩 만들기]를 누르세요.")
+        self.status = QLabel("종목을 고르고 기출 PDF를 넣은 뒤 [문제팩 만들기]를 누르세요.")
         self.status.setObjectName("status")
         self.progress = QProgressBar()
         self.progress.setValue(0)
         mid.addWidget(self.status)
         mid.addWidget(self.progress)
-        self.open_out_btn = QPushButton("팩 폴더 열기")
+        self.open_out_btn = QPushButton("문제팩 폴더 열기")
         self.open_out_btn.clicked.connect(self.open_out)
         self.open_report_btn = QPushButton("검수 보고서(웹)")
         self.open_report_btn.setEnabled(False)
@@ -561,6 +542,18 @@ class MainWindow(QMainWindow):
         lay.addLayout(mid, 1)
         lay.addWidget(self.open_out_btn)
         lay.addWidget(self.open_report_btn)
+        sep = QFrame()
+        sep.setObjectName("vsep")
+        sep.setFixedWidth(1)
+        lay.addWidget(sep)
+        step4 = QLabel("4")
+        step4.setObjectName("cardStep")
+        lay.addWidget(step4, 0, Qt.AlignVCenter)
+        self.share_btn = QPushButton("문제팩 공유하기")
+        self.share_btn.setObjectName("shareBtn")
+        self.share_btn.setToolTip("문제팩 폴더에서 보낼 문제팩 파일을 골라 메시지와 함께 내 휴대폰·동료에게 보냅니다")
+        self.share_btn.clicked.connect(self.show_share)
+        lay.addWidget(self.share_btn)
         return f
 
     # ───────────────── 설정 ─────────────────
@@ -568,13 +561,11 @@ class MainWindow(QMainWindow):
         st = self.settings
         docs = QStandardPaths.writableLocation(QStandardPaths.DocumentsLocation)
         self.out_dir = Path(st.value("out", str(Path(docs) / "원큐합격 문제팩")))
-        self.picker.select_code(st.value("cert", "SURVEY"))
+        # ① 종목은 처음에 빈칸 — 사용자가 원하는 종목을 고르게(사용자 2026-11-12, 예전엔 측량을 미리 골라 둠)
 
     def save_settings(self) -> None:
         st = self.settings
         st.setValue("out", str(self.out_dir))
-        if self.picker.code:
-            st.setValue("cert", self.picker.code)
 
     def open_out(self) -> None:
         self.out_dir.mkdir(parents=True, exist_ok=True)
@@ -716,7 +707,7 @@ class MainWindow(QMainWindow):
         for b in self.pdf_buttons:
             b.setEnabled(ready)
         self.drop.setEnabled(ready)
-        self.drop_hint.setText("기출 PDF를 여기로 끌어다 놓으세요" if ready else "먼저 ①에서 자격종목을 조회하세요")
+        self.drop_hint.setText("기출 PDF를 여기로 끌어다 놓으세요" if ready else "먼저 ① 종목 선택에서 자격종목을 조회하세요")
         self.update_flow()
 
     def make_profile(self, cert) -> None:
@@ -788,7 +779,7 @@ class MainWindow(QMainWindow):
     def spec(self, pdfs: list[Path] | None = None) -> BatchSpec:
         w = int(self.settings.value("workers", 0) or 0)
         return BatchSpec(pdfs=list(pdfs if pdfs is not None else self.pdfs), cert=self.picker.code or "",
-                         out=self.out_dir, prepared_by=f"원큐합격 전처리기 v{__version__}",
+                         out=self.out_dir, prepared_by=f"{APP_NAME} v{__version__}",
                          workers=w or None, file_dates=dict(self.file_dates))
 
     def refresh_plan(self) -> None:
@@ -872,8 +863,7 @@ class MainWindow(QMainWindow):
         kinds = {k: sum(r.kind == k for r in self.rows) for k in ("글자", "스캔", "섞임")}
         ktxt = " · ".join(f"{k} {v}" for k, v in kinds.items() if v)
         self.summary.setText((f"PDF {n}개" + (f" ({ktxt})" if ktxt else "") + (f" · 팩 {packed}개" if packed else "")) if n else "")
-        if self._cond_user is None:
-            self.toggle_conditions(not self.rows)
+        self.drop.set_compact(bool(self.rows))   # 목록이 생기면 상자는 낮게(조건 셋은 그대로 보임)
         self.update_flow()
 
     def on_item_changed(self, item: QTableWidgetItem) -> None:
@@ -1048,8 +1038,8 @@ class MainWindow(QMainWindow):
         if self.bundle:
             self.bundle_note.set("ok", f"종목 묶음 저장: {self.bundle.name}",
                                  [f"이번에 새로 만든 회차 {ok - sum(1 for r in rows if r.prepared and r.prepared.unchanged)}개를 파일 하나에 담았어요.",
-                                  "원큐합격 학습앱(폰·PC 각각)에서 [문제팩 가져오기]로 이 파일을 넣으세요. [팩 폴더 열기]로 위치를 볼 수 있어요.",
-                                  "학습앱이 아직 없으면 왼쪽 작업 순서 3단계의 [학습앱 설치], 동료에게는 위쪽 [동료에게 보내기]."])
+                                  "원큐합격 학습앱(폰·PC 각각)에서 [문제팩 가져오기]로 이 파일을 넣으세요. [문제팩 폴더 열기]로 위치를 볼 수 있어요.",
+                                  "내 휴대폰이나 동료에게는 아래 ④ [문제팩 공유하기]."])
         else:
             self.bundle_note.setVisible(False)
         lines = law_summary(self.rows)

@@ -11,7 +11,7 @@ dev-dist/
 *.local
 .vite/
 
-# ── Python (전처리기) ──
+# ── Python (문제팩 생성기, 구 전처리기) ──
 __pycache__/
 *.py[cod]
 .venv/

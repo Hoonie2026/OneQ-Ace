@@ -24,8 +24,7 @@ import { askConfirm, showNotice } from './Dialog';
 import type { PackRow } from '../db';
 import { BackButton, Icon } from './Icon';
 import { InstallGuide } from './InstallGuide';
-import { PrepCard } from './PrepCard';
-import { prepLink } from '../prep';
+import { MakerCard } from './MakerCard';
 
 /** 3분 전 · 2시간 전 · 5일 전 */
 function ago(ts: number): string {
@@ -545,14 +544,12 @@ export function Settings(props: {
         </div>
       </section>
 
-      {/* 보내기·설치 — 설치 경로 두 갈래(사용자 2026-11-12, ADR 021 7절): 학습앱 링크(공부할 사람) / 전처리기 링크(문제팩을 만들 사람) */}
+      {/* 보내기·설치 — 설치 루트 재설계(사용자 2026-11-12 세션 #19): 모든 시작은 학습앱 링크 하나. 생성기 링크는 따로 보내지 않음 */}
       <section className="card address">
-        <h2>동료에게 보내기 · 설치 안내</h2>
-        <h3>학습앱 링크 — 공부할 사람에게</h3>
+        <h2>학습앱 보내기 · 설치 안내</h2>
+        <h3>학습앱 링크</h3>
         <p className="url">{appUrl}</p>
-        <p className="hint">
-          문제팩 파일(oneq-종목-bundle-….zip)과 함께 카카오톡·메일 등으로 보내면, 받은 사람은 링크를 열어 학습앱을 설치하고 설치한 앱에서 받은 문제팩을 가져옵니다.
-        </p>
+        <p className="hint">카카오톡·메일 등으로 보내면, 받은 사람은 링크를 열어 PC·휴대폰에 학습앱을 설치합니다.</p>
         <div className="test-actions">
           <button className="btn btn-small" onClick={() => copy(appUrl, '학습앱 링크를 복사했습니다')} data-testid="copy-app-link">
             학습앱 링크 복사
@@ -563,26 +560,13 @@ export function Settings(props: {
             </button>
           )}
         </div>
-        <h3>전처리기 링크 — 문제팩을 직접 만들 사람에게(Windows PC)</h3>
-        <p className="url">{prepLink(appUrl)}</p>
-        <div className="test-actions">
-          <button className="btn btn-small" onClick={() => copy(prepLink(appUrl), '전처리기 링크를 복사했습니다')} data-testid="copy-prep-link">
-            전처리기 링크 복사
-          </button>
-          {'share' in navigator && (
-            <button className="btn btn-small" onClick={() => navigator.share({ title: '원큐합격 전처리기', url: prepLink(appUrl) }).catch(() => undefined)}>
-              보내기
-            </button>
-          )}
-        </div>
         <details className="why" data-testid="install-how">
-          <summary>이 기기에 학습앱 설치하는 방법</summary>
-          <InstallGuide url={appUrl} onCopy={() => copy(appUrl, '주소를 복사했습니다')} testId="install-guide-settings" />
-          {isStandalone() && <p className="hint">이 기기에는 이미 설치되어 있습니다(설치한 앱으로 열림).</p>}
+          <summary>학습앱 설치 방법 — PC(Windows) · 모바일(Android·iPhone)</summary>
+          <InstallGuide url={appUrl} onCopy={() => copy(appUrl, '학습앱 주소를 복사했습니다')} testId="install-guide-settings" />
         </details>
-        <details className="why" data-testid="prep-how">
-          <summary>문제팩을 직접 만들려면 — 원큐합격 전처리기</summary>
-          <PrepCard testId="prep-card-settings" url={appUrl} />
+        <details className="why" data-testid="maker-how">
+          <summary>문제팩을 직접 만들려면 — 원큐합격 문제팩 생성기</summary>
+          <MakerCard testId="maker-card-settings" />
         </details>
       </section>
     </div>

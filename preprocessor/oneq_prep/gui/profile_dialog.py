@@ -128,7 +128,7 @@ class ProfileDialog(QDialog):
             raise ValueError("옛 과목명은 현행 과목 이름으로 연결해야 합니다: " + ", ".join(bad))
         return {"code": self.code_edit.text().strip().upper(), "name": self.cert.name, "grade": self.cert.grade or "기사",
                 "version": self.version.text().strip() or str(dt.date.today().year),
-                "note": "전처리기 창에서 직접 입력(큐넷 출제기준 확인)",
+                "note": "문제팩 생성기 창에서 직접 입력(큐넷 출제기준 확인)",
                 "passRule": {"subjectMin": self.subj_min.value(), "avgMin": self.avg_min.value()},
                 "subjects": subjects, "aliases": aliases, "excluded": []}
 

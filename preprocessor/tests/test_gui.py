@@ -56,7 +56,7 @@ def test_inputs_required(win):
     win.set_cert("SAFETY")
     assert "PDF" in win.check_inputs([])
     assert win.check_inputs([Path("x.pdf")]) is None
-    assert win.spec([Path("x.pdf")]).prepared_by.startswith("원큐합격 전처리기")
+    assert win.spec([Path("x.pdf")]).prepared_by.startswith("원큐합격 문제팩 생성기")
 
 
 @pytest.mark.skipif(not all(p.exists() for p in PDFS), reason="건설안전 기출 PDF 없음")
@@ -170,65 +170,49 @@ def test_comcbt_button_adds_files_and_guides(win, qtbot, tmp_path, monkeypatch):
     assert (tmp_path / "packs" / "기출 PDF" / "건설안전기사" / src.name).exists()
 
 
-def test_app_install_dialog(win, monkeypatch):
-    """[학습앱 설치](전처리기 경로의 서브, 2026-11-12): PC는 브라우저 정식 설치 — 학습앱을 기본 브라우저로 열 뿐(바로가기 안 만듦),
-    휴대폰은 QR·주소 보내기 두 방법, 브라우저를 단정하지 않고 문제팩 안내도 없음."""
-    from PySide6.QtWidgets import QApplication, QLabel, QPushButton
+def test_share_dialog(win, tmp_path, monkeypatch):
+    """④ [문제팩 공유하기](사용자 2026-11-12): 학습앱·생성기 안내 없이 문제팩만 — 폴더에서 여러 개(또는 여러 번 나눠) 고르고
+    [선택 완료 · 메시지 복사] → 메시지가 클립보드에, [문제팩 파일 복사]로 파일 자체(Ctrl+V 첨부)."""
+    from PySide6.QtWidgets import QApplication, QLabel, QPlainTextEdit
 
     from oneq_prep.appinfo import APP_URL
-    from oneq_prep.gui import app_install_dialog as aid
-
-    opened = []
-    monkeypatch.setattr(aid.QDesktopServices, "openUrl", lambda u: opened.append(u.toString()) or True)
-    d = aid.AppInstallDialog(win, "android", win.status)
-    assert [d.tabs.tabText(i) for i in range(3)] == ["PC(이 컴퓨터)", "Android 휴대폰·태블릿", "iPhone·iPad"]
-    assert d.tabs.currentIndex() == 1
-    qrs = [q for q in d.findChildren(QLabel) if q.objectName() == "appQr"]
-    assert len(qrs) == 2 and all(q.pixmap() is not None and not q.pixmap().isNull() for q in qrs)
-    assert opened == []                       # 창을 열기만 해서는 아무것도 하지 않음
-    d.install_pc()
-    assert opened == [APP_URL] and "PC에 설치" in win.status.text()
-    texts = [b.text() for b in d.findChildren(QPushButton)]
-    assert "학습앱 열기" not in texts and texts.count("주소 복사") == 2
-    labels = " ".join(q.text() for q in d.findChildren(QLabel))
-    assert "실행은 인터넷이 필요 없고" in labels and "백업 파일로만 가능" in labels and "Windows 설정 › 앱" in labels
-    assert "Chrome</b>에서 엽니다" not in labels and "Safari</b>에서 엽니다" not in labels
-    assert "문제팩 가져오기" not in labels
-    d.findChild(QPushButton, "copy_ios").click()
-    assert QApplication.clipboard().text() == APP_URL
-
-
-def test_share_dialog(win, tmp_path, monkeypatch):
-    """[동료에게 보내기](2026-11-12): A 공부할 동료 = 학습앱 링크 + 문제팩 파일, B 문제팩을 만들 동료 = 전처리기 링크(?prep)."""
-    from PySide6.QtWidgets import QApplication, QPlainTextEdit, QPushButton
-
-    from oneq_prep.appinfo import APP_URL, PREP_URL
+    from oneq_prep.batch import RoundResult
     from oneq_prep.gui import share_dialog as sd
 
     win.out_dir = tmp_path
-    old = tmp_path / "oneq-SAFETY-bundle-2020-2021.zip"
-    new = tmp_path / "sub" / "oneq-SAFETY-bundle-2020-2022.zip"
-    new.parent.mkdir()
-    for f in (old, new):
-        f.write_bytes(b"z")
-    import os
-    os.utime(old, (1, 1))
-    assert win.latest_bundle() == new
+    a = tmp_path / "oneq-SAFETY-bundle-2020-2022.zip"
+    b = tmp_path / "oneq-SAFETY-2022-2.zip"
+    for f in (a, b):
+        f.write_bytes(b"z" * 2048)
     shown = []
     monkeypatch.setattr(sd.ShareDialog, "exec", lambda self: shown.append(self) or 0)
     win.show_share()
     d = shown[0]
-    assert [d.tabs.tabText(i) for i in range(2)] == ["문제팩 + 학습앱", "전처리기"]
-    study = d.findChild(QPlainTextEdit, "msg_study").toPlainText()
-    prep = d.findChild(QPlainTextEdit, "msg_prep").toPlainText()
-    assert APP_URL in study and new.name in study and "?prep" not in study
-    assert PREP_URL in prep and PREP_URL == APP_URL + "?prep"
-    opened = []
-    monkeypatch.setattr(sd.QDesktopServices, "openUrl", lambda u: opened.append(u.toLocalFile()) or True)
-    [b for b in d.findChildren(QPushButton) if b.text() == "팩 폴더 열기"][0].click()
-    assert Path(opened[0]) == new.parent
-    [b for b in d.findChildren(QPushButton) if b.accessibleName() == "copy_prep"][0].click()
-    assert QApplication.clipboard().text() == prep
+    assert d.windowTitle() == "문제팩 공유하기"
+    labels = " ".join(q.text() for q in d.findChildren(QLabel))
+    assert "문제팩 폴더" in labels and "oneq-" in labels                          # 폴더를 열어 파일을 고르라는 안내
+    assert "학습앱 설치" not in labels and "생성기" not in labels and APP_URL not in labels
+    assert not d.done_btn.isEnabled() and not d.result.isVisibleTo(d)
+    picks = iter([[str(a)], [str(b), str(a)]])                                   # 한 번에 하나씩 두 번(같은 파일은 한 번만)
+    monkeypatch.setattr(sd.QFileDialog, "getOpenFileNames", lambda *x, **k: (next(picks), ""))
+    d.pick()
+    d.pick()
+    assert d.list.paths() == [a, b] and d.done_btn.isEnabled() and "2개" in d.count.text()
+    d.done_btn.click()
+    msg = d.findChild(QPlainTextEdit, "msg_pack").toPlainText()
+    assert QApplication.clipboard().text() == msg and d.result.isVisibleTo(d) and d.shared
+    assert a.name in msg and b.name in msg and "건설안전기사 2020~2022년 묶음" in msg and "2022년 2회" in msg
+    assert "http" not in msg and "학습앱" not in msg and "생성기" not in msg       # 순수하게 문제팩만
+    d.copy_files_btn.click()
+    urls = [u.toLocalFile() for u in QApplication.clipboard().mimeData().urls()]
+    assert [Path(u) for u in urls] == [a, b]
+    md = d.list.mimeData([d.list.item(0)])                                       # 목록에서 끌어다 놓기 = 파일
+    assert [Path(u.toLocalFile()) for u in md.urls()] == [a]
+    win.shared = True                                                            # ④까지 하면 작업 순서 끝(앞 단계가 끝났을 때)
+    win.picker.current, win.bundle = win.picker.current, a
+    win.rows = [RoundResult(pdf=a, pack_id="SAFETY-2022-1", status="packed")]
+    assert win.flow_state() == ["done", "done", "done", "done"]
+
 
 def test_qnet_success_unlocks_pdf_area(win, qtbot, monkeypatch):
     """🖥P19(2026-11-11): [조회] 성공 뒤 ② 기출 PDF 단추·끌어다 놓기가 열려야 한다(전에는 잠긴 채 남음)."""
@@ -346,29 +330,47 @@ def test_result_while_running(win, qtbot, tmp_path, monkeypatch):
     assert win.pending_rerun == []
 
 
-def test_main_screen_work_order(win):
-    """메인 화면 작업 순서(사용자 2026-11-11): ① 종목 선택(출제기준 다운로드) → ② 기출 PDF 업로드(2-1 자동 → 2-2 직접 + 조건 1·2·3)
-    → ③ 팩 만들기. 조건은 순서 번호와 다른 모양(조건 칩), 작업 순서 카드는 끝난 단계 ✓."""
+def test_main_screen_work_order(win, qtbot, tmp_path, monkeypatch):
+    """메인 화면 재설계(사용자 2026-11-12): 작업 순서 ① 종목 선택 → ② 기출 PDF 업로드 → ③ 문제팩 만들기 → ④ 문제팩 보내기.
+    ② 안은 번호 상자(2-1·2-2) 대신 두 영역(comcbt.com 최근 기출 받기 / 사용자 직접 올리기), 조건 셋은 끌어다 놓는 상자 아래 늘 보임.
+    ① 종목은 처음에 빈칸(미리 골라 둔 종목 없음). 머리말의 [동료에게 보내기]·[학습앱 설치]는 없음."""
+    from PySide6.QtCore import QSettings
+    from PySide6.QtWidgets import QFrame, QPushButton
+
     from oneq_prep.batch import RoundResult
-    from oneq_prep.gui.app import QLabel
+    from oneq_prep.gui.app import MainWindow, QLabel
     texts = [lbl.text() for lbl in win.findChildren(QLabel)]
-    assert "종목 선택(출제기준 다운로드)" in texts and "기출 PDF 업로드" in texts
+    assert "종목 선택" in texts and "기출 PDF 업로드" in texts and "종목 선택(출제기준 다운로드)" not in texts
+    assert [lbl.text() for lbl in win.findChildren(QLabel) if lbl.objectName() == "flowText"] == \
+        ["종목 선택", "기출 PDF 업로드", "문제팩 만들기", "문제팩 보내기"]
+    assert [f.accessibleName() for f in win.findChildren(QFrame) if f.objectName() == "srcArea"] == ["comcbt", "upload"]
+    assert [lbl.text() for lbl in win.findChildren(QLabel) if lbl.objectName() == "srcTitle"] == \
+        ["comcbt.com 최근 기출 받기", "사용자 직접 올리기"]
+    assert not [lbl for lbl in win.findChildren(QLabel) if lbl.objectName() == "subStep"]
     chips = [lbl.text() for lbl in win.findChildren(QLabel) if lbl.objectName() == "condChip"]
     assert chips == ["조건 1", "조건 2", "조건 3"]
-    assert [lbl.text() for lbl in win.findChildren(QLabel) if lbl.objectName() == "subStep"] == ["2-1", "2-2"]
     steps = [lbl.text() for lbl in win.findChildren(QLabel) if lbl.objectName() == "cardStep"]
-    assert sorted(steps) == ["1", "2", "3"]                     # 순서 번호는 셋뿐(조건에는 안 씀)
-    assert win.flow_state() == ["done", "now", "todo"]          # 종목은 골라져 있음 → 지금은 ② 업로드
-    assert not win.cond_panel.isHidden()                         # 목록이 비었으면 조건을 펼쳐 둠
+    assert sorted(steps) == ["1", "2", "3", "4"]
+    buttons = [b.text() for b in win.findChildren(QPushButton)]
+    assert "문제팩 만들기" in buttons and "문제팩 공유하기" in buttons
+    assert "동료에게 보내기" not in buttons and "팩 만들기" not in buttons
+    assert win.flow_state() == ["done", "now", "todo", "todo"]          # 종목은 골라져 있음 → 지금은 ② 업로드
+    assert not win.cond_panel.isHidden()
     p = win.out_dir / "a.pdf"
     win.pdfs = [p]
     win.rows = [RoundResult(pdf=p, pack_id="SAFETY-2022-1", date="2022-03-05", status="waiting")]
     win.render_rows()
-    assert win.cond_panel.isHidden() and "보기" in win.cond_btn.text()     # 파일이 들어오면 접음
-    assert win.flow_state() == ["done", "done", "now"]
-    win.toggle_conditions()                                       # 직접 펼치면 그대로
-    win.render_rows()
-    assert not win.cond_panel.isHidden()
+    assert not win.cond_panel.isHidden() and not win.drop.isHidden()    # 파일이 들어와도 상자·조건은 그대로(상자만 낮게)
+    assert win.drop.maximumHeight() < 100
+    assert win.flow_state() == ["done", "done", "now", "todo"]
+    # 처음 켜면 종목은 빈칸(예전엔 측량이 미리 골라져 ① 체크)
+    monkeypatch.setenv("HOME", str(tmp_path / "fresh"))
+    QSettings.setPath(QSettings.IniFormat, QSettings.UserScope, str(tmp_path / "fresh-settings"))
+    w2 = MainWindow()
+    qtbot.addWidget(w2)
+    assert w2.picker.current is None and w2.picker.edit.text() == ""
+    assert w2.flow_state() == ["now", "todo", "todo", "todo"]
+    assert "① 종목 선택" in w2.drop_hint.text() and not w2.drop.isEnabled()
 
 
 def test_comcbt_hint_round_count(win):

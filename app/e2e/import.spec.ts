@@ -2,7 +2,7 @@
  * 문제팩 가져오기 진행 창·지연 안내·그만 가져오기·중단 안내(v0.10.7, 태블릿 실사용 의견).
  * 시계를 멈춰(page.clock) 진행 창이 떠 있는 상태를 확인하고, 20초를 앞당겨 "오래 걸림" 안내를 확인한다.
  */
-import { expect, test } from '@playwright/test';
+import { expect, test } from './fixtures';
 import { mkdtempSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -87,9 +87,8 @@ test('v0.10.8: 35개 결과 창은 요약되고 [확인]이 화면 안에 있어
 test('v0.10.8: 선택기에서 돌아왔는데 파일이 아직 안 오면 "기기가 받는 중" 안내 → 파일이 오면 사라지고 가져오기', async ({ page }) => {
   await page.goto('./');
   const files = await packFiles(2);
-  await page.getByTestId('empty-home').locator('summary').click(); // 브라우저 화면(설치 전)에서는 가져오기가 접혀 있음(2026-11-12)
   const chooser = page.waitForEvent('filechooser');
-  await page.getByText('문제팩 가져오기', { exact: true }).first().click();
+  await page.getByTestId('empty-home').locator('label', { hasText: '문제팩 가져오기' }).click();
   const fc = await chooser;
   await page.evaluate(() => window.dispatchEvent(new Event('focus')));   // 앱 화면으로 돌아옴(기기는 아직 내려받는 중)
   await expect(page.getByTestId('pick-wait')).toContainText('고른 파일을 기기가 받는 중', { timeout: 5_000 });

@@ -11,9 +11,9 @@ import { SubjectDetail } from './SubjectDetail';
 import { ForecastView } from './ForecastView';
 import { Principles } from './Principles';
 import { computeInsight, type Insight } from '../insight';
-import { deviceEnv, resetPageZoom } from '../util';
-import { PrepCard } from './PrepCard';
-import { isPrepLink } from '../prep';
+import { resetPageZoom } from '../util';
+import { useInstalledApp } from '../install';
+import { MakerCard } from './MakerCard';
 import { InstallGuide } from './InstallGuide';
 import { BackButton, BrandLogo, Icon } from './Icon';
 
@@ -136,14 +136,14 @@ export function Home(props: {
 
   const inSub = view !== 'home' && !!coach && !!cert && !!packs && packs.length > 0;
   const appUrl = new URL(import.meta.env.BASE_URL, window.location.origin).href;
-  const env = deviceEnv();
-  // 설치 경로 두 갈래(사용자 2026-11-12, ADR 021 7절): 학습앱 링크 = 설치 메인·전처리기 서브 / 전처리기 링크(?prep) = 전처리기 메인·학습앱 서브
-  const prepMode = isPrepLink();
+  // 설치 루트 재설계(사용자 2026-11-12 세션 #19): 모든 시작은 학습앱 설치 —
+  // 브라우저 화면 = 설치 안내만(PC·모바일 구분), 설치한 앱을 처음 열면 = [문제팩 가져오기] 메인 + 문제팩 생성기 서브
+  const installed = useInstalledApp();
   const empty = !!packs && packs.length === 0;
   const copyUrl = () =>
     navigator.clipboard
       .writeText(appUrl)
-      .then(() => props.toast('주소를 복사했습니다. Safari 주소창에 붙여넣으세요'))
+      .then(() => props.toast('학습앱 주소를 복사했습니다'))
       .catch(() => props.toast(appUrl));
 
   return (
@@ -177,40 +177,23 @@ export function Home(props: {
             </label>
           )}
 
-          {/* 전처리기 링크(?prep): 전처리기 설치가 메인, 학습앱은 카드 안 서브 링크 */}
-          {prepMode && <PrepCard main url={appUrl} />}
-          {/* 학습앱 링크: 이 기기에 학습앱 설치가 메인(모든 기기 — PC도 Chrome·Edge 정식 설치). 설치한 앱(standalone)에서는 안 보임 */}
-          {!prepMode && <InstallGuide compact main={empty} url={appUrl} onCopy={copyUrl} />}
+          {/* 브라우저 화면: 이 기기에 학습앱 설치가 메인(설치 내용만). 설치한 앱에서는 안 보임 */}
+          {!installed && <InstallGuide compact main={empty} url={appUrl} onCopy={copyUrl} />}
         </>
       )}
 
-      {/* 문제팩 가져오기는 설치한 앱에서 메인. 브라우저 화면(설치 전)에서는 접어 둠 — 설치 안 하고 쓰는 사람만 펼침(사용자 2026-11-12) */}
-      {empty && !prepMode && (env.standalone ? (
-        <section className="card empty" data-testid="empty-home">
-          <h2>문제팩을 가져오세요</h2>
+      {/* 설치한 앱을 처음 열면: 문제팩 가져오기가 메인, 그 아래 서브로 문제팩 생성기(PC만 받기 링크, 휴대폰은 안내 문구만) */}
+      {empty && installed && (
+        <section className="card empty first-run" data-testid="empty-home">
+          <h2>문제팩 가져오기</h2>
           <p>
-            받은 문제팩 파일(<b>oneq-종목-….zip</b>)을 고릅니다 — 카카오톡·메일로 받았거나 다운로드 폴더·구글 드라이브·PC에 보관한 곳에서. 여러 회차를 한 번에 골라도 됩니다(5~10년치를 권장).
+            받은 문제팩 파일(<b>oneq-종목-….zip</b>)을 고릅니다 — 카카오톡·메일로 받았거나 다운로드 폴더·구글 드라이브·PC에 보관한 곳에서. 여러 개를 한 번에 골라도 됩니다(5~10년치를 권장).
           </p>
           <PackPicker busy={props.busy} onFiles={props.onImport} onPickFailed={props.onPickFailed} primary />
+          <div className="first-run-sub" data-testid="maker-sub">
+            <MakerCard />
+          </div>
         </section>
-      ) : (
-        <details className="why sub-path" data-testid="empty-home">
-          <summary>설치하지 않고 이 브라우저에서 쓰기</summary>
-          <p className="hint">
-            받은 문제팩 파일(<b>oneq-종목-….zip</b>)을 고릅니다.{' '}
-            {env.os === 'ios'
-              ? '아이폰·아이패드는 이 브라우저 화면과 홈 화면 앱의 기록이 따로 저장되니, 되도록 설치한 앱에서 가져오세요.'
-              : '설치한 앱과 이 브라우저는 기록을 함께 씁니다.'}
-          </p>
-          <PackPicker busy={props.busy} onFiles={props.onImport} onPickFailed={props.onPickFailed} />
-        </details>
-      ))}
-      {/* 서브: 문제팩을 직접 만들려면 전처리기 */}
-      {empty && !prepMode && (
-        <details className="why sub-path" data-testid="prep-sub">
-          <summary>문제팩을 직접 만들려면 — 원큐합격 전처리기(Windows PC)</summary>
-          <PrepCard url={appUrl} />
-        </details>
       )}
 
       {coach && cert && packs && packs.length > 0 && (

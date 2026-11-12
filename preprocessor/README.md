@@ -1,4 +1,6 @@
-# oneq-prep (기출 PDF 전처리기)
+# oneq-prep — 원큐합격 문제팩 생성기(구 기출 PDF 전처리기)
+
+> 2026-11-12 이름 변경: 화면·설치 프로그램·실행파일 이름은 **원큐합격 문제팩 생성기**(`OneQ-PackMaker.exe`, `OneQ-PackMaker-Setup.exe`). 파이썬 패키지 `oneq_prep`와 팩의 `generator: "oneq-prep x.y"`는 팩 형식과 이어져 있어 그대로 둔다(ADR 023).
 
 > 이 안내는 **v0.4.0 기준**이다. v0.5(ADR 021)에서 입력 칸·종목 목록·시행일 판정·출처 입력이 자동으로 바뀌며, 그때 다시 쓴다(PREP-PLAN-v0.5 D2).
 
@@ -14,10 +16,10 @@ v0.4: 원큐합격 디자인(Pretendard), 종목 검색(별칭·공공데이터 
 pip install -r preprocessor/requirements-gui.txt
 cd preprocessor
 python -m oneq_prep.gui                                   # 창 프로그램
-powershell -ExecutionPolicy Bypass -File packaging\build_exe.ps1   # Windows 실행파일(dist\OneQ-Prep\OneQ-Prep.exe + zip)
+powershell -ExecutionPolicy Bypass -File packaging\build_exe.ps1   # Windows 실행파일(dist\OneQ-PackMaker\OneQ-PackMaker.exe + zip + Setup.exe)
 ```
 
-- 사용 안내(동료용): `docs/PREP-GUIDE.md`. 실행파일로도 명령줄 처리: `OneQ-Prep.exe --cli <PDF…> <출력폴더> --cert …`(기록은 `oneq-prep-cli.log`)
+- 사용 안내(동료용): `docs/PREP-GUIDE.md`. 실행파일로도 명령줄 처리: `OneQ-PackMaker.exe --cli <PDF…> <출력폴더> --cert …`(기록은 `oneq-prep-cli.log`)
 - 처리 규칙은 `batch.py`(일괄·동시 처리)·`review.py`(검수 파일)에 있고 명령줄과 창이 함께 쓴다. 화면은 `oneq_prep/gui/`.
 
 ## 명령줄 (2단계 MVP + v0.3.0 동시 처리 `--workers`)

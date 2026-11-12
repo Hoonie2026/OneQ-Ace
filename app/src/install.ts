@@ -5,6 +5,7 @@
  * - 그 밖의 앱 안 브라우저(네이버 앱 등): 안드로이드는 Chrome 열기 주소(intent://), 아이폰은 Safari로 여는 방법 안내
  * 이벤트는 페이지가 뜨자마자 오므로 main.tsx에서 이 파일을 먼저 가져와 듣기 시작한다
  */
+import { useEffect, useState } from 'react';
 interface InstallPromptEvent extends Event {
   prompt: () => Promise<void>;
   userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }>;
@@ -98,4 +99,28 @@ export function forgetInstalled(): void {
   } catch {
     /* 무시 */
   }
+}
+
+function standaloneNow(): boolean {
+  if (typeof window === 'undefined') return false;
+  return (navigator as Navigator & { standalone?: boolean }).standalone === true || window.matchMedia?.('(display-mode: standalone)').matches === true;
+}
+
+/**
+ * 설치한 앱(홈 화면·PC 앱 창)으로 열렸는지 — 설치 루트 재설계(세션 #19)의 갈림길.
+ * PC Chrome·Edge는 설치하면 지금 탭을 그대로 앱 창으로 옮기므로(새로 불러오지 않음) 표시 방식 변화를 듣고 다시 그린다.
+ */
+export function useInstalledApp(): boolean {
+  const [on, setOn] = useState(standaloneNow);
+  useEffect(() => {
+    const mq = window.matchMedia?.('(display-mode: standalone)');
+    const sync = () => setOn(standaloneNow());
+    mq?.addEventListener?.('change', sync);
+    const off = onInstallChange(sync);
+    return () => {
+      mq?.removeEventListener?.('change', sync);
+      off();
+    };
+  }, []);
+  return on;
 }

@@ -9,7 +9,7 @@
 | 폴더 | 내용 | 상태 |
 |---|---|---|
 | `app/` | 학습앱 — 정적 PWA (Vite + React + TypeScript). 스마트폰·태블릿·PC 브라우저 | **v0.11.0**(현재 점수 = 푼 문항 정답률, 학습 방식 셋으로 단순화·과목 막대 안내창 — ADR 020): 학습 계획·시스템 추천·과목별 학습·모의고사·시험일 예상 점수(계산 보기)·학습 원리, [쉬움], 계산기·손글씨 메모, 백업/복원(기기 간 합치기). `src/engine/` 학습 엔진(FSRS) |
-| `preprocessor/` | PC 기출 PDF 전처리기 `oneq-prep` (Python) | **v0.4.0 창 프로그램**(PySide6, 실행파일 `OneQ-Prep.exe`, 여러 회차 동시 처리·창 안 검수 — ADR 018 / 원큐합격 디자인·종목 검색·과목 개편 요약·법령 문항 표시 — ADR 019) + 명령줄. 종목 프로필 측량·토목·건설안전(2026 기준, ADR 016). 동료용 안내 `docs/PREP-GUIDE.md` |
+| `preprocessor/` | **원큐합격 문제팩 생성기**(구 기출 PDF 전처리기, 패키지 `oneq-prep`, Python) — Windows PC | **v0.5 개발 중**(설치 프로그램 `OneQ-PackMaker-Setup.exe` — PC 학습앱 첫 화면에서 받음, ADR 023) / v0.4.0 창 프로그램(PySide6, 실행파일 `OneQ-PackMaker.exe`, 여러 회차 동시 처리·창 안 검수 — ADR 018 / 원큐합격 디자인·종목 검색·과목 개편 요약·법령 문항 표시 — ADR 019) + 명령줄. 종목 프로필 측량·토목·건설안전(2026 기준, ADR 016). 동료용 안내 `docs/PREP-GUIDE.md` |
 | `shared/` | 팩 포맷 스키마(`pack-schema.json`)·두 검증기 공용 시험 사례 | oqp/1 |
 | `docs/` | 세션 기록, 실기기 결과표, 결정 기록(ADR), 사용 안내 초안(`USER-GUIDE.md`) | |
 

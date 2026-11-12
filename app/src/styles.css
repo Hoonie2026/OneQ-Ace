@@ -3139,9 +3139,6 @@ details.why summary {
 .install-steps li + li {
   margin-top: 2px;
 }
-.prep-card .btn {
-  margin: 8px 0 4px;
-}
 a.btn {
   text-decoration: none;
   box-sizing: border-box;
@@ -3831,19 +3828,78 @@ a.btn {
 .toggle-row { display: flex; gap: 10px; align-items: flex-start; margin-top: 10px; font-size: 15px; line-height: 1.45; }
 .toggle-row input { width: 20px; height: 20px; margin-top: 2px; flex: none; }
 
-/* 설치 경로 두 갈래(2026-11-12): 서브(접힌 칸·카드 안 전처리기) */
-.prep-card.plain {
-  margin: 6px 0 0;
-  padding: 0;
+/* 설치 루트 재설계(2026-11-12 세션 #19): 설치 안내 PC·모바일 탭, 첫 실행 [문제팩 가져오기] + 생성기 서브 */
+.install-kicker {
+  margin: 0 0 8px;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--check);
+}
+.install-tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  padding: 4px;
+  margin: 0 0 14px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--check) 12%, transparent);
+}
+.install-tabs button {
+  min-height: var(--tap);
   border: 0;
-  box-shadow: none;
+  border-radius: 9px;
   background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.25;
+  padding: 6px 8px;
+  cursor: pointer;
 }
-details.sub-path {
-  margin: 4px 2px 12px;
+.install-tabs button.on {
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.12);
 }
-.sub-path {
-  font-size: 14px;
+.install-tab-here {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--primary);
+}
+.install-qr {
+  width: 168px;
+  margin: 10px 0 4px;
+  padding: 8px;
+  border-radius: 10px;
+  background: #ffffff;
+  line-height: 0;
+}
+.install-qr svg {
+  width: 100%;
+  height: auto;
+}
+.first-run h2 {
+  font-size: 20px;
+  margin-bottom: 6px;
+}
+.first-run-sub {
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+.maker-card .maker-lead {
+  margin: 0 0 6px;
+  font-size: 15px;
+  line-height: 1.55;
+}
+.maker-card .btn {
+  margin: 8px 0 4px;
+}
+details .maker-card {
+  margin-top: 8px;
 }
 .card.address h3 {
   font-size: 16px;

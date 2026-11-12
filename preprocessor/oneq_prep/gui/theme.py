@@ -1,4 +1,4 @@
-"""원큐합격 디자인(앱과 같은 색·글꼴) — 전처리기 창 프로그램 v0.4(ADR 019).
+"""원큐합격 디자인(앱과 같은 색·글꼴) — 문제팩 생성기(구 전처리기) 창 프로그램 v0.4(ADR 019).
 
 - 글꼴: Pretendard(SIL OFL, fonts/ 폴더에 함께 배포) → 없으면 맑은 고딕
 - 크기 단계(px): 제목 20 · 카드 제목 16 · 본문·입력 14 · 배지·보조 12. 8px 격자 여백
@@ -78,9 +78,17 @@ QFrame#card {{ background: {SURFACE}; border: 1px solid {LINE}; border-radius: 1
 QLabel#cardTitle {{ font-size: 16px; font-weight: 600; }}
 QLabel#cardStep {{ color: white; background: {PRIMARY}; border-radius: 11px; font-size: 12px; font-weight: 700;
                    min-width: 22px; max-width: 22px; min-height: 22px; max-height: 22px; qproperty-alignment: AlignCenter; }}
-/* 작업 순서(① 종목 → ② 기출 PDF 업로드[2-1·2-2] → ③ 팩 만들기)와 조건 표시 — 순서 번호(동그라미)와 조건(네모 칩)을 구분 */
-QLabel#subStep {{ color: {PRIMARY}; background: {PRIMARY_SOFT}; border: 1px solid {PRIMARY}; border-radius: 6px;
-                  padding: 2px 8px; font-size: 12px; font-weight: 700; }}
+/* 작업 순서(① 종목 선택 → ② 기출 PDF 업로드 → ③ 문제팩 만들기 → ④ 문제팩 보내기)와 조건 표시 — 순서 번호(동그라미)와 조건(네모 칩)을 구분.
+   ② 안은 번호 상자 대신 두 영역(comcbt.com 최근 기출 받기 / 사용자 직접 올리기, 2026-11-12) */
+QFrame#srcArea {{ background: {SURFACE}; border: 1px solid {LINE}; border-left: 4px solid {PRIMARY}; border-radius: 10px; }}
+QLabel#srcTitle {{ font-size: 15px; font-weight: 700; }}
+QLabel#listEmpty {{ color: {MUTED}; background: #f8fafc; border: 1px dashed {LINE}; border-radius: 10px; padding: 18px; font-size: 13px; }}
+QFrame#vsep {{ background: {LINE}; }}
+QListWidget#shareList {{ background: {SURFACE}; border: 1px solid {LINE}; border-radius: 10px; padding: 4px; }}
+QListWidget#shareList::item {{ padding: 8px 6px; border-bottom: 1px solid #edf1f6; }}
+QListWidget#shareList::item:selected {{ background: {PRIMARY_SOFT}; color: {INK}; }}
+QPushButton#shareBtn {{ background: {PRIMARY_SOFT}; color: {PRIMARY}; border: 1px solid {PRIMARY}; padding: 9px 18px; border-radius: 8px; font-weight: 700; }}
+QPushButton#shareBtn:hover {{ background: #dbe7fb; }}
 QLabel#condChip {{ color: {MUTED}; background: {GRAY_SOFT}; border: 1px solid #cfd8e3; border-radius: 6px;
                    padding: 2px 8px; font-size: 12px; font-weight: 700; }}
 QFrame#condPanel {{ background: #f8fafc; border: 1px solid {LINE}; border-radius: 10px; }}
@@ -94,13 +102,11 @@ QLabel#flowText[state="done"] {{ color: {INK}; }}
 QLabel#cardHint, QLabel#muted, QLabel#hint {{ color: {MUTED}; font-size: 13px; }}
 QLabel#fieldLabel {{ color: {MUTED}; font-size: 13px; font-weight: 600; }}
 
-/* 탭([학습앱 설치] 창) */
+/* 탭 */
 QTabWidget::pane {{ background: {SURFACE}; border: 1px solid {LINE}; border-radius: 10px; top: -1px; }}
 QTabBar::tab {{ background: {GRAY_SOFT}; color: {MUTED}; border: 1px solid {LINE}; border-bottom: 0;
                 border-top-left-radius: 8px; border-top-right-radius: 8px; padding: 8px 16px; margin-right: 4px; font-weight: 600; }}
 QTabBar::tab:selected {{ background: {SURFACE}; color: {INK}; }}
-QPushButton#appInstall {{ background: {PRIMARY}; color: white; border: 0; padding: 9px 16px; border-radius: 8px; font-weight: 700; }}
-QPushButton#appInstall:hover {{ background: {PRIMARY_DARK}; }}
 
 /* 입력 */
 QLineEdit, QComboBox, QSpinBox {{ background: {SURFACE}; border: 1px solid #cfd8e3; border-radius: 8px;

@@ -1,9 +1,10 @@
-# 원큐합격 전처리기 Windows 실행파일을 GitHub에서 빌드해 릴리스로 올린다(PREP-PLAN-v0.5 D1, ADR 021 7절).
-# 학습앱의 [전처리기 받기]는 .../releases/latest/download/OneQ-Prep-Setup.exe(설치 프로그램, 사용자 2026-11-11 B안)와
-# 보조로 OneQ-Prep-win64.zip(설치 없이)을 가리킨다(이름 고정 — app/src/prep.ts).
+# 원큐합격 문제팩 생성기(구 전처리기) Windows 실행파일을 GitHub에서 빌드해 릴리스로 올린다(PREP-PLAN-v0.5 D1, ADR 021 7절).
+# PC 학습앱 첫 화면의 [문제팩 생성기 설치 파일 받기]는 .../releases/latest/download/OneQ-PackMaker-Setup.exe(설치 프로그램, 사용자 2026-11-11 B안)와
+# 보조로 OneQ-PackMaker-win64.zip(설치 없이)을 가리킨다(이름 고정 — app/src/maker.ts).
+# 이름 변경(2026-11-12): 이 이름이 붙은 릴리스를 처음 올리기 전까지 학습앱의 받기 링크는 404.
 # 올리는 법: GitHub 웹(폰도 됨) Releases → Draft a new release → 태그 prep-v<버전>(예: prep-v0.5.0-dev.1) 새로 만들기
 #   → 제목·설명 → Set as the latest release 켬 → Publish. 그러면 이 워크플로가 빌드해 그 릴리스에 zip을 붙인다(몇 분).
-#   붙기 전까지 [전처리기 받기]는 직전 릴리스 파일이 아니라 404 — 한가한 시간에 올릴 것.
+#   붙기 전까지 [문제팩 생성기 설치 파일 받기]는 직전 릴리스 파일이 아니라 404 — 한가한 시간에 올릴 것.
 # 손으로 돌리면(workflow_dispatch) 릴리스 없이 빌드 결과만 14일 보관.
 # PC의 packaging/build_exe.ps1과 같은 순서(시험 → PyInstaller → zip). 기출 PDF 점검과 Defender 검사는 PC에서만(🖥P9·P14).
 name: Release preprocessor (Windows)
@@ -29,8 +30,8 @@ jobs:
         shell: pwsh
     env:
       PYTHONUTF8: '1'
-      ASSET: OneQ-Prep-win64.zip
-      SETUP: OneQ-Prep-Setup.exe
+      ASSET: OneQ-PackMaker-win64.zip
+      SETUP: OneQ-PackMaker-Setup.exe
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -51,15 +52,15 @@ jobs:
         run: python -m PyInstaller --noconfirm --clean --distpath dist --workpath build packaging\oneq-prep.spec
       - name: 실행파일 안 Windows 내장 OCR 점검(ADR 022 — winrt 모듈이 빠지지 않았는지, 빌드 기계엔 영어 OCR만 있을 수 있음)
         run: |
-          $p = Start-Process -FilePath dist\OneQ-Prep\OneQ-Prep.exe -ArgumentList "--ocr-check","en" -WorkingDirectory dist -Wait -PassThru
+          $p = Start-Process -FilePath dist\OneQ-PackMaker\OneQ-PackMaker.exe -ArgumentList "--ocr-check","en" -WorkingDirectory dist -Wait -PassThru
           if (Test-Path dist\oneq-prep-ocr-check.log) { Get-Content dist\oneq-prep-ocr-check.log -Encoding utf8; Remove-Item dist\oneq-prep-ocr-check.log }
           if ($p.ExitCode -eq 2 -or $p.ExitCode -eq 4) { throw "실행파일에서 Windows 내장 OCR을 못 부름(종료 코드 $($p.ExitCode))" }
           if ($p.ExitCode -ne 0) { Write-Host "::warning::빌드 기계에 영어 OCR 기능이 없어 실제 읽기는 건너뜀(종료 코드 $($p.ExitCode))" }
       - name: zip·설치 프로그램 만들기
         id: zip
         run: |
-          if (-not (Test-Path dist\OneQ-Prep\OneQ-Prep.exe)) { throw "OneQ-Prep.exe 없음" }
-          Compress-Archive -Path dist\OneQ-Prep -DestinationPath $env:ASSET
+          if (-not (Test-Path dist\OneQ-PackMaker\OneQ-PackMaker.exe)) { throw "OneQ-PackMaker.exe 없음" }
+          Compress-Archive -Path dist\OneQ-PackMaker -DestinationPath $env:ASSET
           $ver = python -c "import oneq_prep; print(oneq_prep.__version__)"
           $num = python -c "import re, oneq_prep; print('.'.join(re.match(r'(\d+)\.(\d+)\.(\d+)', oneq_prep.__version__).groups()))"
           $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
@@ -89,19 +90,19 @@ jobs:
           $dir = Join-Path $env:RUNNER_TEMP "oneq-setup-test"
           $p = Start-Process -FilePath (Resolve-Path $env:SETUP) -ArgumentList "/VERYSILENT","/SUPPRESSMSGBOXES","/NORESTART","/CURRENTUSER","/DIR=`"$dir`"","/TASKS=desktopicon" -Wait -PassThru
           if ($p.ExitCode -ne 0) { throw "설치 실패(종료 코드 $($p.ExitCode))" }
-          if (-not (Test-Path "$dir\OneQ-Prep.exe")) { throw "설치 폴더에 OneQ-Prep.exe 없음" }
-          $lnk = Join-Path ([Environment]::GetFolderPath('Programs')) "원큐합격 전처리기.lnk"
+          if (-not (Test-Path "$dir\OneQ-PackMaker.exe")) { throw "설치 폴더에 OneQ-PackMaker.exe 없음" }
+          $lnk = Join-Path ([Environment]::GetFolderPath('Programs')) "원큐합격 문제팩 생성기.lnk"
           if (-not (Test-Path $lnk)) { throw "시작 메뉴 바로가기 없음: $lnk" }
           $u = Start-Process -FilePath "$dir\unins000.exe" -ArgumentList "/VERYSILENT","/SUPPRESSMSGBOXES","/NORESTART" -Wait -PassThru
-          for ($i = 0; $i -lt 30 -and (Test-Path "$dir\OneQ-Prep.exe"); $i++) { Start-Sleep -Seconds 1 }   # 제거기는 임시 사본으로 다시 떠서 끝남
-          if (Test-Path "$dir\OneQ-Prep.exe") { throw "제거 뒤에도 파일이 남음" }
+          for ($i = 0; $i -lt 30 -and (Test-Path "$dir\OneQ-PackMaker.exe"); $i++) { Start-Sleep -Seconds 1 }   # 제거기는 임시 사본으로 다시 떠서 끝남
+          if (Test-Path "$dir\OneQ-PackMaker.exe") { throw "제거 뒤에도 파일이 남음" }
           Write-Host "설치·바로가기·제거 확인"
 
       - name: 빌드 결과 보관(손으로 돌렸을 때)
         if: ${{ github.event_name != 'release' }}
         uses: actions/upload-artifact@v4
         with:
-          name: OneQ-Prep-win64
+          name: OneQ-PackMaker-win64
           path: |
             preprocessor/${{ env.ASSET }}
             preprocessor/${{ env.SETUP }}
@@ -114,5 +115,5 @@ jobs:
         run: |
           gh release upload $env:TAG $env:SETUP $env:ASSET --clobber
           $body = gh release view $env:TAG --json body --jq .body
-          $note = "OneQ-Prep-Setup.exe — 전처리기 v${{ steps.zip.outputs.version }} 설치 프로그램 · 약 ${{ steps.zip.outputs.smb }}MB · SHA-256 ${{ steps.zip.outputs.ssha }}`n받아 실행 → 「Windows의 PC 보호」 창이면 추가 정보 → 실행 → 설치(관리자 권한 필요 없음) → 시작 메뉴·바탕화면의 '원큐합격 전처리기'`n`nOneQ-Prep-win64.zip — 설치 없이 쓰는 판 · 약 ${{ steps.zip.outputs.mb }}MB · SHA-256 ${{ steps.zip.outputs.sha }}`n받은 zip을 오른쪽 클릭 → 모두 압축 풀기 → 풀린 폴더의 OneQ-Prep.exe"
+          $note = "OneQ-PackMaker-Setup.exe — 원큐합격 문제팩 생성기 v${{ steps.zip.outputs.version }} 설치 프로그램 · 약 ${{ steps.zip.outputs.smb }}MB · SHA-256 ${{ steps.zip.outputs.ssha }}`n받아 실행 → 「Windows의 PC 보호」 창이면 추가 정보 → 실행 → 설치(관리자 권한 필요 없음) → 시작 메뉴·바탕화면의 '원큐합격 문제팩 생성기'`n`nOneQ-PackMaker-win64.zip — 설치 없이 쓰는 판 · 약 ${{ steps.zip.outputs.mb }}MB · SHA-256 ${{ steps.zip.outputs.sha }}`n받은 zip을 오른쪽 클릭 → 모두 압축 풀기 → 풀린 폴더의 OneQ-PackMaker.exe"
           gh release edit $env:TAG --notes ("$body`n`n$note").Trim()

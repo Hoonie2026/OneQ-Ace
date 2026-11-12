@@ -201,12 +201,12 @@ def write_report(prepared: list, out: Path) -> Path:
     total = sum(len([it for it in p.items if not it.excluded]) for p in prepared)
     ok = sum(1 for p in prepared if p.zip_path)
     prof = prepared[0].profile if prepared else None
-    head = (f'<h1>원큐합격 전처리 검수 보고서</h1><p class="mut">{_e(prof.name if prof else "")} · '
+    head = (f'<h1>원큐합격 문제팩 검수 보고서</h1><p class="mut">{_e(prof.name if prof else "")} · '
             f'{dt.datetime.now().strftime("%Y-%m-%d %H:%M")} · 회차 {len(prepared)}개 · 팩 {ok}개 · 문항 {total}개</p>')
     table = ('<table><thead><tr><th>회차</th><th>시행일</th><th>문항</th><th>정답 출처</th><th>정답 표시 제거</th><th>상태</th></tr></thead>'
              f'<tbody>{"".join(rows)}</tbody></table>')
     guide = ('<h2>검수 방법</h2><ol><li>회차 이름을 눌러 문항 카드를 봅니다(<b>경고</b>·<b>재배정 제안</b> 단추로 걸러 보기).</li>'
              '<li>정답·과목·제외를 고치고 <b>검수 파일 저장</b> → 받은 <code>팩ID.review.json</code>을 이 <code>review</code> 폴더에 넣습니다.</li>'
              '<li>같은 명령을 다시 실행하면 반영되어 팩이 만들어집니다. 구기준 회차는 <b>검수 완료</b>를 체크해야 재배정이 반영됩니다.</li></ol>')
-    out.write_text(_page("전처리 검수 보고서", head + table + guide), encoding="utf-8")
+    out.write_text(_page("문제팩 검수 보고서", head + table + guide), encoding="utf-8")
     return out

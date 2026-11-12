@@ -9,18 +9,18 @@ from oneq_prep.gui import shortcut  # noqa: E402
 
 def test_inside_zip_temp(tmp_path):
     t = tmp_path / "Temp"
-    exe = t / "Temp1_OneQ-Prep-win64.zip" / "OneQ-Prep" / "OneQ-Prep.exe"
+    exe = t / "Temp1_OneQ-PackMaker-win64.zip" / "OneQ-PackMaker" / "OneQ-PackMaker.exe"
     exe.parent.mkdir(parents=True)
     exe.touch()
     assert shortcut.inside_zip_temp(exe, str(t))
-    ok = tmp_path / "Documents" / "OneQ-Prep" / "OneQ-Prep.exe"
+    ok = tmp_path / "Documents" / "OneQ-PackMaker" / "OneQ-PackMaker.exe"
     ok.parent.mkdir(parents=True)
     ok.touch()
     assert not shortcut.inside_zip_temp(ok, str(t))
 
 
 def test_ps_script_quotes_and_targets():
-    exe = Path("C:/Users/o'brien/문서/OneQ-Prep/OneQ-Prep.exe")
+    exe = Path("C:/Users/o'brien/문서/OneQ-PackMaker/OneQ-PackMaker.exe")
     s = shortcut.ps_script(exe)
     assert "GetFolderPath('Desktop')" in s and "GetFolderPath('Programs')" in s
     assert "o''brien" in s                      # 작은따옴표 이스케이프
@@ -29,7 +29,7 @@ def test_ps_script_quotes_and_targets():
 
 
 def test_installed(tmp_path):
-    exe = tmp_path / "OneQ-Prep.exe"
+    exe = tmp_path / "OneQ-PackMaker.exe"
     exe.touch()
     assert not shortcut.installed(exe)
     (tmp_path / "unins000.exe").touch()
@@ -40,7 +40,8 @@ def test_exe_path_none_when_not_frozen():
     assert shortcut.exe_path() is None
 
 
-def test_legacy_study_app_detect():
-    """PC 학습앱은 브라우저 정식 설치로 통일(2026-11-12) — 예전 바로가기 방식은 알아보기만(윈도가 아니면 False)."""
-    assert shortcut.legacy_app_installed() is False
-    assert shortcut.APP_UNINSTALL_KEY.endswith("OneQAce.StudyApp")
+def test_old_name_links_removed():
+    """이름 변경(전처리기 → 원큐합격 문제팩 생성기, 2026-11-12): 새 바로가기를 만들 때 옛 이름 바로가기는 지운다."""
+    s = shortcut.ps_script(Path("C:/x/OneQ-PackMaker.exe"))
+    assert "'원큐합격 문제팩 생성기.lnk'" in s and s.count("Remove-Item") == 2 and "'원큐합격 전처리기.lnk'" in s
+    assert "Remove-Item" not in shortcut.ps_script(Path("C:/x/a.exe"), name="다른 이름.lnk")

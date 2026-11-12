@@ -39,7 +39,7 @@ a = Analysis(
     pathex=[str(PRE)],
     binaries=binaries,
     datas=datas,
-    hiddenimports=["oneq_prep.gui.app", "oneq_prep.pack", "oneq_prep.batch", "oneq_prep.lawtag", "oneq_prep.summary", "oneq_prep.certs", "oneq_prep.appinfo", "oneq_prep.ocr", "segno"] + hidden_ocr,
+    hiddenimports=["oneq_prep.gui.app", "oneq_prep.pack", "oneq_prep.batch", "oneq_prep.lawtag", "oneq_prep.summary", "oneq_prep.certs", "oneq_prep.appinfo", "oneq_prep.ocr"] + hidden_ocr,
     excludes=["tkinter", "matplotlib", "PySide6.QtWebEngineCore", "PySide6.QtWebEngineWidgets", "PySide6.Qt3DCore",
               "PySide6.QtQuick", "PySide6.QtQml", "PySide6.QtMultimedia", "PySide6.QtCharts", "PySide6.QtDataVisualization",
               "pytest", "pytestqt", "scipy", "pandas", "lxml", "IPython", "sympy", "matplotlib"],
@@ -51,10 +51,10 @@ exe = EXE(
     a.scripts,
     [],
     exclude_binaries=True,
-    name="OneQ-Prep",
+    name="OneQ-PackMaker",
     console=False,
     icon=str(icon_ico) if icon_ico.exists() else None,
     version=str(HERE / "version_info.txt") if (HERE / "version_info.txt").exists() else None,
     upx=False,                 # UPX 압축은 백신 오탐을 늘린다 — 쓰지 않음
 )
-coll = COLLECT(exe, a.binaries, a.datas, strip=False, upx=False, name="OneQ-Prep")
+coll = COLLECT(exe, a.binaries, a.datas, strip=False, upx=False, name="OneQ-PackMaker")

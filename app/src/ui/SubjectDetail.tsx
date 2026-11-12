@@ -51,7 +51,7 @@ export function SubjectDetail(props: { certCode: string; subjectKey: string; ver
     return (
       <section className="card" data-testid="subject-detail-empty">
         <p>이 과목 문제팩에는 단원·유형 정보가 없어요.</p>
-        <p className="muted">원큐합격 전처리기 v0.5 이상으로 다시 만든 문제팩을 가져오면 단원별·유형별로 풀 수 있어요. 학습 기록은 그대로 이어집니다.</p>
+        <p className="muted">원큐합격 문제팩 생성기(v0.5 이상)로 다시 만든 문제팩을 가져오면 단원별·유형별로 풀 수 있어요. 학습 기록은 그대로 이어집니다.</p>
       </section>
     );
   }

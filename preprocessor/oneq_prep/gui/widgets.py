@@ -3,10 +3,35 @@ from __future__ import annotations
 
 from PySide6.QtCore import QRectF, QSize, Qt, Signal
 from PySide6.QtGui import QColor, QFont, QPainter, QPainterPath, QPixmap
-from PySide6.QtWidgets import (QFrame, QGraphicsDropShadowEffect, QHBoxLayout, QLabel, QStyle, QStyledItemDelegate,
-                               QStyleOptionViewItem, QVBoxLayout, QWidget)
+from PySide6.QtWidgets import (QFrame, QGraphicsDropShadowEffect, QHBoxLayout, QLabel, QSizePolicy, QStyle,
+                               QStyledItemDelegate, QStyleOptionViewItem, QVBoxLayout, QWidget)
 
 from . import theme
+
+
+class WrapLabel(QLabel):
+    """줄바꿈 글 — 지금 폭에 맞는 높이만 차지한다. 기본 QLabel(wordWrap)은 스크롤 영역 안에서 좁은 폭 기준 높이를 알려
+    빈 줄 같은 틈이 생긴다(메인 화면 재설계 2026-11-12)."""
+
+    def __init__(self, text: str = "", parent: QWidget | None = None):
+        super().__init__(text, parent)
+        self.setWordWrap(True)
+        self.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
+
+    def _h(self) -> int:
+        w = self.width() if self.width() > 40 else 600
+        return max(self.fontMetrics().height(), self.heightForWidth(w))
+
+    def sizeHint(self):  # noqa: N802 — Qt 이름
+        return QSize(super().sizeHint().width(), self._h())
+
+    def minimumSizeHint(self):  # noqa: N802
+        return QSize(0, self._h())
+
+    def resizeEvent(self, e):  # noqa: N802
+        super().resizeEvent(e)
+        if self.height() != self._h():
+            self.updateGeometry()
 
 
 class Card(QFrame):
@@ -147,12 +172,12 @@ class DropZone(QFrame):
         self.setObjectName("dropZone")
         self.setCursor(Qt.PointingHandCursor)
         lay = QVBoxLayout(self)
-        lay.setContentsMargins(24, 32, 24, 32)
-        lay.setSpacing(8)
+        lay.setContentsMargins(24, 22, 24, 22)
+        lay.setSpacing(6)
         lay.addStretch(1)
         icon = QLabel("📄")
         icon.setAlignment(Qt.AlignCenter)
-        icon.setStyleSheet("font-size: 40px;")
+        icon.setStyleSheet("font-size: 32px;")
         t = QLabel("기출 PDF를 여기로 끌어다 놓으세요")
         t.setObjectName("dropTitle")
         self.title = t
@@ -163,6 +188,16 @@ class DropZone(QFrame):
         for w in (icon, t, s):
             lay.addWidget(w)
         lay.addStretch(1)
+        self._icon, self._sub, self._lay = icon, s, lay
+        self.set_compact(False)
+
+    def set_compact(self, on: bool) -> None:
+        """목록에 파일이 있으면 낮은 띠로(더 넣을 수 있게 남겨 둠) — 큰 그림·설명은 숨김."""
+        self._icon.setVisible(not on)
+        self._sub.setVisible(not on)
+        self._lay.setContentsMargins(24, 8 if on else 14, 24, 8 if on else 14)
+        self.setMinimumHeight(46 if on else 120)
+        self.setMaximumHeight(52 if on else 140)
 
     def set_active(self, on: bool) -> None:
         self.setProperty("active", on)

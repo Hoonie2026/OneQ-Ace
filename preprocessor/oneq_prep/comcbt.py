@@ -23,7 +23,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 BASE = "https://www.comcbt.com"
-UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) OneQ-Prep"
+UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) OneQ-PackMaker"
 # 따옴표는 둘 다 받음 — 첫 화면 메뉴는 href='//www.comcbt.com/xe/n1'(작은따옴표), 게시판·글은 큰따옴표(2026-10-24 PC 실측)
 # 2026-11-11 첫 화면 개편: <a class="cbt-download-item" href="//…/xe/n1"><span class="…-title">토목기사</span><span>›</span></a>
 # → 링크 안쪽 HTML을 통째로 잡고, 제목 span이 있으면 그것, 없으면 태그를 걷어낸 글자(예전 모양도 그대로 읽음)

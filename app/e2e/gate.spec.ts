@@ -6,6 +6,7 @@
  * 샘플팩 packs/oneq-SURVEY-2022-1.zip이 있으면 그것을, 없으면 시험용 100문항 팩을 만들어 쓴다.
  */
 import { expect, test, type Page } from '@playwright/test';
+import { asInstalledApp } from './fixtures';
 import { existsSync, readFileSync, writeFileSync, mkdtempSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -54,6 +55,7 @@ test('3단계 게이트(5단계 개편 후): 오프라인 과목별 학습·이�
   const { path: pack, total } = await packFile();
   const ctx = await browser.newContext({ ...info.project.use, serviceWorkers: 'allow', acceptDownloads: true });
   await ctx.addInitScript(newerChromeScroll);
+  await ctx.addInitScript(asInstalledApp); // 설치한 앱으로(세션 #19 — 가져오기는 설치한 앱의 첫 화면에서)
   const page = await ctx.newPage();
   await page.goto('./');
   await waitForSW(page);
@@ -191,9 +193,10 @@ test('3단계 게이트(5단계 개편 후): 오프라인 과목별 학습·이�
   // ⑤ 앱 삭제 = 저장소가 빈 새 컨텍스트, ⑥ 복원
   const ctx2 = await browser.newContext({ ...info.project.use, serviceWorkers: 'allow' });
   await ctx2.addInitScript(newerChromeScroll);
+  await ctx2.addInitScript(asInstalledApp);
   const p2 = await ctx2.newPage();
   await p2.goto('./');
-  await expect(p2.getByTestId('empty-home')).toBeVisible(); // 팩 없는 첫 화면(브라우저에서는 접힌 '설치하지 않고 쓰기')
+  await expect(p2.getByTestId('empty-home')).toBeVisible(); // 팩 없는 첫 화면(설치한 앱의 첫 실행 화면: 문제팩 가져오기)
   await p2.getByRole('button', { name: '백업·설정' }).click();
   p2.on('dialog', (d) => d.accept());
   await p2.getByTestId('restore-input').setInputFiles(backupPath);
@@ -252,6 +255,6 @@ test('3단계 게이트(5단계 개편 후): 오프라인 과목별 학습·이�
   await p2.getByTestId('wipe-all-go').click();
   await p2.getByTestId('dialog-ok').click();
   await p2.getByTestId('dialog-ok').click();
-  await expect(p2.getByTestId('empty-home')).toBeVisible(); // 팩 없는 첫 화면(브라우저에서는 접힌 '설치하지 않고 쓰기')
+  await expect(p2.getByTestId('empty-home')).toBeVisible(); // 팩 없는 첫 화면(설치한 앱의 첫 실행 화면: 문제팩 가져오기)
   await ctx2.close();
 });

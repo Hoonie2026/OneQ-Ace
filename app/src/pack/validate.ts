@@ -21,7 +21,7 @@ export interface PackManifest {
   exam: { year: number; round: number; roundLabel?: string; date: string; dateUnknown?: boolean };
   subjects: {
     no: number; name: string; count: number; examCount?: number; isLaw: boolean;
-    /** 단원 = 출제기준 세부항목(ADR 021 4.1) — 전처리기 v0.5 팩부터 */
+    /** 단원 = 출제기준 세부항목(ADR 021 4.1) — 문제팩 생성기(구 전처리기) v0.5 팩부터 */
     units?: { id: string; major: string; name: string }[];
   }[];
   passRule: { subjectMin: number; avgMin: number };
@@ -55,7 +55,7 @@ export interface PackQuestion {
   lawRefs: string[];
   clusterId: string | null;
   flags: string[];
-  /** ADR 021 4절(전처리기 v0.5 팩부터, 없으면 단원·유형 화면 비활성) */
+  /** ADR 021 4절(문제팩 생성기(구 전처리기) v0.5 팩부터, 없으면 단원·유형 화면 비활성) */
   unit?: string;
   qtype?: 'calc' | 'law' | 'concept';
   sequence?: boolean;

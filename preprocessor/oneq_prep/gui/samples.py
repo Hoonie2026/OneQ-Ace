@@ -193,14 +193,14 @@ class ConditionPicture(QWidget):
     def __init__(self, index: int, parent: QWidget | None = None):
         super().__init__(parent)
         self.index = index
-        self.setMinimumHeight(96)
+        self.setMinimumHeight(84)
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self.setCursor(Qt.PointingHandCursor)
         self.setToolTip("눌러서 크게 보기")
         self.setObjectName("conditionPicture")
 
     def sizeHint(self):  # noqa: N802
-        return QSize(int(W), 104)
+        return QSize(int(W), 88)
 
     def paintEvent(self, _e):  # noqa: N802
         p = QPainter(self)

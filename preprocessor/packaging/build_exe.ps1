@@ -1,6 +1,6 @@
-﻿# 원큐합격 전처리기 — Windows 실행파일(폴더형) 만들기 (ADR 018)
+﻿# 원큐합격 문제팩 생성기(구 전처리기) — Windows 실행파일(폴더형) 만들기 (ADR 018)
 # 사용(preprocessor 폴더에서):  powershell -ExecutionPolicy Bypass -File packaging\build_exe.ps1
-# 결과: dist\OneQ-Prep\OneQ-Prep.exe  +  dist\OneQ-Prep-<버전>-win64.zip  +  dist\OneQ-Prep-Setup.exe(Inno Setup 6이 깔려 있을 때)
+# 결과: dist\OneQ-PackMaker\OneQ-PackMaker.exe  +  dist\OneQ-PackMaker-<버전>-win64.zip  +  dist\OneQ-PackMaker-Setup.exe(Inno Setup 6이 깔려 있을 때)
 # 보통은 GitHub 빌드(.github/workflows/release-prep.yml)를 쓰고, 이 스크립트는 기출 PDF 점검·Defender 검사용
 $ErrorActionPreference = "Stop"
 $pre = Split-Path $PSScriptRoot -Parent
@@ -23,7 +23,7 @@ Remove-Item Env:QT_QPA_PLATFORM
 Write-Host "3/5 실행파일 만들기(PyInstaller, 폴더형)" -ForegroundColor Cyan
 & $py -m PyInstaller --noconfirm --clean --distpath dist --workpath build packaging\oneq-prep.spec
 if ($LASTEXITCODE -ne 0) { throw "PyInstaller 실패" }
-$exe = Join-Path $pre "dist\OneQ-Prep\OneQ-Prep.exe"
+$exe = Join-Path $pre "dist\OneQ-PackMaker\OneQ-PackMaker.exe"
 
 Write-Host "4/5 점검: 실행파일로 기출 PDF 2개 처리(--cli)" -ForegroundColor Cyan
 $pdfs = @(Get-ChildItem (Join-Path $pre "..\source_pdf\safety_기출_2003_2022\*.pdf") -ErrorAction SilentlyContinue | Select-Object -Last 2)
@@ -43,14 +43,14 @@ if ($pdfs.Count -eq 2) {
 
 Write-Host "5/5 나눠 줄 zip 만들기 + Windows Defender 검사" -ForegroundColor Cyan
 $ver = & $py -c "import oneq_prep; print(oneq_prep.__version__)"
-$zip = Join-Path $pre "dist\OneQ-Prep-$ver-win64.zip"
+$zip = Join-Path $pre "dist\OneQ-PackMaker-$ver-win64.zip"
 Remove-Item $zip -ErrorAction SilentlyContinue
-Compress-Archive -Path (Join-Path $pre "dist\OneQ-Prep") -DestinationPath $zip
+Compress-Archive -Path (Join-Path $pre "dist\OneQ-PackMaker") -DestinationPath $zip
 $mp = Join-Path $env:ProgramFiles "Windows Defender\MpCmdRun.exe"
 if (Test-Path $mp) {
-    & $mp -Scan -ScanType 3 -File (Join-Path $pre "dist\OneQ-Prep") -DisableRemediation | Select-Object -Last 3
+    & $mp -Scan -ScanType 3 -File (Join-Path $pre "dist\OneQ-PackMaker") -DisableRemediation | Select-Object -Last 3
 } else {
-    Write-Host "  Defender 명령줄을 찾지 못함 — 회사 백신으로 dist\OneQ-Prep 폴더를 직접 검사해 보세요" -ForegroundColor Yellow
+    Write-Host "  Defender 명령줄을 찾지 못함 — 회사 백신으로 dist\OneQ-PackMaker 폴더를 직접 검사해 보세요" -ForegroundColor Yellow
 }
 $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
 if (Test-Path $iscc) {
@@ -58,7 +58,7 @@ if (Test-Path $iscc) {
     $num = & $py -c "import re, oneq_prep; print('.'.join(re.match(r'(\d+)\.(\d+)\.(\d+)', oneq_prep.__version__).groups()))"
     & $iscc /Qp "/DMyVersion=$ver" "/DMyNumVersion=$num" packaging\oneq-prep.iss
     if ($LASTEXITCODE -ne 0) { throw "설치 프로그램 만들기 실패" }
-    Write-Host "  설치 프로그램: dist\OneQ-Prep-Setup.exe" -ForegroundColor Green
+    Write-Host "  설치 프로그램: dist\OneQ-PackMaker-Setup.exe" -ForegroundColor Green
 } else {
     Write-Host "  설치 프로그램 건너뜀: Inno Setup 6 없음(winget install JRSoftware.InnoSetup)" -ForegroundColor Yellow
 }

@@ -12,7 +12,9 @@ import sys
 import tempfile
 from pathlib import Path
 
-LINK_NAME = "원큐합격 전처리기.lnk"
+LINK_NAME = "원큐합격 문제팩 생성기.lnk"
+# 이름을 바꾸기 전(전처리기 시절)의 바로가기 — 새 바로가기를 만들 때 지운다(같은 프로그램이 둘로 보이지 않게)
+OLD_LINK_NAMES = ("원큐합격 전처리기.lnk",)
 
 
 def exe_path() -> Path | None:
@@ -56,6 +58,9 @@ def ps_script(exe: Path, desktop: bool = True, start_menu: bool = True, *, name:
             "$l.Save()",
             "$made += $p",
         ]
+    for old in (OLD_LINK_NAMES if name == LINK_NAME else ()):
+        for t in targets:
+            lines.append(f"Remove-Item -LiteralPath (Join-Path ([Environment]::GetFolderPath('{t}')) {_ps_quote(old)}) -ErrorAction SilentlyContinue")
     lines.append("$made -join \"`n\"")
     return "\n".join(lines)
 
@@ -72,21 +77,5 @@ def _run_ps(script: str) -> list[str]:
 
 
 def make_shortcuts(exe: Path, desktop: bool = True, start_menu: bool = True) -> list[str]:
-    """전처리기 바로가기 경로들. 실패하면 RuntimeError(메시지는 화면에 그대로)."""
+    """문제팩 생성기 바로가기 경로들. 실패하면 RuntimeError(메시지는 화면에 그대로). 옛 이름(전처리기) 바로가기는 지운다."""
     return _run_ps(ps_script(exe, desktop, start_menu))
-
-
-# ── PC 학습앱 = Chrome·Edge 정식 설치(PWA)로 통일(사용자 2026-11-12) ──
-# 전처리기가 바로가기를 만들던 방식(11-11~12 개발판)은 없앰. 그 판으로 설치한 PC만 알아보고 정리를 안내한다 —
-# 그때 등록한 Windows 프로그램 목록 항목(제거하면 바로가기·아이콘만 지우고 기록은 남김)이 그대로 동작한다.
-APP_UNINSTALL_KEY = r"Software\Microsoft\Windows\CurrentVersion\Uninstall\OneQAce.StudyApp"
-
-
-def legacy_app_installed() -> bool:
-    """예전 방식(전처리기 바로가기)의 '원큐합격 학습앱'이 이 PC에 남아 있는지."""
-    try:
-        import winreg
-        winreg.CloseKey(winreg.OpenKey(winreg.HKEY_CURRENT_USER, APP_UNINSTALL_KEY))
-        return True
-    except Exception:  # noqa: BLE001 — 윈도가 아니거나 없음
-        return False

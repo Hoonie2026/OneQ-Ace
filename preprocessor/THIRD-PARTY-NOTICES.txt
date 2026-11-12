@@ -1,4 +1,4 @@
-원큐합격 전처리기 — 함께 배포하는 오픈소스와 라이선스
+원큐합격 문제팩 생성기 — 함께 배포하는 오픈소스와 라이선스
 
 이 프로그램은 아래 오픈소스를 사용합니다. 각 라이선스 원문은 같은 폴더의 _internal 안 각 패키지 폴더
 (…-dist-info/LICENSE 등)에 들어 있습니다.
@@ -16,7 +16,6 @@
 ■ pypdfium2 (Apache-2.0 또는 BSD-3-Clause), PDFium (BSD-3-Clause 등)
 ■ pdfplumber (MIT), pdfminer.six (MIT)
 ■ Pillow (MIT-CMU / HPND)
-■ segno (BSD-3-Clause) — 첫 화면 앱 주소 QR
 ■ winocr (MIT), PyWinRT winrt-* (MIT) — 스캔본 글자 읽기에 Windows 내장 OCR(Windows.Media.Ocr)을 부름. OCR 엔진 자체는 Windows 기능
 ■ NumPy (BSD-3-Clause)
 ■ jsonschema (MIT), referencing·jsonschema-specifications·rpds-py (MIT)

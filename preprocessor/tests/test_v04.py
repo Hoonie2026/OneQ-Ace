@@ -1,4 +1,4 @@
-"""전처리기 v0.4(ADR 019): 법령·기준 문항 표시, 종목 검색, 과목 개편 요약, 사용자 프로필."""
+"""문제팩 생성기(구 전처리기) v0.4(ADR 019): 법령·기준 문항 표시, 종목 검색, 과목 개편 요약, 사용자 프로필."""
 import sys
 from dataclasses import dataclass
 from pathlib import Path

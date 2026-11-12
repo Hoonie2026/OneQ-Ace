@@ -3,7 +3,7 @@
  * → 과목별 학습 15문항(오늘 추천 과목) → 틀린 문항 다시·이 과목 계속 → 모의고사(정답 숨김·타이머와 제출 분리) → 성적 이력.
  * 화면 사진은 test-results/stage5-*.png
  */
-import { expect, test } from '@playwright/test';
+import { expect, test } from './fixtures';
 import { existsSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';

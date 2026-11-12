@@ -2,7 +2,7 @@
  * 학습 점검 카드(ADR 014, 실기기 W6 — 하루 안에는 "3일 이상 계획보다 적게 푼" 상태를 만들 수 없어 자동 시험으로 확인).
  * 브라우저 시계를 앞당기며 사흘 동안 하루 5문항만 풀고(계획 하루 4시간) 나흘째 홈을 연다.
  */
-import { expect, test } from '@playwright/test';
+import { expect, test } from './fixtures';
 import { existsSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';

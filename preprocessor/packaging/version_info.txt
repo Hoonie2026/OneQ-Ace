@@ -4,11 +4,11 @@ VSVersionInfo(
   kids=[
     StringFileInfo([StringTable('041204B0', [
       StringStruct('CompanyName', 'OneQ-Ace'),
-      StringStruct('FileDescription', '원큐합격 전처리기 - 기출 PDF를 문제팩으로'),
+      StringStruct('FileDescription', '원큐합격 문제팩 생성기 - 기출 PDF를 문제팩으로'),
       StringStruct('FileVersion', '0.5.0'),
-      StringStruct('InternalName', 'OneQ-Prep'),
-      StringStruct('OriginalFilename', 'OneQ-Prep.exe'),
-      StringStruct('ProductName', '원큐합격 전처리기'),
+      StringStruct('InternalName', 'OneQ-PackMaker'),
+      StringStruct('OriginalFilename', 'OneQ-PackMaker.exe'),
+      StringStruct('ProductName', '원큐합격 문제팩 생성기'),
       StringStruct('ProductVersion', '0.5.0')])]),
     VarFileInfo([VarStruct('Translation', [0x0412, 1200])])
   ]

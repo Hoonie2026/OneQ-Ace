@@ -3,7 +3,7 @@
  * 도·분·초 계산·도분초 표시, 손글씨 메모, 같은 문항에서 오가도 그대로, 다음 문항에서도 도구는 열린 채(메모만 새 장),
  * PC 키보드(2 → 답, Enter → 다음). 휴대폰 크기 + PC 크기(1366×768, 두 단 화면)
  */
-import { expect, test } from '@playwright/test';
+import { expect, test } from './fixtures';
 import { existsSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';

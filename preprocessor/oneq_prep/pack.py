@@ -565,7 +565,7 @@ def main(argv=None):
     ap.add_argument("pdf", nargs="+", type=Path, help="기출 PDF(여러 개 가능)")
     ap.add_argument("out", type=Path, help="출력 폴더(팩 zip, review/ 보고서·검수 파일)")
     ap.add_argument("--cert", default="SURVEY", choices=S.available(), help="종목 코드(출제기준 프로필)")
-    ap.add_argument("--prepared-by", default="원큐합격 전처리기 v0.5", help="만든 사람(기본: 자동 — ADR 021 6절)")
+    ap.add_argument("--prepared-by", default="원큐합격 문제팩 생성기 v0.5", help="만든 사람(기본: 자동 — ADR 021 6절)")
     ap.add_argument("--origin", default="", help="원본 출처(기본: 문서 머리말·꼬리말에서 읽음, 모르면 '직접 올림')")
     ap.add_argument("--source-type", default=None, choices=["public-pbt", "recalled", "other"], help="기본: 문서에서 읽음")
     ap.add_argument("--date", help="시행일 YYYY-MM-DD 직접 지정(PDF 1개) — 기본은 문서 내용에서 읽고, 못 찾으면 '0000년 nn회'")

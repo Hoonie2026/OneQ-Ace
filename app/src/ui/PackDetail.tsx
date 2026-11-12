@@ -55,9 +55,9 @@ export function PackDetail(props: { packId: string; onBack: () => void; onBackup
             </dd>
           </div>
           <div>
-            <dt>전처리</dt>
+            <dt>생성</dt>
             <dd>
-              {m.preparedBy} · {m.reviewedAt ? `검수 ${m.reviewedAt}` : '검수 전'} · v{m.packVersion}
+              {m.preparedBy.replace('원큐합격 전처리기', '원큐합격 문제팩 생성기')} · {m.reviewedAt ? `검수 ${m.reviewedAt}` : '검수 전'} · v{m.packVersion}
             </dd>
           </div>
           <div>
