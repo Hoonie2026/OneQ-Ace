@@ -164,9 +164,29 @@ def load(code: str, root: Path | None = None) -> Profile:
     if not p.exists():
         raise FileNotFoundError(f"출제기준 프로필 없음: {p}")
     d = json.loads(p.read_text(encoding="utf-8"))
+    if root is None and p.parent == user_root():
+        d = _with_builtin_names(d, code)
     return Profile(d["code"], d["name"], d["grade"], str(d["version"]), d["passRule"], d["subjects"],
                    d.get("aliases", {}), d.get("excluded", []), d.get("legacy"), d.get("draft", False), d.get("note", ""),
                    d.get("period"), d.get("source"))
+
+
+def _with_builtin_names(d: dict, code: str) -> dict:
+    """사용자 폴더 프로필에 함께 배포한 프로필의 aliases·excluded를 더한다(0.5.1, 사용자 2026-11-19).
+    사용자 폴더 것은 예전 큐넷 조회로 만들어져 새 판의 별칭이 없을 수 있다 — 다시 설치하거나 다시 조회하지 않아도
+    설치 파일과 같은 별칭으로 처리되게. 같은 옛 이름이 둘 다 있으면 사용자 것이 우선."""
+    b = _root() / f"{code}.json"
+    if not b.exists():
+        return d
+    try:
+        bd = json.loads(b.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return d
+    d = dict(d)
+    d["aliases"] = {**bd.get("aliases", {}), **d.get("aliases", {})}
+    ex = list(d.get("excluded", []))
+    d["excluded"] = ex + [x for x in bd.get("excluded", []) if norm(x) not in {norm(y) for y in ex}]
+    return d
 
 
 def available(root: Path | None = None) -> list[str]:

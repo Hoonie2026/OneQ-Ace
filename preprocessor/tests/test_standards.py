@@ -56,3 +56,25 @@ def test_guess_subject_without_review():
     assert p.guess("건축법규", 5, 5, {S.norm("건축관계법규")}) is None          # 이미 다른 과목이 차지
     assert p.guess("제5과목", 5, 5) == ("건축관계법규", "과목 순서")             # 이름이 전혀 달라도 과목 수가 같으면 순번
     assert p.guess("조경학", 6, 6) is None                                        # 과목 수가 다르면(폐지 과목 등) 추정하지 않음
+
+
+def test_q2390_profile_old_subject_names():
+    """건설안전산업기사(0.5.1): 옛 과목명이 현행 4과목으로 — 건설재료학·건설시공학은 한 과목으로 합쳐짐."""
+    p = S.load("Q2390", S._root())
+    assert p.resolve("산업안전관리론") == ("std", 1, "산업재해 예방 및 안전보건교육")
+    assert p.resolve("인간공학 및 시스템안전공학")[2] == "인간공학 및 위험성 평가·관리"
+    assert p.resolve("건설재료학")[:2] == ("std", 3) and p.resolve("건설시공학")[:2] == ("std", 3)
+    assert p.resolve("건설안전기술") == ("std", 4, "건설공사 안전 관리")
+
+
+def test_user_profile_gets_builtin_aliases(tmp_path, monkeypatch):
+    """예전 큐넷 조회로 만든 사용자 폴더 프로필(별칭 없음)도 설치 파일의 별칭을 함께 쓴다(0.5.1)."""
+    monkeypatch.setenv("ONEQ_PREP_HOME", str(tmp_path))
+    d = json.loads((S._root() / "Q2390.json").read_text(encoding="utf-8"))
+    d["aliases"], d["excluded"] = {"건설안전기술": "건설공사 안전 관리", "안전기술": "건설공사 안전 관리"}, ["옛과목"]
+    S.save_user_profile(d)
+    p = S.load("Q2390")
+    assert S.is_user_profile("Q2390")
+    assert p.resolve("건설재료학")[:2] == ("std", 3)            # 설치 파일 별칭
+    assert p.resolve("안전기술")[0] == "std"                    # 사용자 별칭도 그대로
+    assert p.resolve("옛과목")[0] == "excluded"
