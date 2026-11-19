@@ -1,0 +1,3 @@
+# 검증기 시험 데이터는 해시로 검사하므로 줄바꿈 변환을 막는다(Windows autocrlf 대비)
+shared/fixtures/** -text
+*.webp binary

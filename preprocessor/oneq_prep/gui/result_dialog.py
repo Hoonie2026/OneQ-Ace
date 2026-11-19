@@ -1,0 +1,158 @@
+"""파일 하나의 결과 화면(ADR 021 6절) — 과목별 문항 수, 정답 상태, 뺀 문항, 문항 미리 보기(직접 고치기·검수는 없앰 — 2026-11-17, 학습앱에서 바로잡는 쪽으로)."""
+from __future__ import annotations
+
+from collections import Counter
+
+from PySide6.QtCore import Qt
+from PySide6.QtGui import QPixmap
+from PySide6.QtWidgets import (QDialog, QFrame, QGridLayout, QHBoxLayout, QLabel, QPushButton, QScrollArea, QVBoxLayout,
+                               QWidget)
+
+from . import theme
+from .widgets import Note
+
+
+
+def suspects(p) -> list:
+    """학습 엔진 필수 정보(문항 경계·정답·과목)의 의심 문항(ADR 021 6절). 자동으로 뺀 문항은 셈하지 않음(2026-11-12)."""
+    return [it for it in p.items if not it.excluded and (
+        [w for w in it.warnings if not w.startswith("info:")] or it.answer is None
+        or (it.suggestion and it.suggestion.suggested != it.suggestion.current))]
+
+
+def auto_excluded(p) -> list:
+    from ..pack import AUTO_EXCLUDE
+    return [it for it in p.items if it.excluded and it.excluded.startswith(AUTO_EXCLUDE)]
+
+
+def summary(p) -> dict:
+    kept = [it for it in p.items if not it.excluded]
+    by_subj = Counter(it.subject for it in kept)
+    want = {s["name"]: s["count"] for s in p.profile.subjects}
+    src = Counter(it.answer_source for it in kept)
+    return {
+        "subjects": [(name, by_subj.get(name, 0), want[name]) for name in want] +
+                    [(n, c, None) for n, c in by_subj.items() if n not in want],
+        "answers": (sum(it.answer is not None for it in kept), len(kept), src),
+        "excluded": len(p.items) - len(kept),
+        "suspects": len(suspects(p)),
+    }
+
+
+class ResultDialog(QDialog):
+    def __init__(self, row, parent=None, pending: bool = False):
+        """pending=True: 처리 중에 먼저 끝난 파일(B3 ②) — 정답 교차 확인과 팩 쓰기는 모든 회차가 끝난 뒤."""
+        super().__init__(parent)
+        self.pending = pending
+        p = row.prepared
+        self.p = p
+        s = summary(p)
+        ex = p.exam
+        label = f"{ex['year']:04d}년 {ex.get('roundLabel') or str(ex['round']) + '회'}"
+        self.setWindowTitle(f"결과 — {p.profile.name} {label}")
+        self.resize(860, 760)
+        lay = QVBoxLayout(self)
+        lay.setContentsMargins(24, 20, 24, 16)
+        lay.setSpacing(12)
+        date = "시행일 모름" if ex.get("dateUnknown") else ex["date"]
+        info = p.info
+        head = QLabel(f"<h2 style='margin:0'>{p.profile.name} {label}</h2>"
+                      f"<span style='color:{theme.MUTED}'>{date} · {p.pdf.name}"
+                      + (f" · 출처 {info.origin}" if info and info.origin else "") + "</span>")
+        head.setTextFormat(Qt.RichText)
+        head.setWordWrap(True)
+        lay.addWidget(head)
+
+        # 검수는 선택(사용자 2026-11-12 — 시험 준비생에게 검수를 요구하지 않음): 정답이 불확실한 문항은 이미 자동으로 뺐다
+        auto = auto_excluded(p)
+        if p.issues:
+            note = Note("warn")
+            note.set("warn", "이 파일은 문제팩을 만들지 못했어요", p.issues[:4])
+            lay.addWidget(note)
+        else:
+            ok = Note("ok")
+            flag = [it for it in p.items if not it.excluded
+                    and ("answer-unsure" in getattr(it, "flags", []) or getattr(it, "doubt", None))]
+            cross = [it for it in p.items if not it.excluded and getattr(it, "answer_source", "") == "cross-check"]
+            lines = []
+            if cross:
+                lines.append(f"다른 회차의 같은 문항으로 정답을 맞춘 문항 {len(cross)}개")
+            if flag:
+                lines.append(f"'정답 확인 필요'로 넣은 문항 {len(flag)}개(학습앱이 답한 뒤 확인하도록 안내): "
+                             + ", ".join(f"{it.no}번" for it in flag[:12]) + (" …" if len(flag) > 12 else ""))
+            if auto:
+                lines.append(f"정답이 없어 뺀 문항 {len(auto)}개: " + ", ".join(f"{it.no}번" for it in auto[:12])
+                             + (" …" if len(auto) > 12 else ""))
+            ok.set("ok", ("다른 회차가 끝나면 문제팩이 만들어져요" if pending else "문제팩을 만들었어요"), lines)
+            lay.addWidget(ok)
+        if pending:
+            wait = Note("info")
+            wait.set("info", "다른 회차를 처리하는 중이에요",
+                     ["다른 회차와 정답 맞춰 보기·팩 쓰기는 모든 회차가 끝난 뒤에 합니다.",
+                      "지금 고친 내용은 처리가 끝나면 이 회차를 다시 만들 때 반영됩니다."])
+            lay.addWidget(wait)
+
+        grid = QGridLayout()
+        grid.setHorizontalSpacing(24)
+        grid.setVerticalSpacing(6)
+        r = 0
+
+        def row_(k: str, v: str) -> None:
+            nonlocal r
+            a = QLabel(k)
+            a.setObjectName("fieldLabel")
+            b = QLabel(v)
+            b.setTextFormat(Qt.RichText)
+            b.setWordWrap(True)
+            grid.addWidget(a, r, 0, Qt.AlignTop)
+            grid.addWidget(b, r, 1)
+            r += 1
+
+        subj = []
+        for name, got, want in s["subjects"]:
+            bad = want is not None and got != want
+            subj.append(f"{name} <b{' style=color:' + theme.BAD if bad else ''}>{got}</b>"
+                        + (f"/{want}" if want is not None and bad else ""))
+        row_("과목별 문항", " · ".join(subj))
+        got, tot, src = s["answers"]
+        srcs = " · ".join(f"{ {'inline-mark': '보기 표시', 'answer-table': '정답표', 'manual': '직접 고름'}.get(k, k)} {v}"
+                          for k, v in src.items() if k)
+        row_("정답", f"{got}/{tot}문항 확인" + (f" ({srcs})" if srcs else ""))
+        if s["excluded"]:
+            row_("뺀 문항", f"{s['excluded']}문항(현행 출제기준에 없는 과목 등)")
+        if info and info.evidence:
+            row_("읽은 근거", "<br>".join(info.evidence[:4]))
+        grid.setColumnStretch(1, 1)
+        grid.setColumnMinimumWidth(0, 88)
+        lay.addLayout(grid)
+
+        lay.addWidget(QLabel("<b>문항 미리 보기</b>"))
+        sc = QScrollArea()
+        sc.setWidgetResizable(True)
+        host = QWidget()
+        hv = QVBoxLayout(host)
+        for it in [x for x in p.items if not x.excluded][:4]:
+            card = QFrame()
+            card.setObjectName("qcard")
+            cv = QVBoxLayout(card)
+            cap = QLabel(f"{it.no}번 · {it.subject}")
+            cap.setObjectName("muted")
+            cv.addWidget(cap)
+            img = QLabel()
+            pm = QPixmap()
+            pm.loadFromData(it.image)
+            img.setPixmap(pm.scaledToWidth(min(760, pm.width()), Qt.SmoothTransformation))
+            cv.addWidget(img)
+            hv.addWidget(card)
+        hv.addStretch(1)
+        sc.setWidget(host)
+        lay.addWidget(sc, 1)
+
+        bottom = QHBoxLayout()
+        bottom.addStretch(1)
+        close = QPushButton("닫기")
+        close.clicked.connect(self.accept)
+        bottom.addWidget(close)
+        lay.addLayout(bottom)
+
+

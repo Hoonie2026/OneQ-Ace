@@ -1,0 +1,65 @@
+원큐합격(OneQ-Ace) 이용 안내 · 라이선스
+
+Copyright (c) 2026 hoonie2026. All rights reserved.
+
+원큐합격은 기사·산업기사 필기를 준비하는 동료들이 함께 쓰라고 만든 학습앱과
+문제팩 생성기입니다. 편하게 쓰고 나누시되, 아래 몇 가지만 지켜 주세요.
+
+
+1. 이렇게는 자유롭게 쓰셔도 됩니다
+
+  - 학습앱과 문제팩 생성기를 설치해 자격시험 공부에 쓰는 것
+  - 학습앱 주소나 문제팩 생성기 설치 파일을 동료·지인에게 그대로 전해 주는 것
+    (받은 그대로, 대가 없이)
+  - 이 저장소의 소스 코드를 읽어 보고 공부에 참고하는 것
+
+
+2. 이런 경우에는 먼저 물어봐 주세요
+
+  - 소스 코드를 복사해 다른 프로그램에 쓰거나, 고친 판을 만들어 배포하는 것
+  - 돈을 받고 팔거나, 유료 강의·서비스 등 영리 목적으로 쓰는 것
+
+  원큐합격은 개인 학습용입니다. 위와 같은 쓰임은 저장소 소유자의 허락이 있을 때만
+  가능합니다. GitHub 저장소(https://github.com/Hoonie2026/OneQ-Ace)로 연락 주세요.
+
+
+3. 문제팩(기출문제)에 대해
+
+  - 학습앱과 이 저장소에는 기출문제가 들어 있지 않습니다. 문제팩은 사용자가 직접 구한
+    기출 PDF로 문제팩 생성기를 써서 만듭니다.
+  - 원큐합격이 다루는 기출 PDF는 인터넷에 공개된 자료를 바탕으로 하지만, 각 문제의
+    저작권은 원래 권리자(출제 기관, 자료를 정리해 올린 곳 등)에게 있습니다.
+  - 문제팩을 만들고 나누는 일은 각 사용자의 판단에 맡깁니다. 자료를 받은 곳의 이용 안내
+    (예: 개인 학습용)를 한 번 살펴보시고, 함께 공부하는 동료끼리 나누는 범위에서
+    써 주시면 좋겠습니다.
+
+
+4. 있는 그대로 제공합니다
+
+  원큐합격은 있는 그대로 제공되며, 어떤 보증도 하지 않습니다. 문제팩의 정답이나
+  예상 점수가 틀릴 수 있으니 중요한 내용은 교재나 공식 자료로 확인해 주세요.
+  이 프로그램을 쓰면서 생긴 결과에 대해 저작권자는 책임을 지지 않습니다.
+
+
+5. 함께 쓴 공개 소프트웨어
+
+  원큐합격에 포함된 공개 소프트웨어는 각자의 라이선스를 따릅니다
+  (preprocessor/THIRD-PARTY-NOTICES.txt).
+
+
+──────────────────────────────────────────────
+English summary
+
+Copyright (c) 2026 hoonie2026. All rights reserved.
+
+- You may install and use the OneQ-Ace study app and pack generator for your own
+  personal exam study, share the unmodified installer or app link with others free
+  of charge, and read this source code for reference.
+- You may not copy, modify, or redistribute the source code, or use it for any
+  commercial purpose, without prior written permission from the copyright holder.
+- No past-exam content is included. Packs are made by each user from exam PDFs
+  they obtain themselves (based on publicly available materials); copyright in the
+  questions remains with the original rights holders, and responsibility for making
+  and sharing packs rests with each user.
+- Provided "as is", without warranty of any kind. Third-party components remain
+  under their own licenses (preprocessor/THIRD-PARTY-NOTICES.txt).

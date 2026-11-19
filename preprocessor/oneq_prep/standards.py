@@ -1,0 +1,192 @@
+"""종목별 출제기준 프로필(ADR 005·012).
+
+preprocessor/standards/<종목코드>.json
+  subjects  현행 과목(표준 이름·순서·문항 수, isLaw 선택)
+  aliases   연도마다 다르게 적힌 과목명 → 표준 이름
+  excluded  현행에 없는 과목명(팩에 넣지 않음)
+  legacy    {"before": "YYYY-MM-DD", "action": "reassign"} — 그 전 회차는 문항별 과목 재배정 대상
+  draft     true이면 아직 확정 안 된 프로필(팩을 만들지 않음)
+  period    {"from": "YYYY-MM-DD", "to": …} 적용 기간(큐넷 출제기준 PDF에서 읽은 프로필, ADR 021)
+  subjects[].majors  주요항목 → details(세부항목) → items(세세항목). 팩 subjects[].units로 실어 학습앱 '출제기준' 화면에 보임(ADR 025)
+  source    {"type": "qnet-standard-pdf", "file", "readAt"} 어디서 만든 프로필인지
+"""
+from __future__ import annotations
+
+import json
+import os
+import re
+import sys
+from dataclasses import dataclass, field
+from pathlib import Path
+
+
+def _root() -> Path:
+    base = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parents[1]))   # PyInstaller 대비
+    return base / "standards"
+
+
+def user_root() -> Path:
+    """사용자가 만든 출제기준 프로필(창 프로그램 [과목 직접 입력]) — 실행파일 폴더가 아니라 사용자 폴더에 저장(ADR 019).
+    같은 종목 코드면 사용자 것이 함께 배포된 것보다 우선."""
+    env = os.environ.get("ONEQ_PREP_HOME")
+    if env:
+        base = Path(env)
+    elif os.name == "nt":
+        base = Path(os.environ.get("APPDATA", Path.home())) / "OneQ-Ace"
+    else:
+        base = Path.home() / ".local" / "share" / "OneQ-Ace"
+    return base / "standards"
+
+
+CODE_RE = re.compile(r"^[A-Z][A-Z0-9]{1,15}$")
+
+
+def norm(name: str) -> str:
+    """과목명 비교용: 공백·가운뎃점·괄호·쉼표를 무시한다("수리학및수문학" = "수리학 및 수문학")."""
+    return re.sub(r"[\s·ㆍ,()（）\[\]]+", "", name)
+
+
+def jamo(s: str) -> str:
+    """한글 음절을 자모로 풀어 비교(OCR이 '철→칠', '선→신', '계→기l'처럼 획 하나를 잘못 읽어도 비슷하게 보이게)."""
+    out = []
+    for ch in s:
+        o = ord(ch) - 0xAC00
+        if 0 <= o < 11172:
+            out += [chr(0x1100 + o // 588), chr(0x1161 + (o % 588) // 28)]
+            if o % 28:
+                out.append(chr(0x11A7 + o % 28))
+        else:
+            out.append(ch)
+    return "".join(out)
+
+
+def similarity(a: str, b: str) -> float:
+    from difflib import SequenceMatcher
+    return SequenceMatcher(None, jamo(norm(a)), jamo(norm(b))).ratio()
+
+
+@dataclass
+class Profile:
+    code: str
+    name: str
+    grade: str
+    version: str
+    pass_rule: dict
+    subjects: list[dict]
+    aliases: dict[str, str] = field(default_factory=dict)
+    excluded: list[str] = field(default_factory=list)
+    legacy: dict | None = None
+    draft: bool = False
+    note: str = ""
+    period: dict | None = None
+    source: dict | None = None        # {"type": "qnet-standard-pdf", "qnet": {"jmCd", "no"}, …}
+
+    def units(self, subject: str) -> list[dict]:
+        """과목의 단원(세부항목) 목록 — id는 과목 안에서 "주요항목번호-세부항목번호"(예: "2-3").
+        출제기준에서 읽지 않은(majors 없는) 프로필이면 빈 목록."""
+        i = self.std_index(subject)
+        if i is None:
+            return []
+        out = []
+        for m in self.subjects[i - 1].get("majors", []):
+            for d in m.get("details", []):
+                out.append({"id": f"{m['no']}-{d['no']}", "major": m["name"], "name": d["name"],
+                            "items": d.get("items", [])})
+        return out
+
+    def resolve(self, raw: str) -> tuple[str, int | None, str]:
+        """PDF 과목명 → ("std", 과목번호(1부터), 표준이름) / ("excluded", None, raw) / ("unknown", None, raw)."""
+        n = norm(raw)
+        al = {norm(k): v for k, v in self.aliases.items()}
+        if n in al:
+            n = norm(al[n])
+        for i, s in enumerate(self.subjects):
+            if norm(s["name"]) == n:
+                return "std", i + 1, s["name"]
+        if n in {norm(x) for x in self.excluded}:
+            return "excluded", None, raw
+        return "unknown", None, raw
+
+    def guess(self, raw: str, sno: int | None = None, pdf_subjects: int | None = None,
+              taken: set[str] | frozenset = frozenset()) -> tuple[str, str] | None:
+        """정확히 맞지 않는 PDF 과목명 → 표준 과목 추정(사람 검수 대신, 사용자 2026-11-12 — "건축법규" → "건축관계법규").
+        ① 이름: 한쪽이 다른 쪽에 들어 있거나(글자 순서대로) 비슷함 0.6 이상이고 2등과 차이가 날 때
+        ② 순서: PDF 과목 수가 출제기준과 같으면 같은 순번 과목. 이미 다른 과목이 차지한 표준 과목은 쓰지 않는다.
+        반환 (표준이름, 근거) 또는 None."""
+        from difflib import SequenceMatcher
+
+        def subseq(a: str, b: str) -> bool:
+            it = iter(b)
+            return all(ch in it for ch in a)
+
+        n = norm(raw)
+        if n and not re.fullmatch(r"\d과목", n):
+            cands = []
+            for sub in self.subjects:
+                m = norm(sub["name"])
+                if m in taken:
+                    continue
+                if n in m or m in n:
+                    score = 0.95
+                elif len(n) >= 3 and (subseq(n, m) or subseq(m, n)):
+                    score = 0.9
+                else:
+                    score = max(SequenceMatcher(None, n, m).ratio(), similarity(n, m))   # 자모 단위(OCR 오독, 2026-11-17)
+                cands.append((score, sub["name"]))
+            cands.sort(reverse=True)
+            if cands and cands[0][0] >= 0.6 and (len(cands) == 1 or cands[0][0] - cands[1][0] >= 0.1):
+                return cands[0][1], "이름이 비슷함"
+        if sno and pdf_subjects == len(self.subjects) and 1 <= sno <= len(self.subjects):
+            name = self.subjects[sno - 1]["name"]
+            if norm(name) not in taken:
+                return name, "과목 순서"
+        return None
+
+    def std_index(self, name: str) -> int | None:
+        for i, s in enumerate(self.subjects):
+            if norm(s["name"]) == norm(name):
+                return i + 1
+        return None
+
+    def is_legacy(self, date: str) -> bool:
+        if not date or date.startswith("0000"):
+            return False                                  # 시행일 모름("0000년 nn회") — 옛 기준인지 알 수 없음
+        return bool(self.legacy and date < self.legacy["before"])
+
+
+def load(code: str, root: Path | None = None) -> Profile:
+    if root is not None:
+        p = root / f"{code}.json"
+    else:
+        p = user_root() / f"{code}.json"
+        if not p.exists():
+            p = _root() / f"{code}.json"
+    if not p.exists():
+        raise FileNotFoundError(f"출제기준 프로필 없음: {p}")
+    d = json.loads(p.read_text(encoding="utf-8"))
+    return Profile(d["code"], d["name"], d["grade"], str(d["version"]), d["passRule"], d["subjects"],
+                   d.get("aliases", {}), d.get("excluded", []), d.get("legacy"), d.get("draft", False), d.get("note", ""),
+                   d.get("period"), d.get("source"))
+
+
+def available(root: Path | None = None) -> list[str]:
+    """프로필 종목 코드(대문자 파일 이름만 — law-terms.json 같은 설정 파일은 제외)."""
+    roots = [root] if root is not None else [_root(), user_root()]
+    codes = {p.stem for r in roots if r.exists() for p in r.glob("*.json") if CODE_RE.match(p.stem)}
+    return sorted(codes)
+
+
+def is_user_profile(code: str) -> bool:
+    return (user_root() / f"{code}.json").exists()
+
+
+def save_user_profile(d: dict) -> Path:
+    """창 프로그램에서 만든 프로필 저장. d는 SURVEY.json과 같은 모양(code·name·grade·version·passRule·subjects)."""
+    if not CODE_RE.match(d.get("code", "")):
+        raise ValueError("종목 코드는 영문 대문자로 시작하는 2~16자(예: ELEC, CONC)")
+    if not d.get("subjects"):
+        raise ValueError("과목을 하나 이상 적으세요")
+    p = user_root() / f"{d['code']}.json"
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(json.dumps(d, ensure_ascii=False, indent=2), encoding="utf-8")
+    return p

@@ -1,0 +1,4 @@
+# 창 프로그램(ADR 018) — 명령줄만 쓰면 필요 없음. PySide6-Essentials: Qt 기본 모듈만(웹엔진 등 제외, LGPLv3)
+-r requirements.txt
+PySide6-Essentials>=6.8
+pytest-qt>=4.4

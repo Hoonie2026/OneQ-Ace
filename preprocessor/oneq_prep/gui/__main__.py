@@ -1,0 +1,25 @@
+import multiprocessing
+import sys
+
+if __name__ == "__main__":
+    # 실행파일(PyInstaller)에서 여러 회차 동시 처리(ProcessPool)를 쓰려면 맨 먼저 필요
+    multiprocessing.freeze_support()
+    if len(sys.argv) > 1 and sys.argv[1] == "--ocr-check":
+        # 빌드 시험·PC 점검: OneQ-PackMaker.exe --ocr-check [ko|en] → 종료 코드 0(Windows 내장 OCR 읽힘)·1(Tesseract만)·3(없음)
+        if sys.stdout is None:
+            sys.stdout = sys.stderr = open("oneq-prep-ocr-check.log", "w", encoding="utf-8")  # noqa: SIM115
+        from oneq_prep.ocr import check
+
+        raise SystemExit(check(sys.argv[2] if len(sys.argv) > 2 else "ko"))
+    if len(sys.argv) > 1 and sys.argv[1] == "--cli":
+        if sys.stdout is None:   # 창 프로그램용 exe에는 콘솔이 없다 → 기록 파일로
+            log = open("oneq-prep-cli.log", "w", encoding="utf-8")  # noqa: SIM115
+            sys.stdout = sys.stderr = log
+        # 실행파일로도 명령줄 처리: OneQ-PackMaker.exe --cli <PDF…> <출력폴더> --cert … (점검·일괄 작업용)
+        from oneq_prep.pack import main as cli_main
+
+        cli_main(sys.argv[2:])
+    else:
+        from oneq_prep.gui.app import main
+
+        main()

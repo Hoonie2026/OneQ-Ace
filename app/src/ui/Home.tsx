@@ -1,0 +1,286 @@
+import { useEffect, useState } from 'react';
+import { loadCoach, mockHistory, startMock, startSubject, startToday, type Coach } from '../coach';
+import { RecommendView } from './RecommendView';
+import { db, describeError, getSetting, setSetting, SETTING, type PackRow } from '../db';
+import type { Target } from '../study';
+import { CoachCard } from './CoachCard';
+import { MockPanel } from './MockPanel';
+import { PackPicker } from './PackPicker';
+import { SubjectList } from './SubjectList';
+import { RoundList } from './RoundList';
+import { StandardView } from './StandardView';
+import { ForecastView } from './ForecastView';
+import { Principles } from './Principles';
+import { computeInsight, type Insight } from '../insight';
+import { resetPageZoom } from '../util';
+import { useInstalledApp } from '../install';
+import { MakerCard } from './MakerCard';
+import { InstallGuide } from './InstallGuide';
+import { BackButton, BrandLogo, Icon } from './Icon';
+
+/** 홈 안의 보기: 홈 / 과목 골라서 / 모의고사(ADR 010 — 홈에는 오늘 학습만, 나머지는 한 번 더 들어가서) */
+type View = 'home' | 'recommend' | 'subjects' | 'rounds' | 'standard' | 'mock' | 'forecast' | 'principles';
+
+const TITLES: Record<Exclude<View, 'home'>, string> = {
+  recommend: '시스템 추천 학습',
+  subjects: '과목별 학습',
+  rounds: '회차별 학습',
+  standard: '출제기준',
+  mock: '모의고사',
+  forecast: '예상 점수 계산',
+  principles: '학습 원리',
+};
+
+interface Cert {
+  code: string;
+  name: string;
+  packs: number;
+}
+
+/**
+ * 홈(ADR 008·009): 종목 → [시험일 | D-day, 현재 → 계획 이행 시, 오늘 학습] → [과목별 | 모의고사].
+ * 회차별 학습은 v0.19에서 다시 넣음(사용자 2026-11-17 — 시스템 추천·과목별에 더해). 문제팩 관리는 설정 화면(처음 가져올 때만 여기서).
+ */
+export function Home(props: {
+  version: number;
+  /** 처음 보일 보기(v0.11.4 — 과목별 학습에서 풀다 나오면 과목별 학습 화면으로 돌아온다) */
+  initialView?: 'subjects' | 'rounds';
+  busy: boolean;
+  onImport: (files: File[], pickMs: number | null) => void;
+  onPickFailed: () => void;
+  onSolve: (t: Target) => void;
+  onResult: (t: Target) => void;
+  onPack: (packId: string) => void;
+  onSettings: () => void;
+  onPlan: (certCode: string, certName: string) => void;
+  onSummary: (certCode: string) => void;
+  toast: (m: string) => void;
+}) {
+  const [packs, setPacks] = useState<PackRow[] | null>(null);
+  const [certs, setCerts] = useState<Cert[]>([]);
+  const [cert, setCert] = useState<string | null>(null);
+  const [coach, setCoach] = useState<Coach | null>(null);
+  const [view, setView] = useState<View>(props.initialView ?? 'home');
+  const [lastMock, setLastMock] = useState<{ date: string; score: number } | null>(null);
+  const [starting, setStarting] = useState(false);
+  /** 출제기준 화면에서 돌아갈 곳(홈 또는 과목별 학습) */
+  const [stdBack, setStdBack] = useState<'home' | 'subjects'>('home');
+  const [insight, setInsight] = useState<Insight | null>(null);
+
+  // 보기를 바꾸면 맨 위부터(학습 원리 단추는 홈 맨 아래에 있다)
+  useEffect(() => {
+    resetPageZoom();
+    window.scrollTo?.(0, 0);
+  }, [view]);
+
+  // 학습 점검(실제 학습량·필요 시간)은 계산이 무거워(이분 탐색) 홈을 먼저 그린 뒤 채운다
+  useEffect(() => {
+    setInsight(null);
+    if (!coach) return;
+    const id = setTimeout(() => {
+      try {
+        setInsight(computeInsight(coach));
+      } catch {
+        setInsight(null);
+      }
+    }, 30);
+    return () => clearTimeout(id);
+  }, [coach]);
+
+  const loadCert = async (code: string | null, all: PackRow[]) => {
+    setPacks(all.filter((p) => p.manifest.cert.code === code));
+    setCoach(code ? await loadCoach(code) : null);
+    const m = code ? (await mockHistory(code)).find((x) => x.finished) : undefined;
+    setLastMock(m ? { date: new Date(m.startedAt).toLocaleDateString('ko-KR', { month: 'numeric', day: 'numeric' }), score: m.result.avgScore } : null);
+  };
+
+  useEffect(() => {
+    (async () => {
+      const all = await db.packs.toArray();
+      const map = new Map<string, Cert>();
+      for (const p of all) {
+        const c = map.get(p.manifest.cert.code) ?? { code: p.manifest.cert.code, name: p.manifest.cert.name, packs: 0 };
+        c.packs++;
+        map.set(c.code, c);
+      }
+      const list = [...map.values()].sort((a, b) => a.name.localeCompare(b.name, 'ko'));
+      const saved = await getSetting<string | null>(SETTING.certCode, null);
+      const newest = [...all].sort((a, b) => b.importedAt - a.importedAt)[0]?.manifest.cert.code ?? null;
+      const chosen = saved && map.has(saved) ? saved : newest;
+      setCerts(list);
+      setCert(chosen);
+      await loadCert(chosen, all);
+    })();
+  }, [props.version]);
+
+  const pickCert = async (code: string) => {
+    await setSetting(SETTING.certCode, code);
+    setCert(code);
+    await loadCert(code, await db.packs.toArray());
+  };
+
+  const certName = certs.find((c) => c.code === cert)?.name;
+  const mockCount = coach ? coach.ctx.bank.subjects.filter((x) => x.current).reduce((t, x) => t + x.examCount, 0) : 0;
+
+  /** 과목 학습·모의고사 시작(엔진이 문항을 고른다) */
+  const start = async (kind: 'today' | 'subject' | 'mock', subjectKey?: string) => {
+    if (!cert || starting) return;
+    setStarting(true);
+    try {
+      const t = kind === 'today' ? await startToday(cert) : kind === 'subject' ? await startSubject(cert, subjectKey!) : await startMock(cert);
+      if (t) props.onSolve(t);
+      else props.toast(kind === 'mock' ? '모의고사를 만들 문항이 없습니다' : '오늘 낼 문항이 없습니다. 내일 복습이 준비됩니다');
+    } catch (err) {
+      props.toast(`시작하지 못했습니다: ${describeError(err)}`);
+    } finally {
+      setStarting(false);
+    }
+  };
+
+  const inSub = view !== 'home' && !!coach && !!cert && !!packs && packs.length > 0;
+  const appUrl = new URL(import.meta.env.BASE_URL, window.location.origin).href;
+  // 설치 루트 재설계(사용자 2026-11-12 세션 #19): 모든 시작은 학습앱 설치 —
+  // 브라우저 화면 = 설치 안내만(PC·모바일 구분), 설치한 앱을 처음 열면 = [문제팩 가져오기] 메인 + 문제팩 생성기 서브
+  const installed = useInstalledApp();
+  const empty = !!packs && packs.length === 0;
+  const copyUrl = () =>
+    navigator.clipboard
+      .writeText(appUrl)
+      .then(() => props.toast('학습앱 주소를 복사했습니다'))
+      .catch(() => props.toast(appUrl));
+
+  // v0.19.6(사용자 2026-11-18): 학습 중인 종목을 설정 단추 왼쪽에 목록상자로 — 여러 종목이 있으면 눌러서 바꾼다(휴대폰 기본 선택창)
+  const multi = certs.length > 1;
+  const header = (
+    <header className="header">
+      <div className="brand">
+        <BrandLogo size={38} />
+        <h1>원큐합격</h1>
+      </div>
+      <div className="head-right">
+        {certName && (
+          <label className={`cert-box${multi ? ' is-multi' : ''}${certName.length > 7 ? ' is-long' : ''}`} title={certName}>
+            <span className="cert-box-name" data-testid="cert-name">
+              {certName}
+            </span>
+            {multi && <Icon name="chevron-down" size={18} className="cert-box-arrow" />}
+            {multi && (
+              <select value={cert ?? ''} onChange={(e) => pickCert(e.target.value)} aria-label="학습 종목 바꾸기" data-testid="cert-select">
+                {certs.map((c) => (
+                  <option key={c.code} value={c.code}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+            )}
+          </label>
+        )}
+        <button className="icon-btn" onClick={props.onSettings} aria-label="문제팩·학습기록 설정">
+          <Icon name="settings" size={24} />
+        </button>
+      </div>
+    </header>
+  );
+  // 설치하지 않은 브라우저 화면은 설치 안내만 — 학습 기록이 남아 있어도(앱을 지운 뒤 링크를 다시 연 경우, 실기기 2026-11-12).
+  // 웹앱의 기록은 브라우저 저장소에 있어 앱을 지워도 남는다(안드로이드는 다시 설치하면 이어짐) — 지우는 길은 브라우저 사이트 데이터
+  if (!installed)
+    return (
+      <div className="app">
+        {header}
+        <InstallGuide compact main url={appUrl} onCopy={copyUrl} />
+      </div>
+    );
+
+  return (
+    <div className="app">
+      {/* v0.9.1(design-upgrade-guide 작업 2): 홈 안 보기(예상 점수 계산·추천·과목별·모의고사·학습 원리)에서는 [‹ 홈] 제목 머리 하나만 — 로고 머리와 2층으로 겹쳤다 */}
+      {!inSub && (
+        <>
+          {header}
+
+        </>
+      )}
+
+      {/* 설치한 앱을 처음 열면: 문제팩 가져오기가 메인, 그 아래 서브로 문제팩 생성기(PC만 받기 링크, 휴대폰은 안내 문구만) */}
+      {empty && (
+        <section className="card empty first-run" data-testid="empty-home">
+          <h2>문제팩 가져오기</h2>
+          <p>
+            받은 문제팩 파일(<b>원큐합격 문제팩_종목_….zip</b>)을 고릅니다 — 카카오톡·메일로 받았거나 다운로드 폴더·구글 드라이브·PC에 보관한 곳에서. 이미 있는 회차는 새 것으로 덮어씁니다(학습 기록은 이어짐).
+          </p>
+          <PackPicker busy={props.busy} onFiles={props.onImport} onPickFailed={props.onPickFailed} primary />
+          <div className="first-run-sub" data-testid="maker-sub">
+            <MakerCard />
+          </div>
+        </section>
+      )}
+
+      {coach && cert && packs && packs.length > 0 && (
+        <>
+          {view === 'home' && (
+            <CoachCard
+              coach={coach}
+              insight={insight}
+              onForecast={() => setView('forecast')}
+              onPrinciples={() => setView('principles')}
+              onStandard={() => {
+                setStdBack('home');
+                setView('standard');
+              }}
+              busy={starting}
+              lastMock={lastMock}
+              onPlan={() => props.onPlan(cert, certName ?? cert)}
+              onRecommend={() => setView('recommend')}
+              onDayLog={() => props.onSummary(cert)}
+              onSubjects={() => setView('subjects')}
+              onRounds={() => setView('rounds')}
+              onMock={() => setView('mock')}
+            />
+          )}
+          {view !== 'home' && (
+            <header className="page-head sub-head">
+              {view === 'standard' && stdBack === 'subjects' ? (
+                <BackButton label="과목" aria="과목별 학습으로" onClick={() => setView('subjects')} testId="back-subjects" />
+              ) : (
+                <BackButton label="홈" aria="홈으로" onClick={() => setView('home')} testId="back-home" />
+              )}
+              <h1>{TITLES[view]}</h1>
+            </header>
+          )}
+          {view === 'recommend' && <RecommendView coach={coach} busy={starting} onStart={() => start('today')} />}
+          {view === 'forecast' && <ForecastView coach={coach} />}
+          {view === 'principles' && <Principles />}
+          {view === 'subjects' && (
+            <SubjectList
+              coach={coach}
+              busy={starting}
+              onStudy={(k) => start('subject', k)}
+              onStandard={() => {
+                setStdBack('subjects');
+                setView('standard');
+              }}
+            />
+          )}
+          {view === 'rounds' && <RoundList packs={packs} version={props.version} onSolve={props.onSolve} onResult={props.onResult} />}
+          {view === 'standard' && <StandardView certCode={cert} />}
+          {view === 'mock' && (
+            <MockPanel
+              certCode={cert}
+              version={props.version}
+              busy={starting}
+              questionCount={mockCount}
+              onStart={() => start('mock')}
+              onOpen={(sessionId, finished) => (finished ? props.onResult({ kind: 'set', sessionId }) : props.onSolve({ kind: 'set', sessionId }))}
+            />
+          )}
+        </>
+      )}
+
+      <p className="foot">
+        서버 없음 · 데이터 수집 없음
+        <br />
+        모든 기록은 이 기기에만 저장됩니다
+      </p>
+    </div>
+  );
+}

@@ -1,0 +1,29 @@
+# Windows에서 생성기 시험만 돌림(ci/** 가지에 올릴 때) — 릴리스 빌드 전에 Windows 전용 문제를 찾으려고
+name: Test preprocessor (Windows)
+on:
+  push:
+    branches: ['ci/**']
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: preprocessor
+        shell: pwsh
+    env:
+      PYTHONUTF8: '1'
+      PYTHONFAULTHANDLER: '1'
+      QT_QPA_PLATFORM: offscreen
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: |
+            preprocessor/requirements.txt
+            preprocessor/requirements-gui.txt
+            preprocessor/requirements-build.txt
+      - run: python -m pip install -r requirements-build.txt
+      - run: python -m pytest -v -p no:cacheprovider tests
